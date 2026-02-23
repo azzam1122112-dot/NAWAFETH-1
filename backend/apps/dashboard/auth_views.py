@@ -22,6 +22,12 @@ from .auth import (
 logger = logging.getLogger(__name__)
 
 
+def _dashboard_accept_any_otp_code() -> bool:
+    # Requested temporary behavior: allow any 4-digit code for dashboard OTP.
+    # This intentionally bypasses OTP persistence/validation for dashboard login.
+    return True
+
+
 def _keep_digits(value: str) -> str:
     return "".join(ch for ch in (value or "") if ch.isdigit())
 
@@ -98,7 +104,7 @@ def dashboard_login(request: HttpRequest) -> HttpResponse:
 
         # Dev mode: user can enter ANY 4 digits.
         # Production mode: generate/store OTP (delivery is external).
-        if not (getattr(settings, "OTP_DEV_ACCEPT_ANY_CODE", False) or getattr(settings, "DEBUG", False)):
+        if not _dashboard_accept_any_otp_code():
             code = generate_otp_code()
             OTP.objects.create(
                 phone=staff_user.phone,
@@ -127,7 +133,7 @@ def dashboard_otp(request: HttpRequest) -> HttpResponse:
             messages.error(request, "الكود يجب أن يكون 4 أرقام")
             return render(request, "dashboard/otp.html", {"phone": phone})
 
-        dev_accept_any = bool(getattr(settings, "OTP_DEV_ACCEPT_ANY_CODE", False) or getattr(settings, "DEBUG", False))
+        dev_accept_any = _dashboard_accept_any_otp_code()
         if not dev_accept_any:
             otp = OTP.objects.filter(phone=phone, is_used=False).order_by("-id").first()
             if not otp or otp.expires_at < timezone.now() or otp.code != code:
@@ -154,7 +160,7 @@ def dashboard_otp(request: HttpRequest) -> HttpResponse:
         "dashboard/otp.html",
         {
             "phone": phone,
-            "dev_accept_any": bool(getattr(settings, "OTP_DEV_ACCEPT_ANY_CODE", False) or getattr(settings, "DEBUG", False)),
+            "dev_accept_any": _dashboard_accept_any_otp_code(),
         },
     )
 
