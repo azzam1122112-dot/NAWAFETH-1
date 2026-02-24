@@ -58,8 +58,9 @@ class _ReviewsTabState extends State<ReviewsTab> {
       });
     } catch (e) {
       if (!mounted) return;
+      final msg = e is StateError ? e.message : e.toString();
       setState(() {
-        _error = e.toString();
+        _error = msg.toString();
         _loading = false;
       });
     }
@@ -101,40 +102,48 @@ class _ReviewsTabState extends State<ReviewsTab> {
       );
     }
 
-    final body = RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _RatingSummaryCard(rating: _rating),
-          const SizedBox(height: 12),
-          _CriteriaBreakdownSection(rating: _rating),
-          const SizedBox(height: 14),
-          _SectionHeader(
-            title: 'المراجعات',
-          ),
-          const SizedBox(height: 10),
-          if (_reviews.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'لا توجد مراجعات حتى الآن',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
-              ),
-            )
-          else
-            ..._reviews.map(
-              (r) => _ReviewCard(
-                review: r,
-                providerId: _providerId,
-                onOpenChat: widget.onOpenChat,
+    final list = ListView(
+      padding: const EdgeInsets.all(16),
+      shrinkWrap: widget.embedded,
+      physics: widget.embedded
+          ? const NeverScrollableScrollPhysics()
+          : const AlwaysScrollableScrollPhysics(),
+      children: [
+        _RatingSummaryCard(rating: _rating),
+        const SizedBox(height: 12),
+        _CriteriaBreakdownSection(rating: _rating),
+        const SizedBox(height: 14),
+        _SectionHeader(
+          title: 'المراجعات',
+        ),
+        const SizedBox(height: 10),
+        if (_reviews.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                'لا توجد مراجعات حتى الآن',
+                style: TextStyle(fontFamily: 'Cairo'),
               ),
             ),
-        ],
-      ),
+          )
+        else
+          ..._reviews.map(
+            (r) => _ReviewCard(
+              review: r,
+              providerId: _providerId,
+              onOpenChat: widget.onOpenChat,
+            ),
+          ),
+      ],
     );
+
+    final body = widget.embedded
+        ? list
+        : RefreshIndicator(
+            onRefresh: _load,
+            child: list,
+          );
 
     if (widget.embedded) {
       return Directionality(textDirection: TextDirection.rtl, child: body);

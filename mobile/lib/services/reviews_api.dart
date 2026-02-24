@@ -28,6 +28,16 @@ class ReviewsApi {
     if (data is List) {
       return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final results = map['results'];
+      if (results is List) {
+        return results
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
     throw StateError('Unexpected provider reviews response');
   }
 

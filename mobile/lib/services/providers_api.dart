@@ -32,6 +32,18 @@ class ProvidersApi {
     return const [];
   }
 
+  Map<String, dynamic>? _tryJsonMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      try {
+        return Map<String, dynamic>.from(value);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   Future<List<Category>> getCategories() async {
     try {
       final res = await _dio.get(
@@ -298,10 +310,18 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/me/following/',
       );
-      final list = (res.data as List)
-          .map((e) => ProviderProfile.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <ProviderProfile>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderProfile.fromJson(json));
+        } catch (_) {
+          // Skip malformed rows instead of dropping the whole list.
+        }
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -310,10 +330,16 @@ class ProvidersApi {
   Future<List<ProviderProfile>> getMyLikedProviders() async {
     try {
       final res = await _dio.get('${ApiConfig.apiPrefix}/providers/me/likes/');
-      final list = (res.data as List)
-          .map((e) => ProviderProfile.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <ProviderProfile>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderProfile.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -324,10 +350,16 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/me/followers/',
       );
-      final list = (res.data as List)
-          .map((e) => UserSummary.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <UserSummary>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(UserSummary.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -336,10 +368,16 @@ class ProvidersApi {
   Future<List<UserSummary>> getMyProviderLikers() async {
     try {
       final res = await _dio.get('${ApiConfig.apiPrefix}/providers/me/likers/');
-      final list = (res.data as List)
-          .map((e) => UserSummary.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <UserSummary>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(UserSummary.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -351,10 +389,16 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/$providerId/followers/',
       );
-      final list = (res.data as List)
-          .map((e) => UserSummary.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <UserSummary>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(UserSummary.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -366,10 +410,16 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/$providerId/following/',
       );
-      final list = (res.data as List)
-          .map((e) => ProviderProfile.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <ProviderProfile>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderProfile.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       return [];
     }
@@ -380,10 +430,16 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/me/favorites/',
       );
-      final list = (res.data as List)
-          .map((e) => ProviderPortfolioItem.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (_) {
       return [];
     }
@@ -396,10 +452,16 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/$providerId/portfolio/',
       );
-      final list = (res.data as List)
-          .map((e) => ProviderPortfolioItem.fromJson(e))
-          .toList();
-      return list;
+      final rawList = _extractList(res.data);
+      final out = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
     } catch (_) {
       return [];
     }

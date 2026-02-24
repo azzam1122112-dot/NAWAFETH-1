@@ -1511,7 +1511,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       case 2:
         return _galleryTab();
       case 3:
-        final int? providerId = int.tryParse((widget.providerId ?? '').toString());
+        final int? providerId =
+            _fullProfile?.id ?? int.tryParse((widget.providerId ?? '').toString());
         return ReviewsTab(
           providerId: providerId,
           embedded: true,
