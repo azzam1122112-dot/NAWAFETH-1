@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 import '../models/provider.dart';
 import '../models/provider_portfolio_item.dart';
@@ -43,6 +44,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   final AccountApi _accountApi = AccountApi();
 
   bool _capabilitiesLoaded = false;
+  String? _followingError;
+  String? _followersError;
+  String? _favoritesError;
 
   String? _myDisplayName;
   String? _myHandle;
@@ -95,7 +99,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   Future<void> _loadCapabilitiesAndReload() async {
     try {
-      final me = await _accountApi.me();
+      final me = await _accountApi.me().timeout(const Duration(seconds: 12));
       final hasProviderProfile = me['has_provider_profile'] == true;
       final isProviderActive = RoleController.instance.notifier.value.isProvider;
       final firstName = (me['first_name'] ?? '').toString().trim();
@@ -157,10 +161,49 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   void _reload() {
     setState(() {
-      _followingFuture = _providersApi.getMyFollowingProviders();
-      _followersFuture = _providersApi.getMyProviderFollowers();
-      _favoritesFuture = _providersApi.getMyFavoriteMedia();
+      _followingError = null;
+      _followersError = null;
+      _favoritesError = null;
+      _followingFuture = _loadFollowingSafe();
+      _followersFuture = _loadFollowersSafe();
+      _favoritesFuture = _loadFavoritesSafe();
     });
+  }
+
+  Future<List<ProviderProfile>> _loadFollowingSafe() async {
+    try {
+      return await _providersApi.getMyFollowingProviders().timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      if (mounted) setState(() => _followingError = 'انتهت مهلة تحميل قائمة المتابعة');
+      return const [];
+    } catch (_) {
+      if (mounted) setState(() => _followingError = 'تعذر تحميل قائمة المتابعة');
+      return const [];
+    }
+  }
+
+  Future<List<UserSummary>> _loadFollowersSafe() async {
+    try {
+      return await _providersApi.getMyProviderFollowers().timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      if (mounted) setState(() => _followersError = 'انتهت مهلة تحميل قائمة المتابعين');
+      return const [];
+    } catch (_) {
+      if (mounted) setState(() => _followersError = 'تعذر تحميل قائمة المتابعين');
+      return const [];
+    }
+  }
+
+  Future<List<ProviderPortfolioItem>> _loadFavoritesSafe() async {
+    try {
+      return await _providersApi.getMyFavoriteMedia().timeout(const Duration(seconds: 12));
+    } on TimeoutException {
+      if (mounted) setState(() => _favoritesError = 'انتهت مهلة تحميل المفضلة');
+      return const [];
+    } catch (_) {
+      if (mounted) setState(() => _favoritesError = 'تعذر تحميل المفضلة');
+      return const [];
+    }
   }
 
   Future<void> _refreshInteractiveData() async {
@@ -480,8 +523,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.bookmark_border,
-            title: 'لا تتابع أحداً بعد',
-            subtitle: 'تصفح مقدمي الخدمات وابدأ بمتابعتهم لتظهر تحديثاتهم هنا.',
+            title: _followingError == null ? 'لا تتابع أحداً بعد' : 'تعذر تحميل قائمة المتابعة',
+            subtitle: _followingError ??
+                'تصفح مقدمي الخدمات وابدأ بمتابعتهم لتظهر تحديثاتهم هنا.',
           );
         }
 
@@ -733,7 +777,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.groups_rounded,
-            title: 'لا يوجد متابعون حالياً',
+            title: _followersError == null ? 'لا يوجد متابعون حالياً' : 'تعذر تحميل قائمة المتابعين',
+            subtitle: _followersError,
           );
         }
 
@@ -818,8 +863,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.thumb_up_alt_outlined,
-            title: 'لا توجد عناصر في مفضلتي بعد',
-            subtitle: 'أي صور أو فيديوهات تعمل لها لايك ستظهر هنا.',
+            title: _favoritesError == null ? 'لا توجد عناصر في مفضلتي بعد' : 'تعذر تحميل المفضلة',
+            subtitle: _favoritesError ?? 'أي صور أو فيديوهات تعمل لها لايك ستظهر هنا.',
           );
         }
 
