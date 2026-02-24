@@ -79,21 +79,20 @@ class _PlansScreenState extends State<PlansScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'الباقات المدفوعة',
           style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.bold,
-            color: Colors.black,
           ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _plansFuture,
@@ -138,6 +137,7 @@ class _PlansScreenState extends State<PlansScreen> {
                   icon: scheme.$3,
                   highlight: highlight,
                   loading: isLoading,
+                  isDark: isDark,
                   onSubscribe: () => _subscribe(plan),
                 );
               },
@@ -205,6 +205,7 @@ class _PlansScreenState extends State<PlansScreen> {
     required IconData icon,
     required bool highlight,
     required bool loading,
+    required bool isDark,
     required VoidCallback onSubscribe,
   }) {
     return Container(
@@ -218,7 +219,7 @@ class _PlansScreenState extends State<PlansScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: color2.withValues(alpha: 0.3),
+            color: color2.withValues(alpha: isDark ? 0.18 : 0.3),
             blurRadius: 18,
             spreadRadius: 2,
             offset: const Offset(0, 6),
@@ -228,7 +229,7 @@ class _PlansScreenState extends State<PlansScreen> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Colors.white.withValues(alpha: 0.15),
+          color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.15),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20),

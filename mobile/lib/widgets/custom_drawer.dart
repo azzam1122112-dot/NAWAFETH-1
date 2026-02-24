@@ -121,7 +121,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
     final isDark = theme.brightness == Brightness.dark;
 
     final themeController = MyThemeController.of(context);
-    final isDarkMode = themeController?.themeMode == ThemeMode.dark;
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return FutureBuilder<_SessionInfo>(
       future: _loadSessionInfo(),
@@ -148,8 +148,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
             decoration: BoxDecoration(
               color:
                   isDark
-                      ? Colors.deepPurple.withOpacity(0.15)
-                      : Colors.deepPurple.withOpacity(0.05),
+                      ? Colors.deepPurple.withValues(alpha: 0.15)
+                      : Colors.deepPurple.withValues(alpha: 0.05),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -184,7 +184,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   children: [
                     Switch(
                       value: isDarkMode,
-                      activeColor: AppColors.primaryDark,
+                      activeThumbColor: AppColors.primaryDark,
                       onChanged: (val) {
                         final mode = val ? ThemeMode.dark : ThemeMode.light;
                         themeController?.changeTheme(mode);
@@ -506,7 +506,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
       ),
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      hoverColor: AppColors.primaryDark.withOpacity(0.08),
+      hoverColor: AppColors.primaryDark.withValues(alpha: 0.08),
     );
   }
 

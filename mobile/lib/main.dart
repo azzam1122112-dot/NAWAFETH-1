@@ -28,6 +28,7 @@ import 'services/app_navigation.dart';
 import 'services/fcm_notification_service.dart';
 import 'services/notifications_badge_controller.dart';
 import 'services/role_controller.dart';
+import 'theme/app_theme.dart';
 
 /// 🌙 وحدة تحكم للثيم واللغة
 class MyThemeController extends InheritedWidget {
@@ -72,7 +73,7 @@ class NawafethApp extends StatefulWidget {
 }
 
 class _NawafethAppState extends State<NawafethApp> {
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('ar', 'SA'); // ✅ اللغة الافتراضية العربية
 
   /// 🔄 تبديل الثيم
@@ -104,31 +105,10 @@ class _NawafethAppState extends State<NawafethApp> {
 
         // ✅ إعدادات الثيم
         themeMode: _themeMode,
-        theme: ThemeData(
-          brightness: Brightness.light,
-          fontFamily: 'Cairo',
-          scaffoldBackgroundColor: Colors.white,
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.deepPurple,
-            foregroundColor: Colors.white,
-          ),
-        ),
-        darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          fontFamily: 'Cairo',
-          scaffoldBackgroundColor: const Color(0xFF121212),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.black87,
-            foregroundColor: Colors.white,
-          ),
-        ),
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeAnimationDuration: const Duration(milliseconds: 220),
+        themeAnimationCurve: Curves.easeOutCubic,
 
         // ✅ دعم تعدد اللغات
         locale: _locale,
