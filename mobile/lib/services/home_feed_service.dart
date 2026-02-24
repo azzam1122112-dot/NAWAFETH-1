@@ -34,6 +34,11 @@ class HomeFeedService {
   final Map<String, DateTime> _activePromosAtByKey = {};
   final Map<String, List<Map<String, dynamic>>> _activePromosCacheByKey = {};
   final Map<String, Future<List<Map<String, dynamic>>>> _activePromosInFlightByKey = {};
+  bool _lastBannerItemsLoadFailed = false;
+  bool _lastMediaItemsLoadFailed = false;
+
+  bool get lastBannerItemsLoadFailed => _lastBannerItemsLoadFailed;
+  bool get lastMediaItemsLoadFailed => _lastMediaItemsLoadFailed;
 
   bool _isFresh(DateTime? at) {
     if (at == null) return false;
@@ -234,16 +239,27 @@ class HomeFeedService {
 
     final future = () async {
       final providers = await getTopProviders(limit: 8, forceRefresh: forceRefresh);
-      if (providers.isEmpty) return <ProviderPortfolioItem>[];
+      if (providers.isEmpty) {
+        _lastMediaItemsLoadFailed = _providersApi.lastProvidersListFailed;
+        return <ProviderPortfolioItem>[];
+      }
 
+      var anyPortfolioCallFailed = false;
       final portfolios = await Future.wait(
-        providers.map((p) => _providersApi.getProviderPortfolio(p.id)),
+        providers.map((p) async {
+          final list = await _providersApi.getProviderPortfolio(p.id);
+          if (_providersApi.lastProviderPortfolioRequestFailed) {
+            anyPortfolioCallFailed = true;
+          }
+          return list;
+        }),
       );
 
       final merged = <ProviderPortfolioItem>[
         for (final list in portfolios) ...list.where((e) => e.fileUrl.trim().isNotEmpty),
       ];
       merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _lastMediaItemsLoadFailed = merged.isEmpty && anyPortfolioCallFailed;
       return merged;
     }();
 
@@ -280,10 +296,12 @@ class HomeFeedService {
     _bannersInFlight = future;
     try {
       final data = await future;
+      _lastBannerItemsLoadFailed = _promoApi.lastHomeBannersRequestFailed;
       _bannersCache = data;
       _bannersAt = DateTime.now();
       return data.take(limit).toList();
     } catch (_) {
+      _lastBannerItemsLoadFailed = true;
       _bannersCache = const [];
       _bannersAt = DateTime.now();
       return const [];

@@ -37,13 +37,43 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
   final TextEditingController _codeController = TextEditingController();
   bool _loading = false;
 
+  String? _extractBackendErrorMessage(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final detail = data['detail'];
+      if (detail != null && detail.toString().trim().isNotEmpty) {
+        return detail.toString().trim();
+      }
+      for (final entry in data.entries) {
+        final value = entry.value;
+        if (value is List && value.isNotEmpty) {
+          final first = value.first;
+          final msg = first?.toString().trim() ?? '';
+          if (msg.isNotEmpty) return msg;
+        }
+        final msg = value?.toString().trim() ?? '';
+        if (msg.isNotEmpty && entry.key.toString() != 'ok') {
+          return msg;
+        }
+      }
+    } else if (data is List && data.isNotEmpty) {
+      final msg = data.first?.toString().trim() ?? '';
+      if (msg.isNotEmpty) return msg;
+    } else if (data is String && data.trim().isNotEmpty) {
+      return data.trim();
+    }
+    return null;
+  }
+
   String _formatError(Object e) {
     if (e is DioException) {
-      final uri = e.requestOptions.uri;
-      final baseUrl = e.requestOptions.baseUrl;
+      final backendMsg = _extractBackendErrorMessage(e);
+      if (backendMsg != null && backendMsg.isNotEmpty) {
+        return backendMsg;
+      }
       final msg = (e.message ?? '').trim();
-      final short = msg.isEmpty ? e.type.toString() : msg;
-      return 'حدث خطأ في الاتصال بالشبكة: $short\nURL: $uri\nbaseUrl: $baseUrl\nError: ${e.error}';
+      final short = msg.isEmpty ? 'تعذر الاتصال بالخادم' : msg;
+      return 'حدث خطأ في الاتصال بالشبكة: $short';
     }
     return e.toString();
   }
@@ -200,7 +230,7 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('رمز غير صحيح أو حدث خطأ: ${_formatError(e)}')),
+        SnackBar(content: Text(_formatError(e))),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

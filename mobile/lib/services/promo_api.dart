@@ -7,6 +7,8 @@ import 'dio_proxy.dart';
 
 class PromoApi {
   final Dio _dio;
+  bool lastHomeBannersRequestFailed = false;
+  bool lastActivePromosRequestFailed = false;
 
   PromoApi({Dio? dio}) : _dio = dio ?? ApiDio.dio {
     configureDioForLocalhost(_dio, ApiConfig.baseUrl);
@@ -66,16 +68,20 @@ class PromoApi {
 
       final data = res.data;
       if (data is List) {
+        lastHomeBannersRequestFailed = false;
         return data
             .whereType<dynamic>()
             .map((e) => ProviderPortfolioItem.fromJson(_asMap(e)))
             .toList();
       }
+      lastHomeBannersRequestFailed = false;
       return const [];
     } on DioException {
       // Endpoint might not exist yet on older deployments.
+      lastHomeBannersRequestFailed = true;
       return const [];
     } catch (_) {
+      lastHomeBannersRequestFailed = true;
       return const [];
     }
   }
@@ -101,13 +107,17 @@ class PromoApi {
       );
       final data = res.data;
       if (data is List) {
+        lastActivePromosRequestFailed = false;
         return data.map((e) => _asMap(e)).toList();
       }
+      lastActivePromosRequestFailed = false;
       return const [];
     } on DioException {
       // Endpoint might not exist yet on older deployments.
+      lastActivePromosRequestFailed = true;
       return const [];
     } catch (_) {
+      lastActivePromosRequestFailed = true;
       return const [];
     }
   }

@@ -11,6 +11,8 @@ import 'dio_proxy.dart';
 
 class ProvidersApi {
   final Dio _dio;
+  bool lastProvidersListFailed = false;
+  bool lastProviderPortfolioRequestFailed = false;
 
   ProvidersApi({Dio? dio}) : _dio = dio ?? ApiDio.dio {
     configureDioForLocalhost(_dio, ApiConfig.baseUrl);
@@ -59,8 +61,10 @@ class ProvidersApi {
           // Skip malformed rows instead of dropping the entire feed.
         }
       }
+      lastProvidersListFailed = false;
       return list;
     } catch (e) {
+      lastProvidersListFailed = true;
       return [];
     }
   }
@@ -720,8 +724,10 @@ class ProvidersApi {
       final list = (res.data as List)
           .map((e) => ProviderPortfolioItem.fromJson(e))
           .toList();
+      lastProviderPortfolioRequestFailed = false;
       return list;
     } catch (_) {
+      lastProviderPortfolioRequestFailed = true;
       return [];
     }
   }

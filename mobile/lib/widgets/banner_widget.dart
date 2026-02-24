@@ -33,6 +33,7 @@ class _BannerWidgetState extends State<BannerWidget> {
   Timer? _timer;
 
   bool _loading = true;
+  bool _loadFailed = false;
   int _index = 0;
   List<ProviderPortfolioItem> _banners = const [];
 
@@ -68,6 +69,7 @@ class _BannerWidgetState extends State<BannerWidget> {
       if (!mounted) return;
       setState(() {
         _banners = banners;
+        _loadFailed = _feed.lastBannerItemsLoadFailed;
         _loading = false;
       });
       _startAutoSlide();
@@ -75,6 +77,7 @@ class _BannerWidgetState extends State<BannerWidget> {
       if (!mounted) return;
       setState(() {
         _banners = const [];
+        _loadFailed = true;
         _loading = false;
       });
     }
@@ -101,6 +104,44 @@ class _BannerWidgetState extends State<BannerWidget> {
     }
 
     if (_banners.isEmpty) {
+      if (_loadFailed) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            border: Border.all(color: Colors.red.shade100),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.wifi_off_rounded, color: Colors.red.shade400, size: 28),
+                const SizedBox(height: 8),
+                const Text(
+                  'تعذر تحميل البنرات الآن',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _loading = true;
+                      _loadFailed = false;
+                    });
+                    _load();
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),

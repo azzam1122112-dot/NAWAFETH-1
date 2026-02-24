@@ -15,6 +15,7 @@ class ProviderMediaGrid extends StatefulWidget {
 class _ProviderMediaGridState extends State<ProviderMediaGrid> {
   final HomeFeedService _feed = HomeFeedService.instance;
   bool _loading = true;
+  bool _loadFailed = false;
   List<ProviderPortfolioItem> _items = const [];
 
   Future<void> _openItem(BuildContext context, ProviderPortfolioItem item) async {
@@ -47,12 +48,14 @@ class _ProviderMediaGridState extends State<ProviderMediaGrid> {
       if (!mounted) return;
       setState(() {
         _items = results;
+        _loadFailed = _feed.lastMediaItemsLoadFailed;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _items = const [];
+        _loadFailed = true;
         _loading = false;
       });
     }
@@ -66,7 +69,42 @@ class _ProviderMediaGridState extends State<ProviderMediaGrid> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (_items.isEmpty) return const SizedBox.shrink();
+    if (_items.isEmpty) {
+      if (_loadFailed) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.shade100),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.red.shade400),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'تعذر تحميل محتوى الصفحة الآن',
+                  style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _loading = true;
+                    _loadFailed = false;
+                  });
+                  _load();
+                },
+                child: const Text('إعادة'),
+              ),
+            ],
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
 
     final cardWidth = (MediaQuery.of(context).size.width - 48) / 2;
 

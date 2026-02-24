@@ -685,6 +685,30 @@ def test_dashboard_home_shows_unified_request_kpis():
 
 
 @pytest.mark.django_db
+def test_dashboard_home_hides_latest_requests_link_without_content_access():
+	staff_user = User.objects.create_user(
+		phone="0500000990",
+		password="Pass12345!",
+		is_staff=True,
+	)
+	analytics_dashboard = Dashboard.objects.create(code="analytics", name_ar="التحليلات", sort_order=10)
+	UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.USER).allowed_dashboards.set([analytics_dashboard])
+
+	c = Client()
+	assert c.login(phone=staff_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res = c.get(reverse("dashboard:home"))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "آخر الطلبات" in html
+	assert '<a class="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:shadow-lg transition-all text-sm font-semibold" href="/dashboard/requests/">' not in html
+	assert "cursor-not-allowed" in html
+
+
+@pytest.mark.django_db
 def test_subscriptions_ops_page_shows_inquiries_and_requests():
 	admin_user = User.objects.create_user(phone="0500000951", password="Pass12345!", is_staff=True)
 	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=10)

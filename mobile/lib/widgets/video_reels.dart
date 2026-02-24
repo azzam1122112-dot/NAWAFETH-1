@@ -19,6 +19,7 @@ class _VideoReelsState extends State<VideoReels> {
   Timer? _autoTimer;
 
   bool _loading = true;
+  bool _loadFailed = false;
   int _active = 0;
   List<ProviderPortfolioItem> _items = const [];
 
@@ -41,6 +42,7 @@ class _VideoReelsState extends State<VideoReels> {
       if (!mounted) return;
       setState(() {
         _items = videos;
+        _loadFailed = _feed.lastMediaItemsLoadFailed;
         _loading = false;
       });
       _startAutoScroll();
@@ -48,6 +50,7 @@ class _VideoReelsState extends State<VideoReels> {
       if (!mounted) return;
       setState(() {
         _items = const [];
+        _loadFailed = true;
         _loading = false;
       });
     }
@@ -76,7 +79,30 @@ class _VideoReelsState extends State<VideoReels> {
       );
     }
 
-    if (_items.isEmpty) return const SizedBox(height: 12);
+    if (_items.isEmpty) {
+      if (_loadFailed) {
+        return SizedBox(
+          height: 92,
+          child: Center(
+            child: TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _loading = true;
+                  _loadFailed = false;
+                });
+                _load();
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text(
+                'تعذر تحميل اللمحات - إعادة المحاولة',
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+        );
+      }
+      return const SizedBox(height: 12);
+    }
 
     return Container(
       height: 90,
