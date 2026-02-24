@@ -858,9 +858,15 @@ class ProvidersApi {
       final res = await _dio.get(
         '${ApiConfig.apiPrefix}/providers/$providerId/spotlights/',
       );
-      final list = (res.data as List)
-          .map((e) => ProviderPortfolioItem.fromJson(e))
-          .toList();
+      final rawList = _extractList(res.data);
+      final list = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          list.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
       lastProviderPortfolioRequestFailed = false;
       return list;
     } catch (_) {
