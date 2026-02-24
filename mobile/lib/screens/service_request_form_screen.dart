@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/category.dart';
+import '../models/provider_service.dart';
 import '../services/providers_api.dart';
 import '../services/marketplace_api.dart';
 import '../utils/auth_guard.dart';
@@ -49,6 +50,7 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
   // Data
   List<Category> _categories = [];
   bool _isLoadingCategories = false;
+  String? _categoriesError;
   Category? _selectedCategory;
   SubCategory? _selectedSubCategory;
   bool _isSubmitting = false;
@@ -69,9 +71,23 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
   Future<void> _fetchCategories() async {
     setState(() {
       _isLoadingCategories = true;
+      _categoriesError = null;
     });
     try {
-      final categories = await ProvidersApi().getCategories();
+      final api = ProvidersApi();
+      final providerId = int.tryParse((widget.providerId ?? '').trim());
+      late final List<Category> categories;
+
+      if (providerId != null) {
+        final providerSubs = await api.getProviderSubcategories(providerId);
+        categories = _groupProviderSubcategories(providerSubs);
+        if (categories.isEmpty) {
+          _categoriesError = 'هذا المزود لم يسجل أقسامًا/تخصصات متاحة حالياً';
+        }
+      } else {
+        categories = await api.getCategories();
+      }
+
       if (mounted) {
         setState(() {
           _categories = categories;
@@ -88,10 +104,21 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
             }
           }
         }
+
+        // Convenience auto-select when targeted provider has only one path.
+        if (_selectedCategory == null && categories.length == 1) {
+          _selectedCategory = categories.first;
+          if (categories.first.subcategories.length == 1) {
+            _selectedSubCategory = categories.first.subcategories.first;
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
         debugPrint('Error fetching categories: $e');
+        setState(() {
+          _categoriesError = 'تعذر تحميل الأقسام والتخصصات';
+        });
       }
     } finally {
       if (mounted) {
@@ -100,6 +127,41 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
         });
       }
     }
+  }
+
+  List<Category> _groupProviderSubcategories(List<ProviderServiceSubcategory> subs) {
+    final Map<int, ({String name, List<SubCategory> subs})> grouped = {};
+
+    for (final s in subs) {
+      final categoryId = s.categoryId ?? -1;
+      final categoryName = (s.categoryName ?? '').trim().isNotEmpty
+          ? s.categoryName!.trim()
+          : 'القسم الرئيسي';
+
+      final bucket = grouped[categoryId];
+      if (bucket == null) {
+        grouped[categoryId] = (
+          name: categoryName,
+          subs: <SubCategory>[SubCategory(id: s.id, name: s.name)],
+        );
+      } else {
+        bucket.subs.add(SubCategory(id: s.id, name: s.name));
+      }
+    }
+
+    final out = grouped.entries
+        .map((e) => Category(
+              id: e.key,
+              name: e.value.name,
+              subcategories: e.value.subs,
+            ))
+        .toList();
+
+    out.sort((a, b) => a.name.compareTo(b.name));
+    for (final c in out) {
+      c.subcategories.sort((a, b) => a.name.compareTo(b.name));
+    }
+    return out;
   }
 
   @override
@@ -443,50 +505,133 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
               if (_isLoadingCategories)
                 const Center(child: CircularProgressIndicator())
               else ...[
-                // القسم الرئيسي
-                 const Text("القسم الرئيسي", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-                 const SizedBox(height: 8),
-                 DropdownButtonFormField<Category>(
-                  value: _selectedCategory,
-                  items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedCategory = val;
-                      _selectedSubCategory = null; 
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: "اختر القسم",
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                Builder(
+                  builder: (context) {
+                    final hasSingleCategory = _categories.length == 1 && _selectedCategory != null;
+                    final selectedCategory = _selectedCategory;
+                    final categorySubs = selectedCategory?.subcategories ?? const <SubCategory>[];
+                    final hasSingleSubcategory =
+                        hasSingleCategory && categorySubs.length == 1 && _selectedSubCategory != null;
 
-                // القسم الفرعي
-                if (_selectedCategory != null && _selectedCategory!.subcategories.isNotEmpty) ...[
-                 const Text("القسم الفرعي", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-                 const SizedBox(height: 8),
-                 DropdownButtonFormField<SubCategory>(
-                    value: _selectedSubCategory,
-                    items: _selectedCategory!.subcategories
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
-                        .toList(),
-                    onChanged: (val) {
+                    Widget readonlySelector({
+                      required String text,
+                      IconData icon = Icons.check_circle_outline,
+                    }) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE7E7EF)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(icon, size: 18, color: Colors.deepPurple),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                text,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                if (_categoriesError != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.22)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _categoriesError!,
+                            style: const TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                // القسم الرئيسي
+                const Text("القسم الرئيسي", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                const SizedBox(height: 8),
+                if (hasSingleCategory)
+                  readonlySelector(
+                    text: selectedCategory!.name,
+                    icon: Icons.category_outlined,
+                  )
+                else
+                  DropdownButtonFormField<Category>(
+                    value: _selectedCategory,
+                    items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
+                    onChanged: _categories.isEmpty ? null : (val) {
                       setState(() {
-                        _selectedSubCategory = val;
+                        _selectedCategory = val;
+                        _selectedSubCategory = null; 
                       });
                     },
                     decoration: InputDecoration(
-                      hintText: "اختر التخصص",
+                      hintText: "اختر القسم",
                       filled: true,
                       fillColor: Colors.white,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
                   ),
+                const SizedBox(height: 16),
+
+                // القسم الفرعي
+                if (selectedCategory != null && categorySubs.isNotEmpty) ...[
+                 Text(
+                   hasSingleCategory ? "التخصص المتاح لدى المزود" : "القسم الفرعي",
+                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                 ),
+                 const SizedBox(height: 8),
+                 if (hasSingleSubcategory)
+                   readonlySelector(
+                     text: _selectedSubCategory!.name,
+                     icon: Icons.tune_rounded,
+                   )
+                 else
+                   DropdownButtonFormField<SubCategory>(
+                      value: _selectedSubCategory,
+                      items: categorySubs
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                          .toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedSubCategory = val;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "اختر التخصص",
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
                   const SizedBox(height: 16),
                 ],
+                      ],
+                    );
+                  },
+                ),
 
                 // المدينة
                 const Text("المدينة", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
