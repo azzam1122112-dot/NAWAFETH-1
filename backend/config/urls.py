@@ -39,6 +39,11 @@ urlpatterns = [
         "dashboard/",
         include(("apps.dashboard.urls", "dashboard"), namespace="dashboard"),
     ),
+
+    path(
+        "portal/extras/",
+        include(("apps.extras_portal.urls", "extras_portal"), namespace="extras_portal"),
+    ),
     path("api/backoffice/", include(("apps.backoffice.urls", "backoffice"), namespace="backoffice")),
     path("api/support/", include(("apps.support.urls", "support"), namespace="support")),
     path("api/billing/", include(("apps.billing.urls", "billing"), namespace="billing")),

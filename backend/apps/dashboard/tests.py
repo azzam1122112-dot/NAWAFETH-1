@@ -13,6 +13,8 @@ from apps.dashboard.templatetags.dashboard_access import can_access
 from apps.dashboard.auth import SESSION_OTP_VERIFIED_KEY
 from apps.marketplace.models import RequestStatus, ServiceRequest
 from apps.providers.models import Category, ProviderProfile, SubCategory
+from apps.subscriptions.models import Subscription, SubscriptionPlan, SubscriptionStatus
+from apps.support.models import SupportTicket, SupportTicketType, SupportTicketStatus, SupportPriority, SupportTeam
 from apps.unified_requests.models import UnifiedRequest, UnifiedRequestMetadata
 
 
@@ -680,6 +682,461 @@ def test_dashboard_home_shows_unified_request_kpis():
 	assert "/dashboard/promo/2/" in html
 	assert "const uni =" in html
 	assert "الطلبات الموحدة" in html
+
+
+@pytest.mark.django_db
+def test_subscriptions_ops_page_shows_inquiries_and_requests():
+	admin_user = User.objects.create_user(phone="0500000951", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=10)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000952", password="Pass12345!")
+	team = SupportTeam.objects.create(code="subs", name_ar="إدارة الاشتراكات", is_active=True, sort_order=1)
+	ticket = SupportTicket.objects.create(
+		requester=requester,
+		ticket_type=SupportTicketType.SUBS,
+		status=SupportTicketStatus.NEW,
+		priority=SupportPriority.NORMAL,
+		description="استفسار اشتراك",
+		assigned_team=team,
+	)
+	plan = SubscriptionPlan.objects.create(code="PIONEER", title="الريادية", period="year", price="199.00", is_active=True)
+	invoice = Invoice.objects.create(user=requester, title="فاتورة اشتراك", subtotal="199.00", reference_type="subscription", reference_id="1")
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT, invoice=invoice)
+	UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="pending_payment",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		assigned_team_code="subs",
+		assigned_team_name="الاشتراكات",
+		summary="اشتراك الريادية",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res = c.get(reverse("dashboard:subscriptions_ops"))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "فريق إدارة الاشتراكات" in html
+	assert "قائمة استفسارات الاشتراكات" in html
+	assert "قائمة طلبات الاشتراكات" in html
+	assert (ticket.code or "HD") in html
+	assert "الريادية" in html
+	assert reverse("dashboard:subscription_request_detail", args=[sub.id]) in html
+
+
+@pytest.mark.django_db
+def test_subscription_request_detail_page_shows_invoice_and_unified_links():
+	admin_user = User.objects.create_user(phone="0500000953", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=10)
+	billing_dashboard = Dashboard.objects.create(code="billing", name_ar="الفوترة", sort_order=11)
+	analytics_dashboard = Dashboard.objects.create(code="analytics", name_ar="التحليلات", sort_order=12)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard, billing_dashboard, analytics_dashboard])
+
+	requester = User.objects.create_user(phone="0500000954", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="PRO", title="الاحترافية", period="year", price="999.00", is_active=True)
+	invoice = Invoice.objects.create(user=requester, title="فاتورة اشتراك", subtotal="999.00", reference_type="subscription", reference_id="55")
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT, invoice=invoice)
+	ur = UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="pending_payment",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		summary="اشتراك الاحترافية",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res = c.get(reverse("dashboard:subscription_request_detail", args=[sub.id]))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "تفاصيل طلب الاشتراك" in html
+	assert "ملخص طلب الترقية والتكلفة" in html
+	assert reverse("dashboard:unified_request_detail", args=[ur.id]) in html
+	assert "/dashboard/billing/?q=" in html
+
+
+@pytest.mark.django_db
+def test_subscription_request_detail_adds_operational_note():
+	admin_user = User.objects.create_user(phone="0500000941", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=15)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000942", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="NOTE_SUB", title="الريادية", period="year", price="199.00", is_active=True)
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT)
+	ur = UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="pending_payment",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		summary="اشتراك الريادية",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	note_text = "تم التواصل مع العميل وتم توضيح خطوات الدفع."
+	res_post = c.post(
+		reverse("dashboard:subscription_request_add_note_action", args=[sub.id]),
+		data={"note": note_text},
+	)
+	assert res_post.status_code == 302
+
+	md = UnifiedRequestMetadata.objects.get(request=ur)
+	assert isinstance(md.payload.get("ops_notes"), list)
+	assert md.payload["ops_notes"][-1]["text"] == note_text
+	audit = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_REQUEST_NOTE_ADDED,
+		reference_type="subscription_request.unified",
+		reference_id=str(ur.id),
+	).first()
+	assert audit is not None
+	assert audit.extra.get("subscription_id") == sub.id
+
+	res = c.get(reverse("dashboard:subscription_request_detail", args=[sub.id]))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "ملاحظات تشغيلية (داخلية)" in html
+	assert note_text in html
+
+
+@pytest.mark.django_db
+def test_subscription_request_detail_quick_status_updates_unified_request():
+	admin_user = User.objects.create_user(phone="0500000921", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=18)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000922", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="SD_STATUS", title="الريادية", period="year", price="199.00", is_active=True)
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT)
+	ur = UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="new",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		summary="طلب اشتراك",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res = c.post(
+		reverse("dashboard:subscription_request_set_status_action", args=[sub.id]),
+		data={"status": "in_progress", "note": "بدأت المعالجة"},
+	)
+	assert res.status_code == 302
+	ur.refresh_from_db()
+	assert ur.status == "in_progress"
+	log = ur.status_logs.first()
+	assert log is not None
+	assert log.to_status == "in_progress"
+
+	res2 = c.post(
+		reverse("dashboard:subscription_request_set_status_action", args=[sub.id]),
+		data={"status": "completed"},
+	)
+	assert res2.status_code == 302
+	ur.refresh_from_db()
+	assert ur.status == "completed"
+	assert ur.closed_at is not None
+	audit = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_REQUEST_STATUS_CHANGED,
+		reference_type="subscription_request.unified",
+		reference_id=str(ur.id),
+	).first()
+	assert audit is not None
+	assert audit.extra.get("subscription_id") == sub.id
+
+
+@pytest.mark.django_db
+def test_subscription_request_detail_assigns_unified_request():
+	admin_user = User.objects.create_user(phone="0500000911", password="Pass12345!", is_staff=True)
+	assignee_user = User.objects.create_user(phone="0500000912", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=19)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000913", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="SD_ASSIGN", title="الأساسية", period="year", price="100.00", is_active=True)
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT)
+	ur = UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="new",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		summary="طلب اشتراك",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res = c.post(
+		reverse("dashboard:subscription_request_assign_action", args=[sub.id]),
+		data={"assigned_to": str(assignee_user.id), "note": "تكليف مباشر"},
+	)
+	assert res.status_code == 302
+	ur.refresh_from_db()
+	assert ur.assigned_user_id == assignee_user.id
+	assert ur.assigned_team_code == "subs"
+	assign_log = ur.assignment_logs.first()
+	assert assign_log is not None
+	assert assign_log.to_user_id == assignee_user.id
+	audit = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_REQUEST_ASSIGNED,
+		reference_type="subscription_request.unified",
+		reference_id=str(ur.id),
+	).first()
+	assert audit is not None
+	assert audit.extra.get("to_user_id") == assignee_user.id
+
+
+@pytest.mark.django_db
+def test_subscription_account_detail_page_and_actions():
+	admin_user = User.objects.create_user(phone="0500000955", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=20)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000956", password="Pass12345!")
+	plan_basic = SubscriptionPlan.objects.create(code="BASIC_Y2", title="الأساسية", period="year", price="100.00", is_active=True)
+	plan_pro = SubscriptionPlan.objects.create(code="PRO_Y2", title="الاحترافية", period="year", price="999.00", is_active=True)
+	invoice = Invoice.objects.create(user=requester, title="فاتورة اشتراك", subtotal="100.00", reference_type="subscription", reference_id="77")
+	sub = Subscription.objects.create(user=requester, plan=plan_basic, status=SubscriptionStatus.ACTIVE, invoice=invoice)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	# detail page
+	res = c.get(reverse("dashboard:subscription_account_detail", args=[sub.id]))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "تفاصيل الحساب المشترك" in html
+	assert "تجديد الاشتراك" in html
+	assert "ترقية الاشتراك" in html
+	assert "تنبيهات الاشتراك" in html
+	assert "سجل عمليات الاشتراك" in html
+
+	# renew -> new pending subscription request created
+	count_before = Subscription.objects.count()
+	res_renew = c.post(reverse("dashboard:subscription_account_renew_action", args=[sub.id]), data={})
+	assert res_renew.status_code == 302
+	assert Subscription.objects.count() == count_before + 1
+	newest = Subscription.objects.order_by("-id").first()
+	assert newest is not None
+	assert newest.user_id == requester.id
+	assert newest.plan_id == plan_basic.id
+	assert newest.status == SubscriptionStatus.PENDING_PAYMENT
+	audit_renew = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_ACCOUNT_RENEW_REQUESTED,
+		reference_type="subscription.account",
+		reference_id=str(sub.id),
+	).first()
+	assert audit_renew is not None
+	assert audit_renew.extra.get("new_subscription_id") == newest.id
+
+	# upgrade -> another new pending subscription with selected plan
+	count_before_upgrade = Subscription.objects.count()
+	res_upgrade = c.post(
+		reverse("dashboard:subscription_account_upgrade_action", args=[sub.id]),
+		data={"plan_id": str(plan_pro.id)},
+	)
+	assert res_upgrade.status_code == 302
+	assert Subscription.objects.count() == count_before_upgrade + 1
+	upgraded = Subscription.objects.order_by("-id").first()
+	assert upgraded is not None
+	assert upgraded.plan_id == plan_pro.id
+	assert upgraded.status == SubscriptionStatus.PENDING_PAYMENT
+	audit_upgrade = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_ACCOUNT_UPGRADE_REQUESTED,
+		reference_type="subscription.account",
+		reference_id=str(sub.id),
+	).first()
+	assert audit_upgrade is not None
+	assert audit_upgrade.extra.get("to_plan_id") == plan_pro.id
+	assert audit_upgrade.extra.get("new_subscription_id") == upgraded.id
+
+	# cancel (soft)
+	res_cancel = c.post(reverse("dashboard:subscription_account_cancel_action", args=[sub.id]), data={})
+	assert res_cancel.status_code == 302
+	sub.refresh_from_db()
+	assert sub.status == SubscriptionStatus.CANCELLED
+	audit_cancel = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_ACCOUNT_CANCELLED,
+		reference_type="subscription.account",
+		reference_id=str(sub.id),
+	).first()
+	assert audit_cancel is not None
+	assert audit_cancel.extra.get("status") == SubscriptionStatus.CANCELLED
+
+
+@pytest.mark.django_db
+def test_subscription_account_detail_adds_operational_note():
+	admin_user = User.objects.create_user(phone="0500000931", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=25)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000932", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="ACC_NOTE", title="الأساسية", period="year", price="100.00", is_active=True)
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.ACTIVE)
+	ur = UnifiedRequest.objects.create(
+		request_type="subscription",
+		requester=requester,
+		status="active",
+		priority="normal",
+		source_app="subscriptions",
+		source_model="Subscription",
+		source_object_id=str(sub.id),
+		summary="اشتراك حساب",
+	)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	note_text = "تمت مراجعة بيانات الاشتراك وتأكيد صلاحية المدة."
+	res_post = c.post(reverse("dashboard:subscription_account_add_note_action", args=[sub.id]), data={"note": note_text})
+	assert res_post.status_code == 302
+
+	md = UnifiedRequestMetadata.objects.get(request=ur)
+	assert md.payload["account_ops_notes"][-1]["text"] == note_text
+	audit = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_ACCOUNT_NOTE_ADDED,
+		reference_type="subscription_account.unified",
+		reference_id=str(ur.id),
+	).first()
+	assert audit is not None
+	assert audit.extra.get("subscription_id") == sub.id
+
+	res = c.get(reverse("dashboard:subscription_account_detail", args=[sub.id]))
+	assert res.status_code == 200
+	html = res.content.decode("utf-8")
+	assert "ملاحظات تشغيلية للحساب" in html
+	assert note_text in html
+
+
+@pytest.mark.django_db
+def test_subscription_plans_compare_and_upgrade_summary_pages():
+	admin_user = User.objects.create_user(phone="0500000957", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=30)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000958", password="Pass12345!")
+	plan_basic = SubscriptionPlan.objects.create(code="BASIC_CMP", title="الأساسية", period="year", price="100.00", features=["verify_blue"], is_active=True)
+	plan_pro = SubscriptionPlan.objects.create(code="PRO_CMP", title="الاحترافية", period="year", price="999.00", features=["verify_blue", "verify_green", "promo_ads"], is_active=True)
+	sub = Subscription.objects.create(user=requester, plan=plan_basic, status=SubscriptionStatus.ACTIVE)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res_compare = c.get(reverse("dashboard:subscription_plans_compare"), {"subscription_id": str(sub.id)})
+	assert res_compare.status_code == 200
+	html_compare = res_compare.content.decode("utf-8")
+	assert "الصفحة التفصيلية لخيارات الاشتراك" in html_compare
+	assert "الأساسية" in html_compare
+	assert "الاحترافية" in html_compare
+
+	res_summary = c.get(reverse("dashboard:subscription_upgrade_summary", args=[sub.id]), {"plan_id": str(plan_pro.id)})
+	assert res_summary.status_code == 200
+	html_summary = res_summary.content.decode("utf-8")
+	assert "ملخص طلب الترقية والتكلفة" in html_summary
+	assert "VAT" in html_summary
+	assert "999.00" in html_summary or "999" in html_summary
+	assert reverse("dashboard:subscription_account_upgrade_action", args=[sub.id]) in html_summary
+
+
+@pytest.mark.django_db
+def test_subscription_payment_checkout_and_success_flow():
+	admin_user = User.objects.create_user(phone="0500000959", password="Pass12345!", is_staff=True)
+	subs_dashboard = Dashboard.objects.create(code="subs", name_ar="الاشتراكات", sort_order=40)
+	UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN).allowed_dashboards.set([subs_dashboard])
+
+	requester = User.objects.create_user(phone="0500000960", password="Pass12345!")
+	plan = SubscriptionPlan.objects.create(code="PAYFLOW", title="الريادية", period="year", price="199.00", is_active=True)
+	invoice = Invoice.objects.create(user=requester, title="فاتورة اشتراك", subtotal="199.00", reference_type="subscription", reference_id="88")
+	invoice.mark_pending()
+	invoice.save(update_fields=["status", "paid_at", "cancelled_at", "updated_at"])
+	sub = Subscription.objects.create(user=requester, plan=plan, status=SubscriptionStatus.PENDING_PAYMENT, invoice=invoice)
+
+	c = Client()
+	assert c.login(phone=admin_user.phone, password="Pass12345!")
+	s = c.session
+	s[SESSION_OTP_VERIFIED_KEY] = True
+	s.save()
+
+	res_checkout = c.get(reverse("dashboard:subscription_payment_checkout", args=[sub.id]))
+	assert res_checkout.status_code == 200
+	html_checkout = res_checkout.content.decode("utf-8")
+	assert "شاشة الدفع" in html_checkout
+	assert "دفع" in html_checkout
+	audit_checkout = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_PAYMENT_CHECKOUT_OPENED,
+		reference_type="subscription.payment",
+		reference_id=str(sub.id),
+	).first()
+	assert audit_checkout is not None
+	assert audit_checkout.extra.get("invoice_id") == invoice.id
+
+	res_pay = c.post(reverse("dashboard:subscription_payment_complete_action", args=[sub.id]), data={})
+	assert res_pay.status_code == 302
+	assert reverse("dashboard:subscription_payment_success", args=[sub.id]) in res_pay["Location"]
+
+	sub.refresh_from_db()
+	invoice.refresh_from_db()
+	assert invoice.status == "paid"
+	assert sub.status == SubscriptionStatus.ACTIVE
+	audit_pay = AuditLog.objects.filter(
+		action=AuditAction.SUBSCRIPTION_PAYMENT_COMPLETED,
+		reference_type="subscription.payment",
+		reference_id=str(sub.id),
+	).first()
+	assert audit_pay is not None
+	assert audit_pay.extra.get("invoice_id") == invoice.id
+	assert audit_pay.extra.get("invoice_status") == "paid"
+
+	res_success = c.get(reverse("dashboard:subscription_payment_success", args=[sub.id]))
+	assert res_success.status_code == 200
+	html_success = res_success.content.decode("utf-8")
+	assert "تمت عملية سداد الرسوم بنجاح" in html_success
 
 
 @pytest.mark.django_db

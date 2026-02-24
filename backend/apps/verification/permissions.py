@@ -53,8 +53,13 @@ class IsOwnerOrBackofficeVerify(BasePermission):
                     return False
             return True
 
-        # owner
-        if obj.requester_id == user.id:
+        # owner (VerificationRequest) / owner (VerifiedBadge)
+        requester_id = getattr(obj, "requester_id", None)
+        if requester_id is not None and requester_id == user.id:
+            return True
+
+        owner_user_id = getattr(obj, "user_id", None)
+        if owner_user_id is not None and owner_user_id == user.id:
             return True
 
         return self._has_backoffice_access(request)

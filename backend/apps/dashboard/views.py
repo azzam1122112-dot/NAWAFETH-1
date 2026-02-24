@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import logging
+from decimal import Decimal
 from functools import wraps
 from django.contrib import messages
 
@@ -13,6 +14,7 @@ from .auth import dashboard_staff_required as staff_member_required
 from .auth import dashboard_login_required as login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponse
@@ -30,14 +32,29 @@ from apps.providers.models import ProviderPortfolioItem
 from apps.accounts.models import User
 from apps.messaging.models import Message
 from apps.reviews.models import Review
-from apps.support.models import SupportTicket, SupportTicketStatus, SupportTeam
+from apps.support.models import SupportTicket, SupportTicketStatus, SupportTeam, SupportTicketType
 from apps.support.models import SupportTicketType
 from apps.support.services import change_ticket_status, assign_ticket
-from apps.billing.models import Invoice, InvoiceStatus, PaymentAttempt
-from apps.verification.models import VerificationRequest, VerificationStatus, VerificationDocument
-from apps.verification.services import finalize_request_and_create_invoice, activate_after_payment as activate_verification_after_payment
-from apps.subscriptions.models import Subscription, SubscriptionStatus
-from apps.subscriptions.services import refresh_subscription_status, activate_subscription_after_payment
+from apps.billing.models import Invoice, InvoiceStatus, PaymentAttempt, money_round
+from apps.billing.services import init_payment, handle_webhook
+from apps.verification.models import (
+    VerificationRequest,
+    VerificationStatus,
+    VerificationDocument,
+    VerificationRequirement,
+    VerifiedBadge,
+)
+from apps.verification.services import (
+    finalize_request_and_create_invoice,
+    decide_requirement,
+    activate_after_payment as activate_verification_after_payment,
+)
+from apps.subscriptions.models import Subscription, SubscriptionStatus, SubscriptionPlan, FeatureKey
+from apps.subscriptions.services import (
+    refresh_subscription_status,
+    activate_subscription_after_payment,
+    start_subscription_checkout,
+)
 from apps.promo.models import PromoRequest, PromoRequestStatus
 from apps.promo.models import PromoAdPrice, PromoAdType
 from apps.promo.services import quote_and_create_invoice, reject_request, activate_after_payment as activate_promo_after_payment
@@ -48,7 +65,14 @@ from apps.features.upload_limits import user_max_upload_mb
 from apps.backoffice.models import AccessLevel, Dashboard, UserAccessProfile
 from apps.audit.models import AuditAction
 from apps.audit.services import log_action
-from apps.unified_requests.models import UnifiedRequest, UnifiedRequestStatus, UnifiedRequestType
+from apps.unified_requests.models import (
+    UnifiedRequest,
+    UnifiedRequestAssignmentLog,
+    UnifiedRequestMetadata,
+    UnifiedRequestStatus,
+    UnifiedRequestStatusLog,
+    UnifiedRequestType,
+)
 from .forms import AcceptAssignProviderForm, CategoryForm, SubCategoryForm
 
 # إن كانت عندك Enums استوردها (عدّل حسب مشروعك)
@@ -174,10 +198,10 @@ def dashboard_access_required(dashboard_code: str, write: bool = False):
             ("content", "dashboard:requests_list"),
             ("billing", "dashboard:billing_invoices_list"),
             ("support", "dashboard:support_tickets_list"),
-            ("verify", "dashboard:verification_requests_list"),
+            ("verify", "dashboard:verification_ops"),
             ("promo", "dashboard:promo_requests_list"),
             ("subs", "dashboard:subscriptions_list"),
-            ("extras", "dashboard:extras_list"),
+            ("extras", "dashboard:extras_ops"),
             ("access", "dashboard:access_profiles_list"),
         ]
         for code, route in candidates:
@@ -1773,6 +1797,9 @@ def support_ticket_detail(request: HttpRequest, ticket_id: int) -> HttpResponse:
             "reported_user_profile_url": reported_user_profile_url,
             "reported_target_label": reported_target_label,
             "reported_target_url": reported_target_url,
+            "back_url": reverse("dashboard:support_tickets_list"),
+            "assign_action_url": reverse("dashboard:support_ticket_assign_action", args=[ticket.id]),
+            "status_action_url": reverse("dashboard:support_ticket_status_action", args=[ticket.id]),
         },
     )
 
@@ -2030,7 +2057,12 @@ def support_ticket_status_action(request: HttpRequest, ticket_id: int) -> HttpRe
 @staff_member_required
 @dashboard_access_required("verify")
 def verification_requests_list(request: HttpRequest) -> HttpResponse:
-    qs = VerificationRequest.objects.select_related("requester", "invoice", "assigned_to").all().order_by("-id")
+    qs = (
+        VerificationRequest.objects.select_related("requester", "invoice", "assigned_to")
+        .prefetch_related("requirements")
+        .all()
+        .order_by("-id")
+    )
     q = (request.GET.get("q") or "").strip()
     status_val = (request.GET.get("status") or "").strip()
     if q:
@@ -2043,16 +2075,21 @@ def verification_requests_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
 
     if _want_xlsx(request) or _want_pdf(request) or _want_csv(request):
-        headers_ar = ["الكود", "المستخدم", "نوع الشارة", "الحالة", "فاتورة", "إجراءات"]
+        headers_ar = ["الكود", "المستخدم", "نوع/بنود التوثيق", "الأولوية", "الحالة", "فاتورة", "إجراءات"]
         export_rows = []
         for vr in qs[:2000]:
             code = vr.code or vr.id
             phone = getattr(getattr(vr, "requester", None), "phone", "—") or "—"
-            badge = getattr(vr, "get_badge_type_display", lambda: getattr(vr, "badge_type", ""))() or "—"
+            if vr.badge_type:
+                badge = getattr(vr, "get_badge_type_display", lambda: getattr(vr, "badge_type", ""))() or "—"
+            else:
+                codes = [r.code for r in getattr(vr, "requirements", []).all()]
+                badge = " / ".join([c for c in codes if c]) or "—"
+            priority = getattr(vr, "priority", "—")
             status_label = getattr(vr, "get_status_display", lambda: vr.status)() or "—"
             invoice_code = getattr(getattr(vr, "invoice", None), "code", "—") or "—"
             detail_path = f"/dashboard/verification/{vr.id}/"
-            export_rows.append([code, phone, badge, status_label, invoice_code, detail_path])
+            export_rows.append([code, phone, badge, priority, status_label, invoice_code, detail_path])
 
         if _want_csv(request):
             return _csv_response("verification_requests.csv", headers_ar, export_rows)
@@ -2089,11 +2126,129 @@ def verification_request_detail(request: HttpRequest, verification_id: int) -> H
     if ap and ap.level == "user" and vr.assigned_to_id is not None and vr.assigned_to_id != request.user.id:
         return HttpResponse("غير مصرح", status=403)
     docs = VerificationDocument.objects.filter(request=vr).select_related("decided_by").order_by("-id")
+    reqs = (
+        vr.requirements.select_related("decided_by")
+        .prefetch_related("attachments")
+        .order_by("sort_order", "id")
+    )
+    inv_lines = []
+    if getattr(vr, "invoice", None) and hasattr(vr.invoice, "lines"):
+        inv_lines = list(vr.invoice.lines.all().order_by("sort_order", "id"))
     return render(
         request,
         "dashboard/verification_request_detail.html",
-        {"vr": vr, "docs": docs},
+        {"vr": vr, "docs": docs, "reqs": reqs, "inv_lines": inv_lines},
     )
+
+
+@staff_member_required
+@dashboard_access_required("verify")
+def verified_badges_list(request: HttpRequest) -> HttpResponse:
+    qs = (
+        VerifiedBadge.objects.select_related("user", "request")
+        .all()
+        .order_by("-is_active", "-id")
+    )
+    q = (request.GET.get("q") or "").strip()
+    active_val = (request.GET.get("active") or "").strip()
+    if q:
+        qs = qs.filter(
+            Q(user__phone__icontains=q)
+            | Q(verification_code__icontains=q)
+            | Q(request__code__icontains=q)
+        )
+    if active_val in ("1", "true", "yes"):
+        qs = qs.filter(is_active=True)
+    if active_val in ("0", "false", "no"):
+        qs = qs.filter(is_active=False)
+
+    paginator = Paginator(qs, 25)
+    page_obj = paginator.get_page(request.GET.get("page") or "1")
+    return render(
+        request,
+        "dashboard/verified_badges_list.html",
+        {
+            "page_obj": page_obj,
+            "q": q,
+            "active_val": active_val,
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("verify", write=True)
+@require_POST
+def verified_badge_deactivate_action(request: HttpRequest, badge_id: int) -> HttpResponse:
+    badge = get_object_or_404(VerifiedBadge, id=badge_id)
+    try:
+        badge.is_active = False
+        badge.expires_at = timezone.now()
+        badge.save(update_fields=["is_active", "expires_at"])
+        messages.success(request, "تم إلغاء التفعيل")
+    except Exception:
+        logger.exception("verified_badge_deactivate_action error")
+        messages.error(request, "تعذر إلغاء التفعيل")
+    return redirect("dashboard:verified_badges_list")
+
+
+@staff_member_required
+@dashboard_access_required("verify", write=True)
+@require_POST
+def verified_badge_renew_action(request: HttpRequest, badge_id: int) -> HttpResponse:
+    badge = get_object_or_404(VerifiedBadge.objects.select_related("user"), id=badge_id)
+    user = badge.user
+
+    # Create a renewal verification request with a single approved requirement.
+    try:
+        vr = VerificationRequest.objects.create(
+            requester=user,
+            badge_type=badge.badge_type,
+            status=VerificationStatus.IN_REVIEW,
+            priority=2,
+        )
+        VerificationRequirement.objects.create(
+            request=vr,
+            badge_type=badge.badge_type,
+            code=badge.verification_code or ("B1" if badge.badge_type == "blue" else "G1"),
+            title=badge.verification_title or "",
+            is_approved=True,
+            decision_note="تجديد",
+            decided_by=request.user,
+            decided_at=timezone.now(),
+            sort_order=0,
+        )
+        vr = finalize_request_and_create_invoice(vr=vr, by_user=request.user)
+        messages.success(request, f"تم إنشاء فاتورة تجديد: {vr.invoice.code if vr.invoice else vr.code}")
+    except Exception:
+        logger.exception("verified_badge_renew_action error")
+        messages.error(request, "تعذر إنشاء طلب تجديد")
+    return redirect("dashboard:verified_badges_list")
+
+
+@staff_member_required
+@dashboard_access_required("verify", write=True)
+@require_POST
+def verification_requirement_decision_action(request: HttpRequest, req_id: int) -> HttpResponse:
+    req = get_object_or_404(VerificationRequirement.objects.select_related("request"), id=req_id)
+    vr = req.request
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and vr.assigned_to_id is not None and vr.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    raw = (request.POST.get("is_approved") or "").strip().lower()
+    if raw not in ("true", "false", "1", "0", "yes", "no"):
+        messages.warning(request, "اختر قرار البند")
+        return redirect("dashboard:verification_request_detail", verification_id=vr.id)
+    is_approved = raw in ("true", "1", "yes")
+    note = (request.POST.get("decision_note") or "").strip()
+    try:
+        decide_requirement(req=req, is_approved=is_approved, note=note, by_user=request.user)
+        messages.success(request, "تم حفظ قرار البند")
+    except Exception:
+        logger.exception("verification_requirement_decision_action error")
+        messages.error(request, "تعذر حفظ قرار البند")
+    return redirect("dashboard:verification_request_detail", verification_id=vr.id)
 
 
 @staff_member_required
@@ -2128,6 +2283,169 @@ def verification_activate_action(request: HttpRequest, verification_id: int) -> 
     except Exception as e:
         messages.error(request, str(e) or "تعذر تفعيل طلب التوثيق")
     return redirect("dashboard:verification_request_detail", verification_id=verification_id)
+
+
+@staff_member_required
+@dashboard_access_required("verify")
+def verification_ops(request: HttpRequest) -> HttpResponse:
+    """Unified verification operations page.
+
+    Shows:
+    - Verification inquiries (SupportTicketType.VERIFY) codes HDxxxx
+    - Verification requests (VerificationRequest) codes ADxxxx
+    """
+
+    q = (request.GET.get("q") or "").strip()
+    inq_status = (request.GET.get("inq_status") or "").strip()
+    req_status = (request.GET.get("req_status") or "").strip()
+
+    inq_qs = (
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to")
+        .filter(ticket_type=SupportTicketType.VERIFY)
+        .order_by("-id")
+    )
+    if q:
+        inq_qs = inq_qs.filter(Q(code__icontains=q) | Q(requester__phone__icontains=q) | Q(description__icontains=q))
+    if inq_status:
+        inq_qs = inq_qs.filter(status=inq_status)
+
+    req_qs = (
+        VerificationRequest.objects.select_related("requester", "invoice", "assigned_to")
+        .prefetch_related("requirements")
+        .all()
+        .order_by("-id")
+    )
+    if q:
+        req_qs = req_qs.filter(Q(code__icontains=q) | Q(requester__phone__icontains=q))
+    if req_status:
+        req_qs = req_qs.filter(status=req_status)
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user":
+        inq_qs = inq_qs.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
+        req_qs = req_qs.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
+
+    inq_paginator = Paginator(inq_qs, 15)
+    inq_page_obj = inq_paginator.get_page(request.GET.get("inq_page") or "1")
+
+    req_paginator = Paginator(req_qs, 15)
+    req_page_obj = req_paginator.get_page(request.GET.get("req_page") or "1")
+
+    return render(
+        request,
+        "dashboard/verification_ops.html",
+        {
+            "q": q,
+            "inq_status": inq_status,
+            "req_status": req_status,
+            "inq_page_obj": inq_page_obj,
+            "req_page_obj": req_page_obj,
+            "inq_status_choices": SupportTicketStatus.choices,
+            "req_status_choices": VerificationStatus.choices,
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("verify")
+def verification_inquiry_detail(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to", "last_action_by"),
+        id=ticket_id,
+        ticket_type=SupportTicketType.VERIFY,
+    )
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    comments = ticket.comments.select_related("created_by").order_by("-id")
+    logs = ticket.status_logs.select_related("changed_by").order_by("-id")
+    teams = SupportTeam.objects.filter(is_active=True).order_by("sort_order", "id")
+    staff_users = User.objects.filter(is_staff=True).order_by("-id")[:150]
+    can_write = _dashboard_allowed(request.user, "verify", write=True)
+
+    return render(
+        request,
+        "dashboard/support_ticket_detail.html",
+        {
+            "ticket": ticket,
+            "comments": comments,
+            "logs": logs,
+            "teams": teams,
+            "staff_users": staff_users,
+            "status_choices": SupportTicketStatus.choices,
+            "reported_user_profile_url": "",
+            "reported_target_label": "",
+            "reported_target_url": "",
+            "can_write": can_write,
+            "back_url": reverse("dashboard:verification_ops"),
+            "assign_action_url": reverse("dashboard:verification_inquiry_assign_action", args=[ticket.id]),
+            "status_action_url": reverse("dashboard:verification_inquiry_status_action", args=[ticket.id]),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("verify", write=True)
+@require_POST
+def verification_inquiry_assign_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.VERIFY)
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    team_id = request.POST.get("assigned_team") or None
+    assigned_to = request.POST.get("assigned_to") or None
+    note = (request.POST.get("note") or "").strip()
+    try:
+        team_id = int(team_id) if team_id else None
+    except Exception:
+        team_id = None
+    try:
+        assigned_to = int(assigned_to) if assigned_to else None
+    except Exception:
+        assigned_to = None
+
+    if ap and ap.level == "user":
+        if assigned_to is not None and assigned_to != request.user.id:
+            return HttpResponse("غير مصرح", status=403)
+
+    try:
+        assign_ticket(ticket=ticket, team_id=team_id, user_id=assigned_to, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث التعيين بنجاح")
+    except Exception:
+        logger.exception("verification_inquiry_assign_action error")
+        messages.error(request, "تعذر تحديث التعيين")
+
+    return redirect("dashboard:verification_inquiry_detail", ticket_id=ticket.id)
+
+
+@staff_member_required
+@dashboard_access_required("verify", write=True)
+@require_POST
+def verification_inquiry_status_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.VERIFY)
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    status_new = (request.POST.get("status") or "").strip()
+    note = (request.POST.get("note") or "").strip()
+    if not status_new:
+        messages.warning(request, "اختر حالة التذكرة")
+        return redirect("dashboard:verification_inquiry_detail", ticket_id=ticket.id)
+
+    try:
+        change_ticket_status(ticket=ticket, new_status=status_new, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث حالة الاستفسار")
+    except Exception:
+        logger.exception("verification_inquiry_status_action error")
+        messages.error(request, "تعذر تحديث الحالة")
+
+    return redirect("dashboard:verification_inquiry_detail", ticket_id=ticket.id)
 
 
 @staff_member_required
@@ -2268,6 +2586,1200 @@ def promo_activate_action(request: HttpRequest, promo_id: int) -> HttpResponse:
 
 @staff_member_required
 @dashboard_access_required("subs")
+def subscriptions_ops(request: HttpRequest) -> HttpResponse:
+    """Unified subscriptions operations page.
+
+    Shows:
+    - Subscription inquiries (SupportTicketType.SUBS) codes HDxxxx
+    - Subscription requests/accounts (Subscription) with SDxxxx via unified engine when available
+    """
+    q = (request.GET.get("q") or "").strip()
+    inq_status = (request.GET.get("inq_status") or "").strip()
+    req_status = (request.GET.get("req_status") or "").strip()
+
+    inq_qs = (
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to")
+        .filter(ticket_type=SupportTicketType.SUBS)
+        .order_by("-id")
+    )
+    if q:
+        inq_qs = inq_qs.filter(Q(code__icontains=q) | Q(requester__phone__icontains=q) | Q(description__icontains=q))
+    if inq_status:
+        inq_qs = inq_qs.filter(status=inq_status)
+
+    req_qs = Subscription.objects.select_related("user", "plan", "invoice").all().order_by("-id")
+    if q:
+        req_qs = req_qs.filter(Q(user__phone__icontains=q) | Q(plan__title__icontains=q) | Q(plan__code__icontains=q))
+    if req_status:
+        req_qs = req_qs.filter(status=req_status)
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user":
+        inq_qs = inq_qs.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
+        # subscriptions themselves have no assignee; restrict by user ownership for backoffice user role
+        req_qs = req_qs.filter(user=request.user)
+
+    inq_page_obj = Paginator(inq_qs, 15).get_page(request.GET.get("inq_page") or "1")
+    req_page_obj = Paginator(req_qs, 15).get_page(request.GET.get("req_page") or "1")
+
+    # Attach unified request rows (SDxxxx) for request table rendering without N+1 loops on template lookups.
+    req_ids = [r.id for r in req_page_obj.object_list]
+    unified_map = {}
+    if req_ids:
+        for ur in UnifiedRequest.objects.filter(
+            source_app="subscriptions",
+            source_model="Subscription",
+            source_object_id__in=[str(i) for i in req_ids],
+        ).select_related("assigned_user"):
+            unified_map[str(ur.source_object_id)] = ur
+    for row in req_page_obj.object_list:
+        row.unified_request = unified_map.get(str(row.id))
+
+    return render(
+        request,
+        "dashboard/subscriptions_ops.html",
+        {
+            "q": q,
+            "inq_status": inq_status,
+            "req_status": req_status,
+            "inq_page_obj": inq_page_obj,
+            "req_page_obj": req_page_obj,
+            "inq_status_choices": SupportTicketStatus.choices,
+            "req_status_choices": SubscriptionStatus.choices,
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_inquiry_detail(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to", "last_action_by"),
+        id=ticket_id,
+        ticket_type=SupportTicketType.SUBS,
+    )
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    comments = ticket.comments.select_related("created_by").order_by("-id")
+    logs = ticket.status_logs.select_related("changed_by").order_by("-id")
+    teams = SupportTeam.objects.filter(is_active=True).order_by("sort_order", "id")
+    staff_users = User.objects.filter(is_staff=True).order_by("-id")[:150]
+    can_write = _dashboard_allowed(request.user, "subs", write=True)
+
+    return render(
+        request,
+        "dashboard/support_ticket_detail.html",
+        {
+            "ticket": ticket,
+            "comments": comments,
+            "logs": logs,
+            "teams": teams,
+            "staff_users": staff_users,
+            "status_choices": SupportTicketStatus.choices,
+            "reported_user_profile_url": "",
+            "reported_target_label": "",
+            "reported_target_url": "",
+            "can_write": can_write,
+            "back_url": reverse("dashboard:subscriptions_ops"),
+            "assign_action_url": reverse("dashboard:subscription_inquiry_assign_action", args=[ticket.id]),
+            "status_action_url": reverse("dashboard:subscription_inquiry_status_action", args=[ticket.id]),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_inquiry_assign_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.SUBS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    team_id = request.POST.get("assigned_team") or None
+    assigned_to = request.POST.get("assigned_to") or None
+    note = (request.POST.get("note") or "").strip()
+    try:
+        team_id = int(team_id) if team_id else None
+    except Exception:
+        team_id = None
+    try:
+        assigned_to = int(assigned_to) if assigned_to else None
+    except Exception:
+        assigned_to = None
+
+    if ap and ap.level == "user" and assigned_to not in (None, request.user.id):
+        return HttpResponse("غير مصرح", status=403)
+
+    try:
+        assign_ticket(ticket=ticket, team_id=team_id, user_id=assigned_to, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث التعيين بنجاح")
+    except Exception:
+        logger.exception("subscription_inquiry_assign_action error")
+        messages.error(request, "تعذر تحديث التعيين")
+    return redirect("dashboard:subscription_inquiry_detail", ticket_id=ticket.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_inquiry_status_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.SUBS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    status_new = (request.POST.get("status") or "").strip()
+    note = (request.POST.get("note") or "").strip()
+    if not status_new:
+        messages.warning(request, "اختر حالة الاستفسار")
+        return redirect("dashboard:subscription_inquiry_detail", ticket_id=ticket.id)
+    try:
+        change_ticket_status(ticket=ticket, new_status=status_new, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث حالة الاستفسار")
+    except Exception:
+        logger.exception("subscription_inquiry_status_action error")
+        messages.error(request, "تعذر تحديث الحالة")
+    return redirect("dashboard:subscription_inquiry_detail", ticket_id=ticket.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_request_detail(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan", "invoice"), id=subscription_id)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and sub.user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    ur = UnifiedRequest.objects.select_related("assigned_user").filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).first()
+    ops_notes = []
+    if ur:
+        md = getattr(ur, "metadata_record", None)
+        payload = getattr(md, "payload", {}) or {}
+        raw_notes = payload.get("ops_notes") if isinstance(payload, dict) else None
+        if isinstance(raw_notes, list):
+            ops_notes = [n for n in raw_notes if isinstance(n, dict)]
+            ops_notes.sort(key=lambda n: str(n.get("created_at") or ""), reverse=True)
+    invoice_url = ""
+    if sub.invoice_id and _dashboard_allowed(request.user, "billing", write=False):
+        q = getattr(sub.invoice, "code", "") or str(sub.invoice_id)
+        invoice_url = f"{reverse('dashboard:billing_invoices_list')}?q={q}"
+    staff_users = User.objects.filter(is_staff=True).order_by("-id")[:150]
+
+    return render(
+        request,
+        "dashboard/subscription_request_detail.html",
+        {
+            "sub": sub,
+            "ur": ur,
+            "invoice_url": invoice_url,
+            "ops_notes": ops_notes[:30],
+            "staff_users": staff_users,
+            "can_write": _dashboard_allowed(request.user, "subs", write=True),
+            "back_url": reverse("dashboard:subscriptions_ops"),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_request_add_note_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription, id=subscription_id)
+    note = (request.POST.get("note") or "").strip()
+    if not note:
+        messages.warning(request, "نص الملاحظة مطلوب")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+    if len(note) > 300:
+        messages.warning(request, "الحد الأقصى للملاحظة 300 حرف")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    ur = UnifiedRequest.objects.filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).first()
+    if not ur:
+        messages.error(request, "لا يوجد طلب موحد مرتبط لتخزين الملاحظات")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    md, _ = UnifiedRequestMetadata.objects.get_or_create(
+        request=ur,
+        defaults={"payload": {}, "updated_by": request.user},
+    )
+    payload = md.payload if isinstance(md.payload, dict) else {}
+    notes = payload.get("ops_notes")
+    if not isinstance(notes, list):
+        notes = []
+    notes.append(
+        {
+            "text": note,
+            "created_at": timezone.now().isoformat(),
+            "by_user_id": request.user.id,
+            "by_user_phone": getattr(request.user, "phone", "") or "",
+        }
+    )
+    payload["ops_notes"] = notes[-50:]
+    md.payload = payload
+    md.updated_by = request.user
+    md.save(update_fields=["payload", "updated_by", "updated_at"])
+    try:
+        log_action(
+            actor=request.user,
+            action=AuditAction.SUBSCRIPTION_REQUEST_NOTE_ADDED,
+            reference_type="subscription_request.unified",
+            reference_id=str(ur.id),
+            request=request,
+            extra={
+                "subscription_id": sub.id,
+                "unified_request_id": ur.id,
+                "note_length": len(note),
+            },
+        )
+    except Exception:
+        logger.exception("subscription_request_add_note_action audit log error")
+    messages.success(request, "تم حفظ الملاحظة التشغيلية")
+    return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_request_set_status_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription, id=subscription_id)
+    new_status = (request.POST.get("status") or "").strip()
+    note = (request.POST.get("note") or "").strip()
+    allowed_statuses = {
+        UnifiedRequestStatus.NEW,
+        UnifiedRequestStatus.IN_PROGRESS,
+        UnifiedRequestStatus.COMPLETED,
+        UnifiedRequestStatus.RETURNED,
+        UnifiedRequestStatus.CLOSED,
+    }
+    if new_status not in allowed_statuses:
+        messages.warning(request, "حالة طلب الاشتراك غير صالحة")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    ur = UnifiedRequest.objects.filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).first()
+    if not ur:
+        messages.error(request, "لا يوجد طلب موحد مرتبط بطلب الاشتراك")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    prev_status = ur.status
+    if prev_status == new_status:
+        messages.info(request, "الحالة الحالية مطابقة للحالة المطلوبة")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    ur.status = new_status
+    if new_status in {UnifiedRequestStatus.CLOSED, UnifiedRequestStatus.COMPLETED}:
+        ur.closed_at = ur.closed_at or timezone.now()
+    else:
+        ur.closed_at = None
+    ur.save(update_fields=["status", "closed_at", "updated_at"])
+
+    UnifiedRequestStatusLog.objects.create(
+        request=ur,
+        from_status=prev_status or "",
+        to_status=new_status,
+        changed_by=request.user,
+        note=(note[:200] if note else "dashboard subscription status"),
+    )
+    try:
+        log_action(
+            actor=request.user,
+            action=AuditAction.SUBSCRIPTION_REQUEST_STATUS_CHANGED,
+            reference_type="subscription_request.unified",
+            reference_id=str(ur.id),
+            request=request,
+            extra={
+                "subscription_id": sub.id,
+                "unified_request_id": ur.id,
+                "from_status": prev_status,
+                "to_status": new_status,
+                "note": note[:200],
+            },
+        )
+    except Exception:
+        logger.exception("subscription_request_set_status_action audit log error")
+    messages.success(request, "تم تحديث حالة طلب الاشتراك")
+    return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_request_assign_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription, id=subscription_id)
+    assigned_to = request.POST.get("assigned_to") or None
+    note = (request.POST.get("note") or "").strip()
+    try:
+        assigned_to = int(assigned_to) if assigned_to else None
+    except Exception:
+        assigned_to = None
+
+    ap = getattr(request.user, "access_profile", None)
+    ur = UnifiedRequest.objects.filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).first()
+    if not ur:
+        messages.error(request, "لا يوجد طلب موحد مرتبط بطلب الاشتراك")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    if ap and ap.level == "user":
+        if ur.assigned_user_id is not None and ur.assigned_user_id != request.user.id:
+            return HttpResponse("غير مصرح", status=403)
+        if assigned_to not in (None, request.user.id):
+            return HttpResponse("غير مصرح", status=403)
+
+    if assigned_to is not None and not User.objects.filter(id=assigned_to, is_staff=True).exists():
+        messages.error(request, "المكلّف غير صحيح")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    try:
+        with transaction.atomic():
+            ur = UnifiedRequest.objects.select_for_update().get(id=ur.id)
+            old_user_id = ur.assigned_user_id
+            old_team = ur.assigned_team_code or ""
+            ur.assigned_team_code = "subs"
+            ur.assigned_team_name = "الاشتراكات"
+            ur.assigned_user_id = assigned_to
+            ur.assigned_at = timezone.now() if assigned_to else None
+            ur.save(update_fields=["assigned_team_code", "assigned_team_name", "assigned_user", "assigned_at", "updated_at"])
+            if old_user_id != ur.assigned_user_id or old_team != (ur.assigned_team_code or ""):
+                UnifiedRequestAssignmentLog.objects.create(
+                    request=ur,
+                    from_team_code=old_team,
+                    to_team_code=ur.assigned_team_code or "",
+                    from_user_id=old_user_id,
+                    to_user=ur.assigned_user,
+                    changed_by=request.user,
+                    note=note[:200],
+                )
+                try:
+                    log_action(
+                        actor=request.user,
+                        action=AuditAction.SUBSCRIPTION_REQUEST_ASSIGNED,
+                        reference_type="subscription_request.unified",
+                        reference_id=str(ur.id),
+                        request=request,
+                        extra={
+                            "subscription_id": sub.id,
+                            "unified_request_id": ur.id,
+                            "from_team": old_team,
+                            "to_team": ur.assigned_team_code or "",
+                            "from_user_id": old_user_id,
+                            "to_user_id": ur.assigned_user_id,
+                            "note": note[:200],
+                        },
+                    )
+                except Exception:
+                    logger.exception("subscription_request_assign_action audit log error")
+        messages.success(request, "تم تحديث إسناد طلب الاشتراك")
+    except Exception:
+        logger.exception("subscription_request_assign_action error")
+        messages.error(request, "تعذر تحديث الإسناد")
+    return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("extras")
+def extras_ops(request: HttpRequest) -> HttpResponse:
+    """Unified extras operations page.
+
+    Shows:
+    - Extras inquiries (SupportTicketType.EXTRAS) codes HDxxxx
+    - Extras operational requests (UnifiedRequestType.EXTRAS) codes Pxxxx
+    """
+
+    q = (request.GET.get("q") or "").strip()
+    inq_status = (request.GET.get("inq_status") or "").strip()
+    req_status = (request.GET.get("req_status") or "").strip()
+
+    inq_qs = (
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to")
+        .filter(ticket_type=SupportTicketType.EXTRAS)
+        .order_by("-id")
+    )
+    if q:
+        inq_qs = inq_qs.filter(Q(code__icontains=q) | Q(requester__phone__icontains=q) | Q(description__icontains=q))
+    if inq_status:
+        inq_qs = inq_qs.filter(status=inq_status)
+
+    req_qs = (
+        UnifiedRequest.objects.select_related("requester", "assigned_user")
+        .filter(request_type=UnifiedRequestType.EXTRAS)
+        .order_by("-id")
+    )
+    if q:
+        req_qs = req_qs.filter(
+            Q(code__icontains=q)
+            | Q(summary__icontains=q)
+            | Q(requester__phone__icontains=q)
+            | Q(source_object_id__icontains=q)
+        )
+    if req_status:
+        req_qs = req_qs.filter(status=req_status)
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user":
+        inq_qs = inq_qs.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
+        req_qs = req_qs.filter(Q(assigned_user=request.user) | Q(assigned_user__isnull=True))
+
+    inq_page_obj = Paginator(inq_qs, 15).get_page(request.GET.get("inq_page") or "1")
+    req_page_obj = Paginator(req_qs, 15).get_page(request.GET.get("req_page") or "1")
+
+    return render(
+        request,
+        "dashboard/extras_ops.html",
+        {
+            "q": q,
+            "inq_status": inq_status,
+            "req_status": req_status,
+            "inq_page_obj": inq_page_obj,
+            "req_page_obj": req_page_obj,
+            "inq_status_choices": SupportTicketStatus.choices,
+            "req_status_choices": UnifiedRequestStatus.choices,
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("extras")
+def extras_inquiry_detail(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(
+        SupportTicket.objects.select_related("requester", "assigned_team", "assigned_to", "last_action_by"),
+        id=ticket_id,
+        ticket_type=SupportTicketType.EXTRAS,
+    )
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    comments = ticket.comments.select_related("created_by").order_by("-id")
+    logs = ticket.status_logs.select_related("changed_by").order_by("-id")
+    teams = SupportTeam.objects.filter(is_active=True).order_by("sort_order", "id")
+    staff_users = User.objects.filter(is_staff=True).order_by("-id")[:150]
+    can_write = _dashboard_allowed(request.user, "extras", write=True)
+
+    return render(
+        request,
+        "dashboard/support_ticket_detail.html",
+        {
+            "ticket": ticket,
+            "comments": comments,
+            "logs": logs,
+            "teams": teams,
+            "staff_users": staff_users,
+            "status_choices": SupportTicketStatus.choices,
+            "reported_user_profile_url": "",
+            "reported_target_label": "",
+            "reported_target_url": "",
+            "can_write": can_write,
+            "back_url": reverse("dashboard:extras_ops"),
+            "assign_action_url": reverse("dashboard:extras_inquiry_assign_action", args=[ticket.id]),
+            "status_action_url": reverse("dashboard:extras_inquiry_status_action", args=[ticket.id]),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("extras", write=True)
+@require_POST
+def extras_inquiry_assign_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.EXTRAS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    team_id = request.POST.get("assigned_team") or None
+    assigned_to = request.POST.get("assigned_to") or None
+    note = (request.POST.get("note") or "").strip()
+    try:
+        team_id = int(team_id) if team_id else None
+    except Exception:
+        team_id = None
+    try:
+        assigned_to = int(assigned_to) if assigned_to else None
+    except Exception:
+        assigned_to = None
+
+    if ap and ap.level == "user" and assigned_to not in (None, request.user.id):
+        return HttpResponse("غير مصرح", status=403)
+
+    try:
+        assign_ticket(ticket=ticket, team_id=team_id, user_id=assigned_to, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث التعيين بنجاح")
+    except Exception:
+        logger.exception("extras_inquiry_assign_action error")
+        messages.error(request, "تعذر تحديث التعيين")
+    return redirect("dashboard:extras_inquiry_detail", ticket_id=ticket.id)
+
+
+@staff_member_required
+@dashboard_access_required("extras", write=True)
+@require_POST
+def extras_inquiry_status_action(request: HttpRequest, ticket_id: int) -> HttpResponse:
+    ticket = get_object_or_404(SupportTicket, id=ticket_id, ticket_type=SupportTicketType.EXTRAS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ticket.assigned_to_id is not None and ticket.assigned_to_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    status_new = (request.POST.get("status") or "").strip()
+    note = (request.POST.get("note") or "").strip()
+    if not status_new:
+        messages.warning(request, "اختر حالة الاستفسار")
+        return redirect("dashboard:extras_inquiry_detail", ticket_id=ticket.id)
+    try:
+        change_ticket_status(ticket=ticket, new_status=status_new, by_user=request.user, note=note)
+        messages.success(request, "تم تحديث حالة الاستفسار")
+    except Exception:
+        logger.exception("extras_inquiry_status_action error")
+        messages.error(request, "تعذر تحديث الحالة")
+    return redirect("dashboard:extras_inquiry_detail", ticket_id=ticket.id)
+
+
+@staff_member_required
+@dashboard_access_required("extras")
+def extras_request_detail(request: HttpRequest, unified_request_id: int) -> HttpResponse:
+    ur = get_object_or_404(
+        UnifiedRequest.objects.select_related("requester", "assigned_user")
+        .prefetch_related(
+            "status_logs__changed_by",
+            "assignment_logs__from_user",
+            "assignment_logs__to_user",
+            "assignment_logs__changed_by",
+        ),
+        id=unified_request_id,
+        request_type=UnifiedRequestType.EXTRAS,
+    )
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ur.assigned_user_id is not None and ur.assigned_user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    metadata_record = getattr(ur, "metadata_record", None)
+    metadata_payload = getattr(metadata_record, "payload", {}) or {}
+    quick_links = _unified_request_quick_links(request.user, ur, metadata_payload)
+
+    purchase = None
+    invoice_url = ""
+    if ur.source_app == "extras" and ur.source_model == "ExtraPurchase" and (ur.source_object_id or "").strip():
+        purchase = ExtraPurchase.objects.select_related("user", "invoice").filter(id=int(ur.source_object_id)).first()
+        if purchase and purchase.invoice_id and _dashboard_allowed(request.user, "billing", write=False):
+            q = getattr(purchase.invoice, "code", "") or str(purchase.invoice_id)
+            invoice_url = f"{reverse('dashboard:billing_invoices_list')}?q={q}"
+
+    staff_users = User.objects.filter(is_staff=True).order_by("-id")[:150]
+
+    return render(
+        request,
+        "dashboard/extras_request_detail.html",
+        {
+            "ur": ur,
+            "purchase": purchase,
+            "invoice_url": invoice_url,
+            "metadata_payload": metadata_payload,
+            "metadata_record": metadata_record,
+            "quick_links": quick_links,
+            "status_logs": ur.status_logs.all(),
+            "assignment_logs": ur.assignment_logs.all(),
+            "status_choices": UnifiedRequestStatus.choices,
+            "staff_users": staff_users,
+            "can_write": _dashboard_allowed(request.user, "extras", write=True),
+            "back_url": reverse("dashboard:extras_ops"),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("extras", write=True)
+@require_POST
+def extras_request_assign_action(request: HttpRequest, unified_request_id: int) -> HttpResponse:
+    ur = get_object_or_404(UnifiedRequest, id=unified_request_id, request_type=UnifiedRequestType.EXTRAS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ur.assigned_user_id is not None and ur.assigned_user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    assigned_to = request.POST.get("assigned_to") or None
+    note = (request.POST.get("note") or "").strip()
+    try:
+        assigned_to = int(assigned_to) if assigned_to else None
+    except Exception:
+        assigned_to = None
+
+    if ap and ap.level == "user" and assigned_to not in (None, request.user.id):
+        return HttpResponse("غير مصرح", status=403)
+
+    if assigned_to is not None and not User.objects.filter(id=assigned_to, is_staff=True).exists():
+        messages.error(request, "المكلّف غير صحيح")
+        return redirect("dashboard:extras_request_detail", unified_request_id=ur.id)
+
+    try:
+        with transaction.atomic():
+            ur = UnifiedRequest.objects.select_for_update().get(id=ur.id)
+            old_user_id = ur.assigned_user_id
+            old_team = ur.assigned_team_code or ""
+
+            ur.assigned_team_code = "extras"
+            ur.assigned_team_name = "الخدمات الإضافية"
+            ur.assigned_user_id = assigned_to
+            ur.assigned_at = timezone.now() if assigned_to else None
+            ur.save(update_fields=["assigned_team_code", "assigned_team_name", "assigned_user", "assigned_at", "updated_at"])
+
+            if old_user_id != ur.assigned_user_id or old_team != (ur.assigned_team_code or ""):
+                UnifiedRequestAssignmentLog.objects.create(
+                    request=ur,
+                    from_team_code=old_team,
+                    to_team_code=ur.assigned_team_code or "",
+                    from_user_id=old_user_id,
+                    to_user=ur.assigned_user,
+                    changed_by=request.user,
+                    note=note[:200],
+                )
+        messages.success(request, "تم تحديث الإسناد")
+    except Exception:
+        logger.exception("extras_request_assign_action error")
+        messages.error(request, "تعذر تحديث الإسناد")
+    return redirect("dashboard:extras_request_detail", unified_request_id=ur.id)
+
+
+@staff_member_required
+@dashboard_access_required("extras", write=True)
+@require_POST
+def extras_request_status_action(request: HttpRequest, unified_request_id: int) -> HttpResponse:
+    ur = get_object_or_404(UnifiedRequest, id=unified_request_id, request_type=UnifiedRequestType.EXTRAS)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and ur.assigned_user_id is not None and ur.assigned_user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    status_new = (request.POST.get("status") or "").strip()
+    note = (request.POST.get("note") or "").strip()
+    allowed_statuses = {v for v, _ in UnifiedRequestStatus.choices}
+    if not status_new or status_new not in allowed_statuses:
+        messages.warning(request, "اختر حالة صحيحة")
+        return redirect("dashboard:extras_request_detail", unified_request_id=ur.id)
+
+    try:
+        with transaction.atomic():
+            ur = UnifiedRequest.objects.select_for_update().get(id=ur.id)
+            old = ur.status
+            if old != status_new:
+                ur.status = status_new
+                if status_new in {"closed", "completed", "cancelled", "expired"} and ur.closed_at is None:
+                    ur.closed_at = timezone.now()
+                    ur.save(update_fields=["status", "closed_at", "updated_at"])
+                else:
+                    ur.save(update_fields=["status", "updated_at"])
+                UnifiedRequestStatusLog.objects.create(
+                    request=ur,
+                    from_status=old,
+                    to_status=status_new,
+                    changed_by=request.user,
+                    note=note[:200],
+                )
+        messages.success(request, "تم تحديث حالة الطلب")
+    except Exception:
+        logger.exception("extras_request_status_action error")
+        messages.error(request, "تعذر تحديث الحالة")
+    return redirect("dashboard:extras_request_detail", unified_request_id=ur.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_account_detail(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan", "invoice"), id=subscription_id)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and sub.user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by("price", "id")
+    recent_for_user = Subscription.objects.select_related("plan", "invoice").filter(user=sub.user).exclude(id=sub.id).order_by("-id")[:10]
+    unified_rows = UnifiedRequest.objects.filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).order_by("-id")[:1]
+    ur = unified_rows.first()
+    account_ops_notes = []
+    if ur:
+        md = getattr(ur, "metadata_record", None)
+        payload = getattr(md, "payload", {}) or {}
+        raw_notes = payload.get("account_ops_notes") if isinstance(payload, dict) else None
+        if isinstance(raw_notes, list):
+            account_ops_notes = [n for n in raw_notes if isinstance(n, dict)]
+            account_ops_notes.sort(key=lambda n: str(n.get("created_at") or ""), reverse=True)
+    payment_attempts = []
+    if sub.invoice_id:
+        payment_attempts = list(PaymentAttempt.objects.filter(invoice_id=sub.invoice_id).order_by("-created_at")[:10])
+
+    now = timezone.now()
+    alerts: list[dict] = []
+    if sub.status == SubscriptionStatus.PENDING_PAYMENT:
+        alerts.append({"level": "warning", "text": "الاشتراك بانتظار سداد الفاتورة لإكمال التفعيل."})
+    if sub.status == SubscriptionStatus.ACTIVE and sub.end_at:
+        days_left = (sub.end_at - now).days
+        if sub.end_at <= now:
+            alerts.append({"level": "danger", "text": "تاريخ نهاية الاشتراك مضى؛ راجع التحديث/التجديد."})
+        elif days_left <= 7:
+            alerts.append({"level": "warning", "text": f"الاشتراك سينتهي قريبًا خلال {max(days_left, 0)} يوم."})
+        else:
+            alerts.append({"level": "success", "text": "الاشتراك نشط ولا توجد تنبيهات حرجة حاليًا."})
+    if sub.status == SubscriptionStatus.GRACE:
+        alerts.append({"level": "warning", "text": "الاشتراك داخل فترة السماح؛ يوصى بإنشاء طلب تجديد."})
+    if sub.status == SubscriptionStatus.EXPIRED:
+        alerts.append({"level": "danger", "text": "الاشتراك منتهي؛ أنشئ طلب تجديد لإعادة التفعيل."})
+    if sub.status == SubscriptionStatus.CANCELLED:
+        alerts.append({"level": "danger", "text": "الاشتراك ملغي (إيقاف تشغيلي)."})
+
+    timeline: list[dict] = []
+    timeline.append({"at": sub.created_at, "title": "إنشاء سجل الاشتراك", "detail": f"تم إنشاء السجل على الباقة {sub.plan.code}."})
+    if sub.invoice_id:
+        timeline.append({
+            "at": sub.invoice.created_at,
+            "title": "إنشاء الفاتورة",
+            "detail": f"الفاتورة {sub.invoice.code or sub.invoice_id} بحالة {sub.invoice.get_status_display()}",
+        })
+        if sub.invoice.paid_at:
+            timeline.append({
+                "at": sub.invoice.paid_at,
+                "title": "سداد الفاتورة",
+                "detail": f"تم السداد بقيمة {sub.invoice.total} {sub.invoice.currency}",
+            })
+    for att in payment_attempts:
+        timeline.append({
+            "at": att.created_at,
+            "title": "محاولة دفع",
+            "detail": f"{att.get_status_display()} - {att.provider} - {att.amount} {att.currency}",
+        })
+    if sub.start_at:
+        timeline.append({"at": sub.start_at, "title": "تفعيل الاشتراك", "detail": "تم تفعيل الاشتراك."})
+    if sub.end_at:
+        timeline.append({"at": sub.end_at, "title": "موعد نهاية الاشتراك", "detail": "نهاية مدة الاشتراك الحالية."})
+    if sub.grace_end_at:
+        timeline.append({"at": sub.grace_end_at, "title": "نهاية فترة السماح", "detail": "آخر موعد قبل التحول إلى منتهي."})
+    if ur:
+        for log in ur.status_logs.select_related("changed_by").all()[:10]:
+            who = getattr(getattr(log, "changed_by", None), "phone", "") or "النظام"
+            timeline.append({
+                "at": log.created_at,
+                "title": "تحديث حالة الطلب الموحد",
+                "detail": f"{log.from_status or '—'} -> {log.to_status} بواسطة {who}",
+            })
+
+    timeline = [t for t in timeline if t.get("at")]
+    timeline.sort(key=lambda x: x["at"], reverse=True)
+
+    invoice_url = ""
+    if sub.invoice_id and _dashboard_allowed(request.user, "billing", write=False):
+        q = getattr(sub.invoice, "code", "") or str(sub.invoice_id)
+        invoice_url = f"{reverse('dashboard:billing_invoices_list')}?q={q}"
+
+    return render(
+        request,
+        "dashboard/subscription_account_detail.html",
+        {
+            "sub": sub,
+            "ur": ur,
+            "plans": plans,
+            "recent_for_user": recent_for_user,
+            "invoice_url": invoice_url,
+            "payment_attempts": payment_attempts,
+            "alerts": alerts,
+            "timeline": timeline[:20],
+            "account_ops_notes": account_ops_notes[:30],
+            "can_write": _dashboard_allowed(request.user, "subs", write=True),
+            "back_url": reverse("dashboard:subscriptions_list"),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_plans_compare(request: HttpRequest) -> HttpResponse:
+    target_sub_id = (request.GET.get("subscription_id") or "").strip()
+    target_sub = None
+    if target_sub_id:
+        try:
+            target_sub = Subscription.objects.select_related("user", "plan").filter(id=int(target_sub_id)).first()
+        except Exception:
+            target_sub = None
+
+    plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by("price", "id"))
+    feature_labels = dict(FeatureKey.choices)
+    all_keys = []
+    seen = set()
+    for p in plans:
+        for key in (p.features or []):
+            if key not in seen:
+                seen.add(key)
+                all_keys.append(key)
+
+    rows = []
+    for key in all_keys:
+        rows.append(
+            {
+                "key": key,
+                "label": feature_labels.get(key, key),
+                "values": [("نعم" if key in (p.features or []) else "—") for p in plans],
+            }
+        )
+
+    return render(
+        request,
+        "dashboard/subscription_plans_compare.html",
+        {
+            "plans": plans,
+            "feature_rows": rows,
+            "target_sub": target_sub,
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_upgrade_summary(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan"), id=subscription_id)
+    plan_id = (request.GET.get("plan_id") or "").strip()
+    plan = None
+    if plan_id:
+        try:
+            plan = SubscriptionPlan.objects.filter(id=int(plan_id), is_active=True).first()
+        except Exception:
+            plan = None
+
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and sub.user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+
+    vat_percent = Decimal("15.00")
+    subtotal = Decimal("0.00")
+    vat_amount = Decimal("0.00")
+    total = Decimal("0.00")
+    if plan:
+        subtotal = money_round(Decimal(plan.price or 0))
+        vat_amount = money_round((subtotal * vat_percent) / Decimal("100"))
+        total = money_round(subtotal + vat_amount)
+
+    return render(
+        request,
+        "dashboard/subscription_upgrade_summary.html",
+        {
+            "sub": sub,
+            "plan": plan,
+            "plans": SubscriptionPlan.objects.filter(is_active=True).order_by("price", "id"),
+            "subtotal": subtotal,
+            "vat_percent": vat_percent,
+            "vat_amount": vat_amount,
+            "total": total,
+            "back_url": reverse("dashboard:subscription_account_detail", args=[sub.id]),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_account_add_note_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription, id=subscription_id)
+    note = (request.POST.get("note") or "").strip()
+    if not note:
+        messages.warning(request, "نص الملاحظة مطلوب")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+    if len(note) > 300:
+        messages.warning(request, "الحد الأقصى للملاحظة 300 حرف")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+    ur = UnifiedRequest.objects.filter(
+        source_app="subscriptions",
+        source_model="Subscription",
+        source_object_id=str(sub.id),
+    ).first()
+    if not ur:
+        messages.error(request, "لا يوجد طلب موحد مرتبط لتخزين ملاحظات الحساب")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+    md, _ = UnifiedRequestMetadata.objects.get_or_create(
+        request=ur,
+        defaults={"payload": {}, "updated_by": request.user},
+    )
+    payload = md.payload if isinstance(md.payload, dict) else {}
+    notes = payload.get("account_ops_notes")
+    if not isinstance(notes, list):
+        notes = []
+    notes.append(
+        {
+            "text": note,
+            "created_at": timezone.now().isoformat(),
+            "by_user_id": request.user.id,
+            "by_user_phone": getattr(request.user, "phone", "") or "",
+        }
+    )
+    payload["account_ops_notes"] = notes[-50:]
+    md.payload = payload
+    md.updated_by = request.user
+    md.save(update_fields=["payload", "updated_by", "updated_at"])
+    try:
+        log_action(
+            actor=request.user,
+            action=AuditAction.SUBSCRIPTION_ACCOUNT_NOTE_ADDED,
+            reference_type="subscription_account.unified",
+            reference_id=str(ur.id),
+            request=request,
+            extra={
+                "subscription_id": sub.id,
+                "unified_request_id": ur.id,
+                "note_length": len(note),
+            },
+        )
+    except Exception:
+        logger.exception("subscription_account_add_note_action audit log error")
+    messages.success(request, "تم حفظ ملاحظة الحساب")
+    return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_account_renew_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan"), id=subscription_id)
+    try:
+        new_sub = start_subscription_checkout(user=sub.user, plan=sub.plan)
+        try:
+            log_action(
+                actor=request.user,
+                action=AuditAction.SUBSCRIPTION_ACCOUNT_RENEW_REQUESTED,
+                reference_type="subscription.account",
+                reference_id=str(sub.id),
+                request=request,
+                extra={
+                    "subscription_id": sub.id,
+                    "new_subscription_id": new_sub.id,
+                    "user_id": sub.user_id,
+                    "plan_id": sub.plan_id,
+                    "invoice_id": new_sub.invoice_id,
+                },
+            )
+        except Exception:
+            logger.exception("subscription_account_renew_action audit log error")
+        messages.success(request, "تم إنشاء طلب تجديد الاشتراك وفاتورته بنجاح")
+        return redirect("dashboard:subscription_payment_checkout", subscription_id=new_sub.id)
+    except Exception as e:
+        messages.error(request, str(e) or "تعذر إنشاء طلب التجديد")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_account_upgrade_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan"), id=subscription_id)
+    plan_id = request.POST.get("plan_id") or request.GET.get("plan_id") or ""
+    try:
+        plan = SubscriptionPlan.objects.get(id=int(plan_id), is_active=True)
+    except Exception:
+        messages.warning(request, "اختر باقة ترقية صالحة")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+    try:
+        new_sub = start_subscription_checkout(user=sub.user, plan=plan)
+        try:
+            log_action(
+                actor=request.user,
+                action=AuditAction.SUBSCRIPTION_ACCOUNT_UPGRADE_REQUESTED,
+                reference_type="subscription.account",
+                reference_id=str(sub.id),
+                request=request,
+                extra={
+                    "subscription_id": sub.id,
+                    "new_subscription_id": new_sub.id,
+                    "user_id": sub.user_id,
+                    "from_plan_id": sub.plan_id,
+                    "to_plan_id": plan.id,
+                    "invoice_id": new_sub.invoice_id,
+                },
+            )
+        except Exception:
+            logger.exception("subscription_account_upgrade_action audit log error")
+        messages.success(request, "تم إنشاء طلب ترقية الاشتراك وفاتورته بنجاح")
+        return redirect("dashboard:subscription_payment_checkout", subscription_id=new_sub.id)
+    except Exception as e:
+        messages.error(request, str(e) or "تعذر إنشاء طلب الترقية")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_account_cancel_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription, id=subscription_id)
+    if sub.status == SubscriptionStatus.CANCELLED:
+        messages.info(request, "الاشتراك ملغي مسبقًا")
+        return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+    sub.status = SubscriptionStatus.CANCELLED
+    sub.save(update_fields=["status", "updated_at"])
+    try:
+        from apps.subscriptions.services import _sync_subscription_to_unified
+        _sync_subscription_to_unified(sub=sub, changed_by=request.user)
+    except Exception:
+        pass
+    try:
+        log_action(
+            actor=request.user,
+            action=AuditAction.SUBSCRIPTION_ACCOUNT_CANCELLED,
+            reference_type="subscription.account",
+            reference_id=str(sub.id),
+            request=request,
+            extra={
+                "subscription_id": sub.id,
+                "user_id": sub.user_id,
+                "plan_id": sub.plan_id,
+                "status": sub.status,
+            },
+        )
+    except Exception:
+        logger.exception("subscription_account_cancel_action audit log error")
+    messages.success(request, "تم إيقاف/إلغاء الاشتراك")
+    return redirect("dashboard:subscription_account_detail", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_payment_checkout(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan", "invoice"), id=subscription_id)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and sub.user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+    if not sub.invoice_id:
+        messages.warning(request, "لا توجد فاتورة مرتبطة بهذا الطلب")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    attempt = None
+    try:
+        # Stable idempotency key keeps the same mock payment attempt for repeated opens.
+        attempt = init_payment(
+            invoice=sub.invoice,
+            provider="mock",
+            by_user=request.user,
+            idempotency_key=f"dashboard-subs-{sub.id}",
+        )
+    except Exception:
+        # If invoice already paid or any init issue, render screen without blocking.
+        attempt = PaymentAttempt.objects.filter(invoice=sub.invoice).order_by("-created_at").first()
+    try:
+        log_action(
+            actor=request.user,
+            action=AuditAction.SUBSCRIPTION_PAYMENT_CHECKOUT_OPENED,
+            reference_type="subscription.payment",
+            reference_id=str(sub.id),
+            request=request,
+            extra={
+                "subscription_id": sub.id,
+                "invoice_id": sub.invoice_id,
+                "invoice_status": getattr(sub.invoice, "status", ""),
+                "payment_attempt_id": (str(getattr(attempt, "id", "")) if getattr(attempt, "id", None) else None),
+            },
+        )
+    except Exception:
+        logger.exception("subscription_payment_checkout audit log error")
+
+    return render(
+        request,
+        "dashboard/subscription_payment_checkout.html",
+        {
+            "sub": sub,
+            "attempt": attempt,
+            "back_url": reverse("dashboard:subscription_upgrade_summary", args=[sub.id]),
+            "request_url": reverse("dashboard:subscription_request_detail", args=[sub.id]),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs", write=True)
+@require_POST
+def subscription_payment_complete_action(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("invoice", "user", "plan"), id=subscription_id)
+    if not sub.invoice_id:
+        messages.error(request, "لا توجد فاتورة لإتمام الدفع")
+        return redirect("dashboard:subscription_request_detail", subscription_id=sub.id)
+
+    try:
+        attempt = init_payment(
+            invoice=sub.invoice,
+            provider="mock",
+            by_user=request.user,
+            idempotency_key=f"dashboard-subs-{sub.id}",
+        )
+    except Exception:
+        attempt = PaymentAttempt.objects.filter(invoice=sub.invoice).order_by("-created_at").first()
+
+    try:
+        if sub.invoice.status != InvoiceStatus.PAID:
+            payload = {
+                "provider_reference": getattr(attempt, "provider_reference", ""),
+                "invoice_code": sub.invoice.code,
+                "status": "success",
+            }
+            handle_webhook(provider="mock", payload=payload, signature="", event_id=f"dashboard-subs-{sub.id}")
+            sub.invoice.refresh_from_db()
+        activate_subscription_after_payment(sub=sub)
+        try:
+            log_action(
+                actor=request.user,
+                action=AuditAction.SUBSCRIPTION_PAYMENT_COMPLETED,
+                reference_type="subscription.payment",
+                reference_id=str(sub.id),
+                request=request,
+                extra={
+                    "subscription_id": sub.id,
+                    "invoice_id": sub.invoice_id,
+                    "invoice_status": getattr(sub.invoice, "status", ""),
+                    "payment_attempt_id": (str(getattr(attempt, "id", "")) if getattr(attempt, "id", None) else None),
+                },
+            )
+        except Exception:
+            logger.exception("subscription_payment_complete_action audit log error")
+        messages.success(request, "تمت عملية سداد الرسوم بنجاح وتفعيل الاشتراك")
+        return redirect("dashboard:subscription_payment_success", subscription_id=sub.id)
+    except Exception as e:
+        messages.error(request, str(e) or "تعذر إتمام الدفع/تفعيل الاشتراك")
+        return redirect("dashboard:subscription_payment_checkout", subscription_id=sub.id)
+
+
+@staff_member_required
+@dashboard_access_required("subs")
+def subscription_payment_success(request: HttpRequest, subscription_id: int) -> HttpResponse:
+    sub = get_object_or_404(Subscription.objects.select_related("user", "plan", "invoice"), id=subscription_id)
+    ap = getattr(request.user, "access_profile", None)
+    if ap and ap.level == "user" and sub.user_id != request.user.id:
+        return HttpResponse("غير مصرح", status=403)
+    return render(
+        request,
+        "dashboard/subscription_payment_success.html",
+        {
+            "sub": sub,
+            "account_url": reverse("dashboard:subscription_account_detail", args=[sub.id]),
+            "request_url": reverse("dashboard:subscription_request_detail", args=[sub.id]),
+            "ops_url": reverse("dashboard:subscriptions_ops"),
+        },
+    )
+
+
+@staff_member_required
+@dashboard_access_required("subs")
 def subscriptions_list(request: HttpRequest) -> HttpResponse:
     qs = Subscription.objects.select_related("user", "plan", "invoice").all().order_by("-id")
     q = (request.GET.get("q") or "").strip()
@@ -2325,6 +3837,9 @@ def subscription_refresh_action(request: HttpRequest, subscription_id: int) -> H
         messages.success(request, "تم تحديث حالة الاشتراك")
     except Exception as e:
         messages.error(request, str(e) or "تعذر تحديث الاشتراك")
+    next_url = (request.POST.get("next") or "").strip()
+    if next_url and next_url.startswith("/"):
+        return redirect(next_url)
     return redirect("dashboard:subscriptions_list")
 
 
@@ -2338,6 +3853,9 @@ def subscription_activate_action(request: HttpRequest, subscription_id: int) -> 
         messages.success(request, "تم تفعيل الاشتراك")
     except Exception as e:
         messages.error(request, str(e) or "تعذر تفعيل الاشتراك")
+    next_url = (request.POST.get("next") or "").strip()
+    if next_url and next_url.startswith("/"):
+        return redirect(next_url)
     return redirect("dashboard:subscriptions_list")
 
 

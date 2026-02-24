@@ -7,7 +7,11 @@
     <h1 class="text-2xl font-bold text-cyan-700">تذكرة {{ ticket.code|default:ticket.id }}</h1>
     <p class="text-gray-500 mt-1">{{ ticket.description }}</p>
   </div>
-  <a href="{% url 'dashboard:support_tickets_list' %}" class="px-4 py-2 rounded-lg bg-gray-100 font-semibold">رجوع</a>
+  {% if back_url %}
+    <a href="{{ back_url }}" class="px-4 py-2 rounded-lg bg-gray-100 font-semibold">رجوع</a>
+  {% else %}
+    <a href="{% url 'dashboard:support_tickets_list' %}" class="px-4 py-2 rounded-lg bg-gray-100 font-semibold">رجوع</a>
+  {% endif %}
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -41,36 +45,38 @@
       {% endif %}
     </div>
 
-    <form method="post" action="{% url 'dashboard:support_ticket_assign_action' ticket.id %}" class="mt-4 space-y-2">
-      {% csrf_token %}
-      <div class="font-semibold">تحديث التعيين</div>
-      <select name="assigned_team" class="w-full rounded-lg border-gray-200 px-3 py-2">
-        <option value="">بدون فريق</option>
-        {% for team in teams %}
-          <option value="{{ team.id }}" {% if ticket.assigned_team_id == team.id %}selected{% endif %}>{{ team.name_ar }}</option>
-        {% endfor %}
-      </select>
-      <select name="assigned_to" class="w-full rounded-lg border-gray-200 px-3 py-2">
-        <option value="">بدون موظف</option>
-        {% for u in staff_users %}
-          <option value="{{ u.id }}" {% if ticket.assigned_to_id == u.id %}selected{% endif %}>{{ u.phone|default:u.username|default:u.id }}</option>
-        {% endfor %}
-      </select>
-      <input name="note" placeholder="ملاحظة" class="w-full rounded-lg border-gray-200 px-3 py-2">
-      <button class="rounded-lg bg-cyan-600 text-white px-4 py-2 font-semibold">حفظ التعيين</button>
-    </form>
+    {% if can_write %}
+      <form method="post" action="{% if assign_action_url %}{{ assign_action_url }}{% else %}{% url 'dashboard:support_ticket_assign_action' ticket.id %}{% endif %}" class="mt-4 space-y-2">
+        {% csrf_token %}
+        <div class="font-semibold">تحديث التعيين</div>
+        <select name="assigned_team" class="w-full rounded-lg border-gray-200 px-3 py-2">
+          <option value="">بدون فريق</option>
+          {% for team in teams %}
+            <option value="{{ team.id }}" {% if ticket.assigned_team_id == team.id %}selected{% endif %}>{{ team.name_ar }}</option>
+          {% endfor %}
+        </select>
+        <select name="assigned_to" class="w-full rounded-lg border-gray-200 px-3 py-2">
+          <option value="">بدون موظف</option>
+          {% for u in staff_users %}
+            <option value="{{ u.id }}" {% if ticket.assigned_to_id == u.id %}selected{% endif %}>{{ u.phone|default:u.username|default:u.id }}</option>
+          {% endfor %}
+        </select>
+        <input name="note" placeholder="ملاحظة" class="w-full rounded-lg border-gray-200 px-3 py-2">
+        <button class="rounded-lg bg-cyan-600 text-white px-4 py-2 font-semibold">حفظ التعيين</button>
+      </form>
 
-    <form method="post" action="{% url 'dashboard:support_ticket_status_action' ticket.id %}" class="mt-5 space-y-2">
-      {% csrf_token %}
-      <div class="font-semibold">تحديث الحالة</div>
-      <select name="status" class="w-full rounded-lg border-gray-200 px-3 py-2">
-        {% for v, l in status_choices %}
-          <option value="{{ v }}" {% if ticket.status == v %}selected{% endif %}>{{ l }}</option>
-        {% endfor %}
-      </select>
-      <input name="note" placeholder="ملاحظة الحالة" class="w-full rounded-lg border-gray-200 px-3 py-2">
-      <button class="rounded-lg bg-blue-600 text-white px-4 py-2 font-semibold">تحديث الحالة</button>
-    </form>
+      <form method="post" action="{% if status_action_url %}{{ status_action_url }}{% else %}{% url 'dashboard:support_ticket_status_action' ticket.id %}{% endif %}" class="mt-5 space-y-2">
+        {% csrf_token %}
+        <div class="font-semibold">تحديث الحالة</div>
+        <select name="status" class="w-full rounded-lg border-gray-200 px-3 py-2">
+          {% for v, l in status_choices %}
+            <option value="{{ v }}" {% if ticket.status == v %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+        <input name="note" placeholder="ملاحظة الحالة" class="w-full rounded-lg border-gray-200 px-3 py-2">
+        <button class="rounded-lg bg-blue-600 text-white px-4 py-2 font-semibold">تحديث الحالة</button>
+      </form>
+    {% endif %}
   </div>
 
   <div class="space-y-6">

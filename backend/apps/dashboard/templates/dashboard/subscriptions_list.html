@@ -1,13 +1,14 @@
 {% extends "dashboard/base_dashboard.html" %}
-{% block title %}إدارة الاشتراكات{% endblock %}
+{% block title %}بيانات حسابات المشتركين{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
   <div>
-    <h1 class="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">إدارة الاشتراكات</h1>
-    <p class="text-gray-500 mt-1">تتبع حالة الاشتراك والتفعيل والـgrace.</p>
+    <h1 class="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">بيانات حسابات المشتركين</h1>
+    <p class="text-gray-500 mt-1">سجل الحسابات المشتركة وتواريخ التفعيل والانتهاء والتجديد.</p>
   </div>
   <div class="flex items-center gap-2">
+    <a href="{% url 'dashboard:subscriptions_ops' %}" class="px-4 py-2 rounded-lg bg-white border border-gray-200 font-semibold">تفعيل الاشتراكات</a>
     <a href="?q={{ q }}&status={{ status_val }}&export=csv" class="px-4 py-2 rounded-lg bg-white border border-gray-200 font-semibold">تصدير CSV</a>
     <a href="?q={{ q }}&status={{ status_val }}&export=xlsx" class="px-4 py-2 rounded-lg bg-white border border-gray-200 font-semibold">تصدير Excel</a>
     <a href="?q={{ q }}&status={{ status_val }}&export=pdf" class="px-4 py-2 rounded-lg bg-white border border-gray-200 font-semibold">تصدير PDF</a>
@@ -36,6 +37,8 @@
         <th class="text-right px-4 py-3">الحالة</th>
         <th class="text-right px-4 py-3">البداية/النهاية</th>
         <th class="text-right px-4 py-3">الفاتورة</th>
+        <th class="text-right px-4 py-3">تفاصيل الحساب</th>
+        <th class="text-right px-4 py-3">تفاصيل الطلب</th>
         <th class="text-right px-4 py-3">تشغيل</th>
       </tr>
     </thead>
@@ -49,14 +52,20 @@
         <td class="px-4 py-3 text-xs">{{ s.start_at|date:"Y-m-d H:i"|default:"—" }} / {{ s.end_at|date:"Y-m-d H:i"|default:"—" }}</td>
         <td class="px-4 py-3">{{ s.invoice.code|default:"—" }}</td>
         <td class="px-4 py-3">
+          <a class="text-violet-700 font-semibold hover:underline" href="{% url 'dashboard:subscription_account_detail' s.id %}">الحساب</a>
+        </td>
+        <td class="px-4 py-3">
+          <a class="text-violet-700 font-semibold hover:underline" href="{% url 'dashboard:subscription_request_detail' s.id %}">فتح</a>
+        </td>
+        <td class="px-4 py-3">
           <div class="flex gap-2">
-            <form method="post" action="{% url 'dashboard:subscription_refresh_action' s.id %}">{% csrf_token %}<button class="px-3 py-1 rounded bg-gray-100 text-xs">Refresh</button></form>
-            <form method="post" action="{% url 'dashboard:subscription_activate_action' s.id %}">{% csrf_token %}<button class="px-3 py-1 rounded bg-emerald-600 text-white text-xs">Activate</button></form>
+            <form method="post" action="{% url 'dashboard:subscription_refresh_action' s.id %}">{% csrf_token %}<button class="px-3 py-1 rounded bg-gray-100 text-xs">تحديث</button></form>
+            <form method="post" action="{% url 'dashboard:subscription_activate_action' s.id %}">{% csrf_token %}<button class="px-3 py-1 rounded bg-emerald-600 text-white text-xs">تفعيل</button></form>
           </div>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">لا توجد اشتراكات.</td></tr>
+      <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">لا توجد اشتراكات.</td></tr>
       {% endfor %}
     </tbody>
   </table>

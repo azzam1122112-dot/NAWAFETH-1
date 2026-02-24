@@ -55,7 +55,17 @@ class VerificationRequest(models.Model):
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
 
-    badge_type = models.CharField(max_length=20, choices=VerificationBadgeType.choices)
+    # Legacy field: historically the request was for a single badge type.
+    # New flow can include multiple requirement items (blue/green) in one request.
+    badge_type = models.CharField(
+        max_length=20,
+        choices=VerificationBadgeType.choices,
+        null=True,
+        blank=True,
+    )
+
+    # Priority shown in ops dashboard (1 أعلى، 3 أدنى) — default وسط.
+    priority = models.PositiveSmallIntegerField(default=2)
 
     status = models.CharField(max_length=25, choices=VerificationStatus.choices, default=VerificationStatus.NEW)
 
@@ -134,6 +144,59 @@ class VerificationDocument(models.Model):
         return f"{self.request.code} doc#{self.pk}"
 
 
+class VerificationRequirement(models.Model):
+    """بند توثيق ضمن طلب.
+
+    أمثلة الأكواد بحسب التصميم:
+    - B1 (الزرقاء)
+    - G1..G6 (الخضراء)
+    """
+
+    request = models.ForeignKey(VerificationRequest, on_delete=models.CASCADE, related_name="requirements")
+
+    badge_type = models.CharField(max_length=20, choices=VerificationBadgeType.choices)
+    code = models.CharField(max_length=10)
+    title = models.CharField(max_length=220)
+
+    is_approved = models.BooleanField(null=True, blank=True)  # None => لم يقرر
+    decision_note = models.CharField(max_length=300, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="verification_requirement_decisions",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["code"]),
+            models.Index(fields=["badge_type"]),
+        ]
+        ordering = ["sort_order", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.request.code} {self.code}"
+
+
+class VerificationRequirementAttachment(models.Model):
+    requirement = models.ForeignKey(VerificationRequirement, on_delete=models.CASCADE, related_name="attachments")
+
+    file = models.FileField(
+        upload_to="verification/requirements/%Y/%m/",
+        validators=[validate_file_size, validate_extension],
+    )
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.requirement_id} attachment#{self.pk}"
+
+
 class VerifiedBadge(models.Model):
     """
     سجل تفعيل الشارات (مرجعي وإداري)
@@ -141,6 +204,8 @@ class VerifiedBadge(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="badges")
 
     badge_type = models.CharField(max_length=20, choices=VerificationBadgeType.choices)
+    verification_code = models.CharField(max_length=10, blank=True, default="")
+    verification_title = models.CharField(max_length=220, blank=True, default="")
     request = models.ForeignKey(VerificationRequest, on_delete=models.CASCADE, related_name="badges")
 
     activated_at = models.DateTimeField(default=timezone.now)
@@ -153,6 +218,7 @@ class VerifiedBadge(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["user", "badge_type", "is_active"]),
+            models.Index(fields=["user", "verification_code", "is_active"]),
         ]
 
     def __str__(self):

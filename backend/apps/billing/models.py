@@ -73,7 +73,14 @@ class Invoice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def recalc(self):
-        st = money_round(Decimal(self.subtotal))
+        # If line items exist, subtotal is derived from them.
+        if self.pk and hasattr(self, "lines") and self.lines.exists():
+            from django.db.models import Sum
+
+            raw = self.lines.aggregate(s=Sum("amount")).get("s")
+            st = money_round(Decimal(raw or 0))
+        else:
+            st = money_round(Decimal(self.subtotal))
         vp = Decimal(self.vat_percent or 0)
         va = money_round((st * vp) / Decimal("100"))
         tt = money_round(st + va)
@@ -113,6 +120,24 @@ class Invoice(models.Model):
 
     def __str__(self):
         return self.code or f"Invoice#{self.pk}"
+
+
+class InvoiceLineItem(models.Model):
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="lines")
+
+    item_code = models.CharField(max_length=20, blank=True, default="")
+    title = models.CharField(max_length=160)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    sort_order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"{self.invoice_id} {self.item_code or ''} {self.amount}"
 
 
 class PaymentAttempt(models.Model):

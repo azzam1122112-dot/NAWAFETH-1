@@ -34,10 +34,40 @@ urlpatterns = [
         name="support_ticket_delete_reported_object_action",
     ),
 
+    path("verification/ops/", views.verification_ops, name="verification_ops"),
+    path("verification/inquiries/<int:ticket_id>/", views.verification_inquiry_detail, name="verification_inquiry_detail"),
+    path(
+        "verification/inquiries/<int:ticket_id>/actions/assign/",
+        views.verification_inquiry_assign_action,
+        name="verification_inquiry_assign_action",
+    ),
+    path(
+        "verification/inquiries/<int:ticket_id>/actions/status/",
+        views.verification_inquiry_status_action,
+        name="verification_inquiry_status_action",
+    ),
+
     path("verification/", views.verification_requests_list, name="verification_requests_list"),
     path("verification/<int:verification_id>/", views.verification_request_detail, name="verification_request_detail"),
     path("verification/<int:verification_id>/actions/finalize/", views.verification_finalize_action, name="verification_finalize_action"),
     path("verification/<int:verification_id>/actions/activate/", views.verification_activate_action, name="verification_activate_action"),
+    path(
+        "verification/requirements/<int:req_id>/actions/decision/",
+        views.verification_requirement_decision_action,
+        name="verification_requirement_decision_action",
+    ),
+
+    path("verification/badges/", views.verified_badges_list, name="verified_badges_list"),
+    path(
+        "verification/badges/<int:badge_id>/actions/deactivate/",
+        views.verified_badge_deactivate_action,
+        name="verified_badge_deactivate_action",
+    ),
+    path(
+        "verification/badges/<int:badge_id>/actions/renew/",
+        views.verified_badge_renew_action,
+        name="verified_badge_renew_action",
+    ),
 
     path("promo/", views.promo_requests_list, name="promo_requests_list"),
     path("promo/inquiries/", views.promo_inquiries_list, name="promo_inquiries_list"),
@@ -48,9 +78,59 @@ urlpatterns = [
     path("promo/<int:promo_id>/actions/reject/", views.promo_reject_action, name="promo_reject_action"),
     path("promo/<int:promo_id>/actions/activate/", views.promo_activate_action, name="promo_activate_action"),
 
+    path("subscriptions/ops/", views.subscriptions_ops, name="subscriptions_ops"),
+    path("subscriptions/inquiries/<int:ticket_id>/", views.subscription_inquiry_detail, name="subscription_inquiry_detail"),
+    path(
+        "subscriptions/inquiries/<int:ticket_id>/actions/assign/",
+        views.subscription_inquiry_assign_action,
+        name="subscription_inquiry_assign_action",
+    ),
+    path(
+        "subscriptions/inquiries/<int:ticket_id>/actions/status/",
+        views.subscription_inquiry_status_action,
+        name="subscription_inquiry_status_action",
+    ),
+    path("subscriptions/requests/<int:subscription_id>/", views.subscription_request_detail, name="subscription_request_detail"),
+    path("subscriptions/requests/<int:subscription_id>/actions/add-note/", views.subscription_request_add_note_action, name="subscription_request_add_note_action"),
+    path("subscriptions/requests/<int:subscription_id>/actions/set-status/", views.subscription_request_set_status_action, name="subscription_request_set_status_action"),
+    path("subscriptions/requests/<int:subscription_id>/actions/assign/", views.subscription_request_assign_action, name="subscription_request_assign_action"),
     path("subscriptions/", views.subscriptions_list, name="subscriptions_list"),
+    path("subscriptions/plans/compare/", views.subscription_plans_compare, name="subscription_plans_compare"),
+    path("subscriptions/accounts/<int:subscription_id>/upgrade-summary/", views.subscription_upgrade_summary, name="subscription_upgrade_summary"),
+    path("subscriptions/accounts/<int:subscription_id>/", views.subscription_account_detail, name="subscription_account_detail"),
+    path("subscriptions/accounts/<int:subscription_id>/actions/add-note/", views.subscription_account_add_note_action, name="subscription_account_add_note_action"),
+    path("subscriptions/payments/<int:subscription_id>/checkout/", views.subscription_payment_checkout, name="subscription_payment_checkout"),
+    path("subscriptions/payments/<int:subscription_id>/actions/complete/", views.subscription_payment_complete_action, name="subscription_payment_complete_action"),
+    path("subscriptions/payments/<int:subscription_id>/success/", views.subscription_payment_success, name="subscription_payment_success"),
+    path("subscriptions/accounts/<int:subscription_id>/actions/renew/", views.subscription_account_renew_action, name="subscription_account_renew_action"),
+    path("subscriptions/accounts/<int:subscription_id>/actions/upgrade/", views.subscription_account_upgrade_action, name="subscription_account_upgrade_action"),
+    path("subscriptions/accounts/<int:subscription_id>/actions/cancel/", views.subscription_account_cancel_action, name="subscription_account_cancel_action"),
     path("subscriptions/<int:subscription_id>/actions/refresh/", views.subscription_refresh_action, name="subscription_refresh_action"),
     path("subscriptions/<int:subscription_id>/actions/activate/", views.subscription_activate_action, name="subscription_activate_action"),
+
+    path("extras/ops/", views.extras_ops, name="extras_ops"),
+    path("extras/inquiries/<int:ticket_id>/", views.extras_inquiry_detail, name="extras_inquiry_detail"),
+    path(
+        "extras/inquiries/<int:ticket_id>/actions/assign/",
+        views.extras_inquiry_assign_action,
+        name="extras_inquiry_assign_action",
+    ),
+    path(
+        "extras/inquiries/<int:ticket_id>/actions/status/",
+        views.extras_inquiry_status_action,
+        name="extras_inquiry_status_action",
+    ),
+    path("extras/requests/<int:unified_request_id>/", views.extras_request_detail, name="extras_request_detail"),
+    path(
+        "extras/requests/<int:unified_request_id>/actions/assign/",
+        views.extras_request_assign_action,
+        name="extras_request_assign_action",
+    ),
+    path(
+        "extras/requests/<int:unified_request_id>/actions/status/",
+        views.extras_request_status_action,
+        name="extras_request_status_action",
+    ),
 
     path("extras/", views.extras_list, name="extras_list"),
     path("extras/<int:extra_id>/actions/activate/", views.extra_activate_action, name="extra_activate_action"),

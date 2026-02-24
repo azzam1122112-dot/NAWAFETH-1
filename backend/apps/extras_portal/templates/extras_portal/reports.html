@@ -1,0 +1,51 @@
+{% extends 'extras_portal/base_portal.html' %}
+
+{% block title %}التقارير{% endblock %}
+{% block header %}التقارير{% endblock %}
+
+{% block content %}
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">إجمالي الطلبات</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ totals.total_requests }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">طلبات مكتملة</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ totals.completed_requests }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">تحت التنفيذ</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ totals.in_progress_requests }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">مبالغ مستلمة (تقريبي)</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ totals.received_amount }}</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">متابعون</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ followers_count }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">إعجابات (بورتفوليو)</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ likes_count }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow p-5">
+      <div class="text-sm text-gray-500 font-semibold">رسائل</div>
+      <div class="text-3xl font-extrabold text-gray-900 mt-2">{{ messages_count }}</div>
+    </div>
+  </div>
+
+  <div class="mt-6 bg-white rounded-2xl border border-gray-100 shadow p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div>
+      <div class="text-lg font-bold text-gray-900">تصدير</div>
+      <div class="text-sm text-gray-500">تصدير آخر البيانات المتاحة (طلبات مزود الخدمة).</div>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'extras_portal:reports_export_pdf' %}" class="px-4 py-2 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800">PDF</a>
+      <a href="{% url 'extras_portal:reports_export_xlsx' %}" class="px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-900 font-semibold hover:bg-gray-50">Excel</a>
+    </div>
+  </div>
+{% endblock %}

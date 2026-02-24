@@ -134,12 +134,12 @@
         {% endif %}
 
         {% if can_verify %}
-        <a href="{% url 'dashboard:verification_requests_list' %}"
-           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'verification_requests_list' or request.resolver_match.url_name == 'verification_request_detail' %}bg-gradient-to-r from-indigo-50 to-violet-50{% else %}hover:bg-gradient-to-r hover:from-indigo-50 hover:to-violet-50{% endif %}">
+        <a href="{% url 'dashboard:verification_ops' %}"
+           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'verification_ops' or request.resolver_match.url_name == 'verification_inquiry_detail' or request.resolver_match.url_name == 'verification_requests_list' or request.resolver_match.url_name == 'verification_request_detail' or request.resolver_match.url_name == 'verified_badges_list' %}bg-gradient-to-r from-indigo-50 to-violet-50{% else %}hover:bg-gradient-to-r hover:from-indigo-50 hover:to-violet-50{% endif %}">
           <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
             ✅
           </div>
-          <span class="font-semibold {% if request.resolver_match.url_name == 'verification_requests_list' or request.resolver_match.url_name == 'verification_request_detail' %}text-indigo-700{% else %}text-gray-700 group-hover:text-indigo-700{% endif %}">التوثيق</span>
+          <span class="font-semibold {% if request.resolver_match.url_name == 'verification_ops' or request.resolver_match.url_name == 'verification_inquiry_detail' or request.resolver_match.url_name == 'verification_requests_list' or request.resolver_match.url_name == 'verification_request_detail' or request.resolver_match.url_name == 'verified_badges_list' %}text-indigo-700{% else %}text-gray-700 group-hover:text-indigo-700{% endif %}">التوثيق</span>
         </a>
         {% endif %}
 
@@ -154,22 +154,22 @@
         {% endif %}
 
         {% if can_subs %}
-        <a href="{% url 'dashboard:subscriptions_list' %}"
-           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'subscriptions_list' %}bg-gradient-to-r from-violet-50 to-indigo-50{% else %}hover:bg-gradient-to-r hover:from-violet-50 hover:to-indigo-50{% endif %}">
+        <a href="{% url 'dashboard:subscriptions_ops' %}"
+           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'subscriptions_ops' or request.resolver_match.url_name == 'subscription_inquiry_detail' or request.resolver_match.url_name == 'subscription_request_detail' or request.resolver_match.url_name == 'subscriptions_list' %}bg-gradient-to-r from-violet-50 to-indigo-50{% else %}hover:bg-gradient-to-r hover:from-violet-50 hover:to-indigo-50{% endif %}">
           <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
             📦
           </div>
-          <span class="font-semibold {% if request.resolver_match.url_name == 'subscriptions_list' %}text-violet-700{% else %}text-gray-700 group-hover:text-violet-700{% endif %}">الاشتراكات</span>
+          <span class="font-semibold {% if request.resolver_match.url_name == 'subscriptions_ops' or request.resolver_match.url_name == 'subscription_inquiry_detail' or request.resolver_match.url_name == 'subscription_request_detail' or request.resolver_match.url_name == 'subscriptions_list' %}text-violet-700{% else %}text-gray-700 group-hover:text-violet-700{% endif %}">الاشتراكات</span>
         </a>
         {% endif %}
 
         {% if can_extras %}
-        <a href="{% url 'dashboard:extras_list' %}"
-           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'extras_list' %}bg-gradient-to-r from-orange-50 to-amber-50{% else %}hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50{% endif %}">
+        <a href="{% url 'dashboard:extras_ops' %}"
+           class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all group {% if request.resolver_match.url_name == 'extras_ops' or request.resolver_match.url_name == 'extras_inquiry_detail' or request.resolver_match.url_name == 'extras_request_detail' or request.resolver_match.url_name == 'extras_list' %}bg-gradient-to-r from-orange-50 to-amber-50{% else %}hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50{% endif %}">
           <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white text-lg group-hover:scale-110 transition-transform">
             ➕
           </div>
-          <span class="font-semibold {% if request.resolver_match.url_name == 'extras_list' %}text-orange-700{% else %}text-gray-700 group-hover:text-orange-700{% endif %}">الإضافات</span>
+          <span class="font-semibold {% if request.resolver_match.url_name == 'extras_ops' or request.resolver_match.url_name == 'extras_inquiry_detail' or request.resolver_match.url_name == 'extras_request_detail' or request.resolver_match.url_name == 'extras_list' %}text-orange-700{% else %}text-gray-700 group-hover:text-orange-700{% endif %}">الخدمات الإضافية</span>
         </a>
         {% endif %}
 

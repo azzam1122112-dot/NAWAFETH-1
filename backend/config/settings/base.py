@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.promo",
     "apps.subscriptions",
     "apps.extras",
+    "apps.extras_portal",
     "apps.features",
     "apps.analytics",
     "apps.audit",

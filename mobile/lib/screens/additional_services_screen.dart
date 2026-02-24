@@ -109,10 +109,18 @@ class _AdditionalServicesScreenState extends State<AdditionalServicesScreen> wit
       final purchase = await _extrasApi.buy(sku);
       if (!mounted) return;
 
+      final unifiedCode = (purchase['unified_request_code'] ?? '').toString().trim();
+
       final invoiceId = _asInt(purchase['invoice']);
       if (invoiceId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إنشاء طلب شراء الإضافة، لكن رقم الفاتورة غير متوفر.')),
+          SnackBar(
+            content: Text(
+              unifiedCode.isNotEmpty
+                  ? 'تم إنشاء طلب شراء الإضافة ($unifiedCode)، لكن رقم الفاتورة غير متوفر.'
+                  : 'تم إنشاء طلب شراء الإضافة، لكن رقم الفاتورة غير متوفر.',
+            ),
+          ),
         );
         return;
       }
@@ -122,7 +130,9 @@ class _AdditionalServicesScreenState extends State<AdditionalServicesScreen> wit
         billingApi: _billingApi,
         invoiceId: invoiceId,
         idempotencyKey: 'extra-$sku-${DateTime.now().millisecondsSinceEpoch}',
-        successMessage: 'تم إنشاء طلب الإضافة وفتح صفحة الدفع.',
+        successMessage: unifiedCode.isNotEmpty
+            ? 'تم إنشاء طلب الإضافة ($unifiedCode) وفتح صفحة الدفع.'
+            : 'تم إنشاء طلب الإضافة وفتح صفحة الدفع.',
       );
       _reloadAll();
     } on DioException catch (e) {

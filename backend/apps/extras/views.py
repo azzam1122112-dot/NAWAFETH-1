@@ -50,4 +50,24 @@ class BuyExtraView(APIView):
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(ExtraPurchaseSerializer(purchase).data, status=status.HTTP_201_CREATED)
+        data = ExtraPurchaseSerializer(purchase).data
+        try:
+            from apps.unified_requests.models import UnifiedRequest
+
+            ur = (
+                UnifiedRequest.objects.filter(
+                    source_app="extras",
+                    source_model="ExtraPurchase",
+                    source_object_id=str(purchase.id),
+                )
+                .only("id", "code")
+                .first()
+            )
+            if ur:
+                data["unified_request_id"] = ur.id
+                data["unified_request_code"] = ur.code
+        except Exception:
+            # Best-effort only; keep response backward compatible.
+            pass
+
+        return Response(data, status=status.HTTP_201_CREATED)

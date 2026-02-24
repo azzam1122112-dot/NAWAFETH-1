@@ -9,15 +9,28 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from .models import VerificationRequest, VerificationDocument, VerificationStatus
+from .models import (
+    VerificationRequest,
+    VerificationDocument,
+    VerificationStatus,
+    VerificationRequirement,
+    VerificationRequirementAttachment,
+)
 from .serializers import (
     VerificationRequestCreateSerializer,
     VerificationRequestDetailSerializer,
     VerificationDocumentSerializer,
     VerificationDocDecisionSerializer,
+    VerificationRequirementDecisionSerializer,
+    VerificationRequirementAttachmentSerializer,
 )
 from .permissions import IsOwnerOrBackofficeVerify
-from .services import decide_document, finalize_request_and_create_invoice, _sync_verification_to_unified
+from .services import (
+    decide_document,
+    decide_requirement,
+    finalize_request_and_create_invoice,
+    _sync_verification_to_unified,
+)
 
 
 class VerificationRequestCreateView(generics.CreateAPIView):
@@ -99,6 +112,49 @@ class VerificationAddDocumentView(generics.CreateAPIView):
         return Response(VerificationDocumentSerializer(doc).data, status=status.HTTP_201_CREATED)
 
 
+class VerificationAddRequirementAttachmentView(generics.CreateAPIView):
+    permission_classes = [IsOwnerOrBackofficeVerify]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = VerificationRequirementAttachmentSerializer
+
+    def create(self, request, *args, **kwargs):
+        vr = VerificationRequest.objects.get(pk=kwargs["pk"])
+        self.check_object_permissions(request, vr)
+
+        if vr.status not in (VerificationStatus.NEW, VerificationStatus.IN_REVIEW, VerificationStatus.REJECTED):
+            return Response({"detail": "لا يمكن رفع مرفقات في هذه المرحلة."}, status=status.HTTP_400_BAD_REQUEST)
+
+        req = get_object_or_404(VerificationRequirement, pk=kwargs["req_id"], request=vr)
+
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response({"detail": "file مطلوب"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from apps.features.upload_limits import user_max_upload_mb
+        from apps.uploads.validators import validate_user_file_size
+        from .validators import validate_extension
+
+        try:
+            validate_extension(file_obj)
+            validate_user_file_size(file_obj, user_max_upload_mb(request.user))
+        except DjangoValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        att = VerificationRequirementAttachment.objects.create(
+            requirement=req,
+            file=file_obj,
+            uploaded_by=request.user,
+        )
+
+        if vr.status == VerificationStatus.REJECTED:
+            vr.status = VerificationStatus.IN_REVIEW
+            vr.save(update_fields=["status", "updated_at"])
+            _sync_verification_to_unified(vr=vr, changed_by=request.user)
+
+        return Response(VerificationRequirementAttachmentSerializer(att).data, status=status.HTTP_201_CREATED)
+
+
 # ---------------- Backoffice ----------------
 
 class BackofficeVerificationRequestsListView(generics.ListAPIView):
@@ -177,6 +233,24 @@ class BackofficeDecideDocumentView(APIView):
 
         decide_document(doc=doc, is_approved=is_approved, note=note, by_user=request.user)
 
+        return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class BackofficeDecideRequirementView(APIView):
+    permission_classes = [IsOwnerOrBackofficeVerify]
+
+    def patch(self, request, req_id: int):
+        req = VerificationRequirement.objects.select_related("request").get(pk=req_id)
+        vr = req.request
+        self.check_object_permissions(request, vr)
+
+        ser = VerificationRequirementDecisionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        is_approved = ser.validated_data["is_approved"]
+        note = ser.validated_data.get("decision_note", "")
+
+        decide_requirement(req=req, is_approved=is_approved, note=note, by_user=request.user)
         return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
