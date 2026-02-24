@@ -1189,7 +1189,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               ),
               const SizedBox(height: 14),
               SizedBox(
-                height: 62,
+                height: 78,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1211,7 +1211,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         constraints: const BoxConstraints(minWidth: 98),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                         decoration: BoxDecoration(
                           color: bg,
                           borderRadius: BorderRadius.circular(14),
@@ -1220,22 +1220,24 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(tabs[index]['icon'], size: 22, color: iconColor),
-                            const SizedBox(height: 6),
+                            Icon(tabs[index]['icon'], size: 20, color: iconColor),
+                            const SizedBox(height: 3),
                             if (_canManageGallery && index == 2)
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Flexible(
                                     child: Text(
                                       tabs[index]['title'],
-                                      maxLines: 2,
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontFamily: 'Cairo',
                                         fontSize: 11,
+                                        height: 1.0,
                                         fontWeight: FontWeight.w800,
                                         color: titleColor,
                                       ),
@@ -1252,10 +1254,10 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                                       },
                                       borderRadius: BorderRadius.circular(999),
                                       child: Padding(
-                                        padding: const EdgeInsets.all(2),
+                                        padding: const EdgeInsets.all(1),
                                         child: Icon(
                                           Icons.settings_outlined,
-                                          size: 16,
+                                          size: 15,
                                           color: titleColor,
                                         ),
                                       ),
@@ -1266,12 +1268,13 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                             else
                               Text(
                                 tabs[index]['title'],
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontSize: 11,
+                                  height: 1.0,
                                   fontWeight: FontWeight.w800,
                                   color: titleColor,
                                 ),
@@ -2237,7 +2240,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               final itemWidth =
                   (constraints.maxWidth - ((crossAxisCount - 1) * 12)) /
                   crossAxisCount;
-              final itemHeight = crossAxisCount == 3 ? 220.0 : 240.0;
+              // Extra height on 2-column layout to absorb long Arabic captions
+              // and action labels without bottom overflow on small screens.
+              final itemHeight = crossAxisCount == 3 ? 238.0 : 280.0;
               final ratio = itemWidth / itemHeight;
               return GridView.builder(
                 shrinkWrap: true,
@@ -2390,109 +2395,136 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                                   color: borderColor,
                                 ),
                                 const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: _isLikeBusy ? null : _toggleProviderLike,
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 4),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              if (_isLikeBusy)
-                                                const SizedBox(
-                                                  width: 14,
-                                                  height: 14,
-                                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                                )
-                                              else
-                                                Icon(
-                                                  _isProviderLiked ? Icons.favorite : Icons.favorite_border,
-                                                  size: 16,
-                                                  color: _isProviderLiked ? Colors.red : mainColor,
-                                                ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'إعجاب',
-                                                style: TextStyle(
-                                                  fontFamily: 'Cairo',
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: textColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => _togglePortfolioFavorite(item),
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 4),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                isFav ? Icons.bookmark : Icons.bookmark_border,
-                                                size: 16,
-                                                color: isFav ? mainColor : secondaryTextColor,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'المفضلة',
-                                                style: TextStyle(
-                                                  fontFamily: 'Cairo',
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: textColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => setState(() => _selectedTabIndex = 0),
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 4),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 8,
-                                                backgroundColor: Colors.grey.shade200,
-                                                child: ClipOval(
-                                                  child: SizedBox(
-                                                    width: 16,
-                                                    height: 16,
-                                                    child: _providerAvatar(),
+                                LayoutBuilder(
+                                  builder: (context, actionConstraints) {
+                                    final compact = actionConstraints.maxWidth < 185;
+                                    final columns = compact ? 2 : 3;
+                                    final spacing = 6.0;
+                                    final itemWidth =
+                                        (actionConstraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+                                    return Wrap(
+                                      spacing: spacing,
+                                      runSpacing: spacing,
+                                      children: [
+                                        SizedBox(
+                                          width: itemWidth,
+                                          child: InkWell(
+                                            onTap: _isLikeBusy ? null : _toggleProviderLike,
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  if (_isLikeBusy)
+                                                    const SizedBox(
+                                                      width: 14,
+                                                      height: 14,
+                                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                                    )
+                                                  else
+                                                    Icon(
+                                                      _isProviderLiked ? Icons.favorite : Icons.favorite_border,
+                                                      size: 16,
+                                                      color: _isProviderLiked ? Colors.red : mainColor,
+                                                    ),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      'إعجاب',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        fontFamily: 'Cairo',
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: textColor,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'حساب المزود',
-                                                style: TextStyle(
-                                                  fontFamily: 'Cairo',
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: textColor,
-                                                ),
-                                              ),
-                                            ],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                  ],
+                                        SizedBox(
+                                          width: itemWidth,
+                                          child: InkWell(
+                                            onTap: () => _togglePortfolioFavorite(item),
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(
+                                                    isFav ? Icons.bookmark : Icons.bookmark_border,
+                                                    size: 16,
+                                                    color: isFav ? mainColor : secondaryTextColor,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      'المفضلة',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        fontFamily: 'Cairo',
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(
+                                          width: itemWidth,
+                                          child: InkWell(
+                                            onTap: () => setState(() => _selectedTabIndex = 0),
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 8,
+                                                    backgroundColor: Colors.grey.shade200,
+                                                    child: ClipOval(
+                                                      child: SizedBox(
+                                                        width: 16,
+                                                        height: 16,
+                                                        child: _providerAvatar(),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      'حساب المزود',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        fontFamily: 'Cairo',
+                                                        fontSize: compact ? 9 : 9.5,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ],
                             ),

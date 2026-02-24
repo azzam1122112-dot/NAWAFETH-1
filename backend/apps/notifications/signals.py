@@ -44,6 +44,7 @@ def notify_offer_created(sender, instance: Offer, created, **kwargs):
         request_id=sr.id,
         offer_id=instance.id,
         meta={"price": str(instance.price), "duration_days": instance.duration_days},
+        audience_mode="client",
     )
 
 
@@ -64,6 +65,7 @@ def notify_offer_selected(sender, instance: Offer, created, **kwargs):
         pref_key="service_reply",
         request_id=sr.id,
         offer_id=instance.id,
+        audience_mode="provider",
     )
 
 
@@ -100,6 +102,7 @@ def notify_new_message(sender, instance: Message, created, **kwargs):
             pref_key="new_chat_message",
             message_id=instance.id,
             meta={"thread_id": thread.id, "is_direct": True},
+            audience_mode="client",
         )
         return
 
@@ -127,6 +130,7 @@ def notify_new_message(sender, instance: Message, created, **kwargs):
         request_id=sr.id,
         message_id=instance.id,
         meta={"thread_id": thread.id, "is_direct": False},
+        audience_mode="provider" if sr.provider_id and target.id == sr.provider.user_id else "client",
     )
 
 
@@ -173,4 +177,5 @@ def notify_request_status_changed(sender, instance: RequestStatusLog, created, *
             "to_status": instance.to_status,
             "note": note,
         },
+        audience_mode="provider" if sr.provider_id and target.id == sr.provider.user_id else "client",
     )

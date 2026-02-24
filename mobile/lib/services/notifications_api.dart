@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../core/network/api_dio.dart';
 import 'api_config.dart';
 import 'dio_proxy.dart';
+import 'role_controller.dart';
 
 class NotificationsApi {
   final Dio _dio;
@@ -12,7 +13,10 @@ class NotificationsApi {
   }
 
   Future<int> getUnreadCount() async {
-    final res = await _dio.get('${ApiConfig.apiPrefix}/notifications/unread-count/');
+    final res = await _dio.get(
+      '${ApiConfig.apiPrefix}/notifications/unread-count/',
+      queryParameters: {'mode': _activeModeParam()},
+    );
     final data = res.data;
 
     if (data is Map<String, dynamic>) {
@@ -28,7 +32,11 @@ class NotificationsApi {
   Future<Map<String, dynamic>> list({int limit = 20, int offset = 0}) async {
     final res = await _dio.get(
       '${ApiConfig.apiPrefix}/notifications/',
-      queryParameters: {'limit': limit, 'offset': offset},
+      queryParameters: {
+        'limit': limit,
+        'offset': offset,
+        'mode': _activeModeParam(),
+      },
     );
 
     if (res.data is Map<String, dynamic>) {
@@ -95,5 +103,9 @@ class NotificationsApi {
         'platform': platform,
       },
     );
+  }
+
+  String _activeModeParam() {
+    return RoleController.instance.notifier.value.isProvider ? 'provider' : 'client';
   }
 }

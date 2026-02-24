@@ -255,6 +255,7 @@ def create_notification(
     meta: dict | None = None,
     is_urgent: bool = False,
     pref_key: str | None = None,
+    audience_mode: str = "shared",
 ):
     meta = meta or {}
     derived_pref_key = pref_key or EVENT_TO_PREF_KEY.get(event_type or "")
@@ -268,6 +269,7 @@ def create_notification(
             body=body,
             kind=kind,
             url=url,
+            audience_mode=(audience_mode or "shared"),
             is_urgent=bool(is_urgent or kind == "urgent"),
         )
         if event_type:

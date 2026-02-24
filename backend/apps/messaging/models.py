@@ -4,6 +4,11 @@ from django.utils import timezone
 from apps.marketplace.models import ServiceRequest
 
 class Thread(models.Model):
+    class ContextMode(models.TextChoices):
+        CLIENT = "client", "عميل"
+        PROVIDER = "provider", "مزود"
+        SHARED = "shared", "مشترك"
+
     request = models.OneToOneField(
         ServiceRequest, on_delete=models.CASCADE, related_name="thread",
         null=True, blank=True,
@@ -18,6 +23,12 @@ class Thread(models.Model):
         related_name="direct_threads_as_p2", null=True, blank=True,
     )
     is_direct = models.BooleanField(default=False)
+    context_mode = models.CharField(
+        max_length=20,
+        choices=ContextMode.choices,
+        default=ContextMode.SHARED,
+        db_index=True,
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

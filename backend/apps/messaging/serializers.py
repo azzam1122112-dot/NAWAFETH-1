@@ -6,7 +6,7 @@ from .models import Message, Thread, ThreadUserState
 class ThreadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Thread
-        fields = ("id", "request", "is_direct", "created_at")
+        fields = ("id", "request", "is_direct", "context_mode", "created_at")
         read_only_fields = ("id", "created_at")
 
 
@@ -16,7 +16,7 @@ class DirectThreadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Thread
-        fields = ("id", "is_direct", "participant_1_id", "participant_2_id", "created_at")
+        fields = ("id", "is_direct", "context_mode", "participant_1_id", "participant_2_id", "created_at")
         read_only_fields = ("id", "created_at")
 
 

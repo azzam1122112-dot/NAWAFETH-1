@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
 from apps.marketplace.models import RequestStatus, RequestType, ServiceRequest
+from apps.messaging.models import ThreadUserState
 from apps.providers.models import Category, ProviderCategory, ProviderProfile, SubCategory
 
 
@@ -510,3 +511,105 @@ def test_thread_report_accepts_reason_and_details():
     )
     assert report_res.status_code == 201
     assert report_res.data.get("ticket_id") is not None
+
+
+@pytest.mark.django_db
+def test_mode_filters_direct_threads_and_thread_states_for_same_user():
+    dual_user = User.objects.create_user(phone="0507000001", role_state=UserRole.PROVIDER)
+    other_client = User.objects.create_user(phone="0507000002", role_state=UserRole.CLIENT)
+    other_provider_user = User.objects.create_user(phone="0507000003", role_state=UserRole.PROVIDER)
+
+    dual_provider = ProviderProfile.objects.create(
+        user=dual_user,
+        provider_type="individual",
+        display_name="ثنائي",
+        bio="bio",
+        years_experience=1,
+        city="الرياض",
+        accepts_urgent=True,
+    )
+    other_provider = ProviderProfile.objects.create(
+        user=other_provider_user,
+        provider_type="individual",
+        display_name="مزود آخر",
+        bio="bio",
+        years_experience=1,
+        city="الرياض",
+        accepts_urgent=True,
+    )
+
+    cat = Category.objects.create(name="تقنية")
+    sub = SubCategory.objects.create(category=cat, name="ويب")
+    ProviderCategory.objects.create(provider=dual_provider, subcategory=sub)
+    ProviderCategory.objects.create(provider=other_provider, subcategory=sub)
+
+    api = APIClient()
+    api.force_authenticate(user=dual_user)
+
+    # Direct thread created in client context
+    r_direct = api.post(
+        "/api/messaging/direct/thread/",
+        {"provider_id": other_provider.id, "mode": "client"},
+        format="json",
+    )
+    assert r_direct.status_code == 200
+    direct_thread_id = r_direct.data["id"]
+    assert r_direct.data["context_mode"] == "client"
+
+    # Request where dual_user is provider -> provider-context thread state
+    sr_provider = ServiceRequest.objects.create(
+        client=other_client,
+        provider=dual_provider,
+        subcategory=sub,
+        title="طلب كمزود",
+        description="وصف",
+        request_type=RequestType.NORMAL,
+        status=RequestStatus.ACCEPTED,
+        city="الرياض",
+    )
+    r_req_thread = api.post(f"/api/messaging/requests/{sr_provider.id}/thread/", {}, format="json")
+    assert r_req_thread.status_code == 200
+    provider_thread_id = r_req_thread.data["id"]
+    api.post(f"/api/messaging/thread/{provider_thread_id}/favorite/", {}, format="json")
+
+    # Request where dual_user is client -> client-context thread state
+    sr_client = ServiceRequest.objects.create(
+        client=dual_user,
+        provider=other_provider,
+        subcategory=sub,
+        title="طلب كعميل",
+        description="وصف",
+        request_type=RequestType.NORMAL,
+        status=RequestStatus.ACCEPTED,
+        city="الرياض",
+    )
+    r_req_thread2 = api.post(f"/api/messaging/requests/{sr_client.id}/thread/", {}, format="json")
+    assert r_req_thread2.status_code == 200
+    client_thread_id = r_req_thread2.data["id"]
+    api.post(f"/api/messaging/thread/{client_thread_id}/archive/", {}, format="json")
+
+    # Direct threads list: visible in client mode, hidden in provider mode
+    direct_client = api.get("/api/messaging/direct/threads/", {"mode": "client"})
+    assert direct_client.status_code == 200
+    assert any((row.get("thread_id") == direct_thread_id) for row in direct_client.data)
+
+    direct_provider = api.get("/api/messaging/direct/threads/", {"mode": "provider"})
+    assert direct_provider.status_code == 200
+    assert all((row.get("thread_id") != direct_thread_id) for row in direct_provider.data)
+
+    # Thread states list: split by active mode
+    states_client = api.get("/api/messaging/threads/states/", {"mode": "client"})
+    assert states_client.status_code == 200
+    ids_client = {row.get("thread") for row in states_client.data}
+    assert client_thread_id in ids_client
+    assert provider_thread_id not in ids_client
+
+    states_provider = api.get("/api/messaging/threads/states/", {"mode": "provider"})
+    assert states_provider.status_code == 200
+    ids_provider = {row.get("thread") for row in states_provider.data}
+    assert provider_thread_id in ids_provider
+    assert client_thread_id not in ids_provider
+
+    # Sanity: states exist in DB for both threads
+    assert ThreadUserState.objects.filter(user=dual_user, thread_id=provider_thread_id).exists()
+    assert ThreadUserState.objects.filter(user=dual_user, thread_id=client_thread_id).exists()

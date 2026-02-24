@@ -12,6 +12,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             "body",
             "kind",
             "url",
+            "audience_mode",
             "is_read",
             "is_pinned",
             "is_follow_up",

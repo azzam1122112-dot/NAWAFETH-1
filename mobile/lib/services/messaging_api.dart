@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../core/network/api_dio.dart';
 import 'api_config.dart';
 import 'dio_proxy.dart';
+import 'role_controller.dart';
 
 class MessagingApi {
   final Dio _dio;
@@ -79,7 +80,10 @@ class MessagingApi {
   // ─── Thread State (favorite / block / archive) ─────────────────
 
   Future<List<Map<String, dynamic>>> getMyThreadStates() async {
-    final res = await _dio.get('${ApiConfig.apiPrefix}/messaging/threads/states/');
+    final res = await _dio.get(
+      '${ApiConfig.apiPrefix}/messaging/threads/states/',
+      queryParameters: {'mode': _activeModeParam()},
+    );
     final data = res.data;
     if (data is List) {
       return data.map((e) => _asMap(e)).toList();
@@ -190,7 +194,7 @@ class MessagingApi {
   Future<Map<String, dynamic>> getOrCreateDirectThread(int providerId) async {
     final res = await _dio.post(
       '${ApiConfig.apiPrefix}/messaging/direct/thread/',
-      data: {'provider_id': providerId},
+      data: {'provider_id': providerId, 'mode': _activeModeParam()},
     );
     return _asMap(res.data);
   }
@@ -258,6 +262,7 @@ class MessagingApi {
   Future<List<Map<String, dynamic>>> getMyDirectThreads() async {
     final res = await _dio.get(
       '${ApiConfig.apiPrefix}/messaging/direct/threads/',
+      queryParameters: {'mode': _activeModeParam()},
     );
     final data = res.data;
     if (data is List) {
@@ -324,5 +329,9 @@ class MessagingApi {
       return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return <String, dynamic>{};
+  }
+
+  String _activeModeParam() {
+    return RoleController.instance.notifier.value.isProvider ? 'provider' : 'client';
   }
 }

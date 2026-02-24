@@ -36,6 +36,11 @@ class EventLog(models.Model):
 
 
 class Notification(models.Model):
+	class AudienceMode(models.TextChoices):
+		CLIENT = "client", "عميل"
+		PROVIDER = "provider", "مزود"
+		SHARED = "shared", "مشترك"
+
 	user = models.ForeignKey(
 		settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
 	)
@@ -44,6 +49,12 @@ class Notification(models.Model):
 	body = models.CharField(max_length=500)
 	kind = models.CharField(max_length=50, default="info")  # info/success/warn/error
 	url = models.CharField(max_length=300, blank=True)  # deep link اختياري
+	audience_mode = models.CharField(
+		max_length=20,
+		choices=AudienceMode.choices,
+		default=AudienceMode.SHARED,
+		db_index=True,
+	)
 	is_read = models.BooleanField(default=False)
 	is_pinned = models.BooleanField(default=False)
 	is_follow_up = models.BooleanField(default=False)

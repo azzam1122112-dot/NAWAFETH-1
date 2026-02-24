@@ -34,15 +34,19 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
       if (list.isEmpty) {
         setState(() => _loading = false);
       } else {
-        // Double the list for infinite scroll feel if small
-        final loopList = list.length < 5
-            ? List.generate(4, (_) => list).expand((x) => x).toList()
-            : list;
+        // Ensure we don't show duplicate providers on the home page.
+        final seen = <int>{};
+        final unique = <ProviderProfile>[];
+        for (final p in list) {
+          if (seen.add(p.id)) unique.add(p);
+        }
         setState(() {
-          _providers = loopList;
+          _providers = unique;
           _loading = false;
         });
-        _startAutoScroll();
+        if (_providers.length > 2) {
+          _startAutoScroll();
+        }
       }
     }
   }

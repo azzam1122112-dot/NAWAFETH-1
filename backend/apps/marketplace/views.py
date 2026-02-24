@@ -128,6 +128,7 @@ def _notify_urgent_request_to_matching_providers(service_request: ServiceRequest
 			pref_key="urgent_request",
 			request_id=service_request.id,
 			is_urgent=True,
+			audience_mode="provider",
 		)
 
 

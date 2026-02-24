@@ -44,6 +44,7 @@ def test_notifications_created_on_offer_and_message():
     assert offer_notif is not None
     assert offer_notif.kind == "offer_created"
     assert offer_notif.url == f"/requests/{sr.id}"
+    assert offer_notif.audience_mode == "client"
 
     # رسالة جديدة => إشعار للطرف الآخر
     thread, _ = Thread.objects.get_or_create(request=sr)
@@ -52,6 +53,7 @@ def test_notifications_created_on_offer_and_message():
     assert msg_notif is not None
     assert msg_notif.kind == "message_new"
     assert f"/requests/{sr.id}/chat" in (msg_notif.url or "")
+    assert msg_notif.audience_mode == "provider"
 
 
 @pytest.mark.django_db
@@ -69,6 +71,90 @@ def test_notifications_api_list_and_unread():
     r2 = api.get("/api/notifications/unread-count/")
     assert r2.status_code == 200
     assert r2.data["unread"] == 1
+
+
+@pytest.mark.django_db
+def test_notifications_are_filtered_by_active_mode_query_param():
+    user = User.objects.create_user(phone="0509000041", role_state=UserRole.CLIENT)
+    provider = ProviderProfile.objects.create(
+        user=user,
+        provider_type="individual",
+        display_name="مزود/عميل",
+        bio="bio",
+        years_experience=1,
+        city="الرياض",
+        accepts_urgent=True,
+    )
+    other_client = User.objects.create_user(phone="0509000042", role_state=UserRole.CLIENT)
+    other_provider_user = User.objects.create_user(phone="0509000043", role_state=UserRole.PROVIDER)
+    other_provider = ProviderProfile.objects.create(
+        user=other_provider_user,
+        provider_type="individual",
+        display_name="مزود آخر",
+        bio="bio",
+        years_experience=1,
+        city="الرياض",
+        accepts_urgent=True,
+    )
+
+    cat = Category.objects.create(name="نجارة")
+    sub = SubCategory.objects.create(category=cat, name="أبواب")
+    ProviderCategory.objects.create(provider=provider, subcategory=sub)
+    ProviderCategory.objects.create(provider=other_provider, subcategory=sub)
+
+    # طلب العميل -> إشعار عميل عند وصول عرض
+    sr_client = ServiceRequest.objects.create(
+        client=user,
+        provider=other_provider,
+        subcategory=sub,
+        title="طلب كعميل",
+        description="وصف",
+        request_type=RequestType.NORMAL,
+        status=RequestStatus.SENT,
+        city="الرياض",
+    )
+    Offer.objects.create(request=sr_client, provider=other_provider, price="120.00", duration_days=2, note="عرض")
+
+    # طلب أنا فيه مزود -> إشعار مزود عند تغيير الحالة بواسطة العميل
+    sr_provider = ServiceRequest.objects.create(
+        client=other_client,
+        provider=provider,
+        subcategory=sub,
+        title="طلب كمزود",
+        description="وصف",
+        request_type=RequestType.NORMAL,
+        status=RequestStatus.ACCEPTED,
+        city="الرياض",
+    )
+    RequestStatusLog.objects.create(
+        request=sr_provider,
+        actor=other_client,
+        from_status=RequestStatus.ACCEPTED,
+        to_status=RequestStatus.IN_PROGRESS,
+        note="بدء التنفيذ",
+    )
+
+    api = APIClient()
+    api.force_authenticate(user=user)
+
+    r_client = api.get("/api/notifications/", {"mode": "client"})
+    assert r_client.status_code == 200
+    client_kinds = [row["kind"] for row in r_client.data["results"]]
+    assert "offer_created" in client_kinds
+    assert "request_status_change" not in client_kinds
+
+    r_provider = api.get("/api/notifications/", {"mode": "provider"})
+    assert r_provider.status_code == 200
+    provider_kinds = [row["kind"] for row in r_provider.data["results"]]
+    assert "request_status_change" in provider_kinds
+    assert "offer_created" not in provider_kinds
+
+    r_unread_client = api.get("/api/notifications/unread-count/", {"mode": "client"})
+    r_unread_provider = api.get("/api/notifications/unread-count/", {"mode": "provider"})
+    assert r_unread_client.status_code == 200
+    assert r_unread_provider.status_code == 200
+    assert r_unread_client.data["unread"] == 1
+    assert r_unread_provider.data["unread"] == 1
 
 
 @pytest.mark.django_db
@@ -114,6 +200,7 @@ def test_status_log_creates_notification_for_counterparty():
     assert "تحت التنفيذ" in notif.body
     assert notif.kind == "request_status_change"
     assert notif.url == f"/requests/{sr.id}"
+    assert notif.audience_mode == "client"
 
 
 @pytest.mark.django_db

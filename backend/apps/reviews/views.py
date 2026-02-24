@@ -100,6 +100,7 @@ class ProviderReviewReplyView(APIView):
 					"provider_id": review.provider_id,
 					"reply_action": "edit" if is_edit else "create",
 				},
+				audience_mode="client",
 			)
 
 		return Response(
@@ -142,6 +143,7 @@ class ProviderReviewReplyView(APIView):
 					"provider_id": review.provider_id,
 					"reply_action": "delete",
 				},
+				audience_mode="client",
 			)
 
 		return Response({"ok": True, "review_id": review.id}, status=status.HTTP_200_OK)

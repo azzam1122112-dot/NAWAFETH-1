@@ -33,6 +33,18 @@ from .serializers import (
 )
 
 
+def _active_context_mode_from_request(request) -> str:
+	mode = (
+		request.query_params.get("mode")
+		or request.data.get("mode")
+		or request.headers.get("X-Account-Mode")
+		or ""
+	).strip().lower()
+	if mode in {"client", "provider"}:
+		return mode
+	return "shared"
+
+
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LEN = 2000
@@ -297,6 +309,7 @@ class DirectThreadGetOrCreateView(APIView):
 
 		provider_user = provider_profile.user
 		me = request.user
+		context_mode = _active_context_mode_from_request(request)
 
 		if me.id == provider_user.id:
 			return Response({"error": "لا يمكنك محادثة نفسك"}, status=status.HTTP_400_BAD_REQUEST)
@@ -304,6 +317,7 @@ class DirectThreadGetOrCreateView(APIView):
 		from django.db.models import Q
 		thread = Thread.objects.filter(
 			is_direct=True,
+			context_mode=context_mode,
 		).filter(
 			Q(participant_1=me, participant_2=provider_user) |
 			Q(participant_1=provider_user, participant_2=me)
@@ -312,6 +326,7 @@ class DirectThreadGetOrCreateView(APIView):
 		if not thread:
 			thread = Thread.objects.create(
 				is_direct=True,
+				context_mode=context_mode,
 				participant_1=me,
 				participant_2=provider_user,
 			)
@@ -419,9 +434,13 @@ class MyDirectThreadsListView(APIView):
 	def get(self, request):
 		from django.db.models import Q, Max, Subquery, OuterRef
 		me = request.user
+		mode = _active_context_mode_from_request(request)
 
+		threads = Thread.objects.filter(is_direct=True)
+		if mode in {"client", "provider"}:
+			threads = threads.filter(context_mode=mode)
 		threads = (
-			Thread.objects.filter(is_direct=True)
+			threads
 			.filter(Q(participant_1=me) | Q(participant_2=me))
 			.select_related("participant_1", "participant_2")
 			.annotate(last_message_at=Max("messages__created_at"))
@@ -460,16 +479,27 @@ class MyThreadStatesListView(APIView):
 	def get(self, request):
 		from django.db.models import Q
 		me = request.user
+		mode = _active_context_mode_from_request(request)
 
-		thread_ids = list(
-			Thread.objects.filter(
+		q = Q()
+		if mode in {"client", "provider"}:
+			q |= (
+				(Q(is_direct=True, participant_1=me) | Q(is_direct=True, participant_2=me))
+				& Q(context_mode=mode)
+			)
+			if mode == "client":
+				q |= Q(request__client=me)
+			else:
+				q |= Q(request__provider__user=me)
+		else:
+			q |= (
 				Q(is_direct=True, participant_1=me)
 				| Q(is_direct=True, participant_2=me)
 				| Q(request__client=me)
 				| Q(request__provider__user=me)
 			)
-			.values_list("id", flat=True)
-		)
+
+		thread_ids = list(Thread.objects.filter(q).values_list("id", flat=True))
 
 		states = ThreadUserState.objects.filter(user=me, thread_id__in=thread_ids)
 		return Response(ThreadUserStateSerializer(states, many=True).data, status=status.HTTP_200_OK)
