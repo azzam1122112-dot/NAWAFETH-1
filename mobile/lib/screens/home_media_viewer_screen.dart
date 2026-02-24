@@ -37,8 +37,8 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
   final Set<int> _savedMediaIds = <int>{};
   final Set<int> _likeBusy = <int>{};
   final Set<int> _saveBusy = <int>{};
-  final Map<int, int> _likeDeltaByItem = <int, int>{};
-  final Map<int, int> _saveDeltaByItem = <int, int>{};
+  final Map<int, int> _likesCountByItem = <int, int>{};
+  final Map<int, int> _savesCountByItem = <int, int>{};
   bool _showSwipeHint = true;
   Timer? _hintTimer;
 
@@ -47,6 +47,10 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
     super.initState();
     _index = widget.initialIndex.clamp(0, widget.items.length - 1);
     _pageController = PageController(initialPage: _index);
+    for (final item in widget.items) {
+      _likesCountByItem[item.id] = item.likeCount;
+      _savesCountByItem[item.id] = item.saveCount;
+    }
     _loadCurrentVideo();
     _primeSocialState();
     _hintTimer = Timer(const Duration(seconds: 3), () {
@@ -68,6 +72,12 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
         _likedMediaIds
           ..clear()
           ..addAll(likes.map((e) => e.id));
+        for (final itemId in _likedMediaIds) {
+          final current = _likesCountByItem[itemId] ?? 0;
+          if (current <= 0) {
+            _likesCountByItem[itemId] = 1;
+          }
+        }
       });
     } catch (_) {
       // Unauthenticated / network failure: ignore.
@@ -83,6 +93,12 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
         _savedMediaIds
           ..clear()
           ..addAll(saved.map((e) => e.id));
+        for (final itemId in _savedMediaIds) {
+          final current = _savesCountByItem[itemId] ?? 0;
+          if (current <= 0) {
+            _savesCountByItem[itemId] = 1;
+          }
+        }
       });
     } catch (_) {
       // Unauthenticated / network failure: ignore.
@@ -153,15 +169,13 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
   }
 
   int _displayLikeCount(ProviderPortfolioItem item) {
-    final delta = _likeDeltaByItem[item.id] ?? 0;
-    final next = item.likeCount + delta;
-    return next < 0 ? 0 : next;
+    final current = _likesCountByItem[item.id] ?? item.likeCount;
+    return current < 0 ? 0 : current;
   }
 
   int _displaySaveCount(ProviderPortfolioItem item) {
-    final delta = _saveDeltaByItem[item.id] ?? 0;
-    final next = item.saveCount + delta;
-    return next < 0 ? 0 : next;
+    final current = _savesCountByItem[item.id] ?? item.saveCount;
+    return current < 0 ? 0 : current;
   }
 
   String _formatCounter(int value) {
@@ -209,8 +223,9 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
           _likedMediaIds.remove(itemId);
         }
       } else {
-        final delta = _likeDeltaByItem[itemId] ?? 0;
-        _likeDeltaByItem[itemId] = delta + (wasLiked ? -1 : 1);
+        final current = _likesCountByItem[itemId] ?? item.likeCount;
+        final next = wasLiked ? (current - 1) : (current + 1);
+        _likesCountByItem[itemId] = next < 0 ? 0 : next;
       }
     });
 
@@ -256,8 +271,9 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
           _savedMediaIds.remove(itemId);
         }
       } else {
-        final delta = _saveDeltaByItem[itemId] ?? 0;
-        _saveDeltaByItem[itemId] = delta + (wasSaved ? -1 : 1);
+        final current = _savesCountByItem[itemId] ?? item.saveCount;
+        final next = wasSaved ? (current - 1) : (current + 1);
+        _savesCountByItem[itemId] = next < 0 ? 0 : next;
       }
     });
 
