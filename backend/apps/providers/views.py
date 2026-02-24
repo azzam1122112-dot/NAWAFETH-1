@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Count, F, Max
+from django.db.models import Count, F, Max, Q
 from django.db.models.functions import Coalesce
 from django.db import transaction
 
@@ -193,6 +193,7 @@ class ProviderListView(generics.ListAPIView):
 	permission_classes = [permissions.AllowAny]
 
 	def get_queryset(self):
+		from apps.marketplace.models import RequestStatus
 		# Public list must include only real active provider accounts.
 		qs = (
 			ProviderProfile.objects.select_related("user")
@@ -202,6 +203,11 @@ class ProviderListView(generics.ListAPIView):
 			.annotate(
 				followers_count=Count("followers", distinct=True),
 				likes_count=Count("likes", distinct=True),
+				completed_requests=Count(
+					"assigned_requests",
+					filter=Q(assigned_requests__status=RequestStatus.COMPLETED),
+					distinct=True,
+				),
 			)
 			.order_by("-id")
 		)
@@ -246,6 +252,7 @@ class ProviderDetailView(generics.RetrieveAPIView):
 	permission_classes = [permissions.AllowAny]
 
 	def get_queryset(self):
+		from apps.marketplace.models import RequestStatus
 		return (
 			ProviderProfile.objects.select_related("user")
 			.filter(
@@ -254,6 +261,11 @@ class ProviderDetailView(generics.RetrieveAPIView):
 			.annotate(
 				followers_count=Count("followers", distinct=True),
 				likes_count=Count("likes", distinct=True),
+				completed_requests=Count(
+					"assigned_requests",
+					filter=Q(assigned_requests__status=RequestStatus.COMPLETED),
+					distinct=True,
+				),
 			)
 		)
 
@@ -499,6 +511,59 @@ class ProviderFollowingView(generics.ListAPIView):
 			)
 		except ProviderProfile.DoesNotExist:
 			return ProviderProfile.objects.none()
+
+
+class ProviderPublicStatsView(APIView):
+	"""Public lightweight stats for a provider profile."""
+	permission_classes = [permissions.AllowAny]
+
+	def get(self, request, provider_id: int):
+		provider = (
+			ProviderProfile.objects.select_related("user")
+			.filter(id=provider_id, user__is_active=True)
+			.first()
+		)
+		if not provider:
+			raise NotFound("provider_not_found")
+
+		# Import locally to avoid hard coupling at import time.
+		from apps.marketplace.models import ServiceRequest, RequestStatus
+
+		completed_requests = ServiceRequest.objects.filter(
+			provider_id=provider_id,
+			status=RequestStatus.COMPLETED,
+		).count()
+		followers_count = (
+			ProviderFollow.objects.filter(provider_id=provider_id)
+			.values("user_id")
+			.distinct()
+			.count()
+		)
+		following_count = (
+			ProviderFollow.objects.filter(user=provider.user)
+			.values("provider_id")
+			.distinct()
+			.count()
+		)
+		likes_count = (
+			ProviderLike.objects.filter(provider_id=provider_id)
+			.values("user_id")
+			.distinct()
+			.count()
+		)
+
+		return Response(
+			{
+				"provider_id": provider_id,
+				"completed_requests": completed_requests,
+				"followers_count": followers_count,
+				"following_count": following_count,
+				"likes_count": likes_count,
+				"rating_avg": getattr(provider, "rating_avg", 0) or 0,
+				"rating_count": getattr(provider, "rating_count", 0) or 0,
+			},
+			status=status.HTTP_200_OK,
+		)
 
 
 class FollowProviderView(APIView):

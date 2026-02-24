@@ -201,6 +201,21 @@ class ProvidersApi {
     }
   }
 
+  Future<Map<String, dynamic>?> getProviderPublicStats(int providerId) async {
+    try {
+      final res = await _dio.get('${ApiConfig.apiPrefix}/providers/$providerId/stats/');
+      if (res.data is Map<String, dynamic>) {
+        return res.data as Map<String, dynamic>;
+      }
+      if (res.data is Map) {
+        return Map<String, dynamic>.from(res.data as Map);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<ProviderService>> getProviderServices(int providerId) async {
     try {
       final res = await _dio.get(
@@ -512,7 +527,25 @@ class ProvidersApi {
         '${ApiConfig.apiPrefix}/providers/me/portfolio/',
         data: formData,
       );
-      return ProviderPortfolioItem.fromJson(Map<String, dynamic>.from(res.data as Map));
+      final data = Map<String, dynamic>.from(res.data as Map);
+      try {
+        return ProviderPortfolioItem.fromJson(data);
+      } catch (_) {
+        final id = int.tryParse('${data['id'] ?? ''}');
+        if (id == null || id <= 0) return null;
+        final createdAt = DateTime.tryParse((data['created_at'] ?? '').toString()) ?? DateTime.now();
+        return ProviderPortfolioItem(
+          id: id,
+          providerId: 0,
+          providerDisplayName: '',
+          providerUsername: null,
+          fileType: (data['file_type'] ?? fileType).toString(),
+          fileUrl: '',
+          thumbnailUrl: null,
+          caption: (data['caption'] ?? caption).toString(),
+          createdAt: createdAt,
+        );
+      }
     } catch (_) {
       return null;
     }
@@ -757,7 +790,25 @@ class ProvidersApi {
         '${ApiConfig.apiPrefix}/providers/me/spotlights/',
         data: formData,
       );
-      return ProviderPortfolioItem.fromJson(Map<String, dynamic>.from(res.data as Map));
+      final data = Map<String, dynamic>.from(res.data as Map);
+      try {
+        return ProviderPortfolioItem.fromJson(data);
+      } catch (_) {
+        final id = int.tryParse('${data['id'] ?? ''}');
+        if (id == null || id <= 0) return null;
+        final createdAt = DateTime.tryParse((data['created_at'] ?? '').toString()) ?? DateTime.now();
+        return ProviderPortfolioItem(
+          id: id,
+          providerId: 0,
+          providerDisplayName: '',
+          providerUsername: null,
+          fileType: (data['file_type'] ?? fileType).toString(),
+          fileUrl: '',
+          thumbnailUrl: null,
+          caption: (data['caption'] ?? caption).toString(),
+          createdAt: createdAt,
+        );
+      }
     } catch (_) {
       return null;
     }

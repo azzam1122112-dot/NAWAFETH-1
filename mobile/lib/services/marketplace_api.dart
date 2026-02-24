@@ -37,8 +37,42 @@ class MarketplaceApi {
     List<File>? files,
     String? audioPath,
   }) async {
+    final result = await createRequestDetailed(
+      subcategoryId: subcategoryId,
+      title: title,
+      description: description,
+      requestType: requestType,
+      city: city,
+      dispatchMode: dispatchMode,
+      providerId: providerId,
+      images: images,
+      videos: videos,
+      files: files,
+      audioPath: audioPath,
+    );
+    return result.ok;
+  }
+
+  Future<MarketplaceActionResult> createRequestDetailed({
+    required int subcategoryId,
+    required String title,
+    required String description,
+    required String requestType,
+    required String city,
+    String? dispatchMode,
+    int? providerId,
+    List<File>? images,
+    List<File>? videos,
+    List<File>? files,
+    String? audioPath,
+  }) async {
     final token = await _session.readAccessToken();
-    if (token == null) return false;
+    if (token == null) {
+      return const MarketplaceActionResult(
+        ok: false,
+        message: 'يلزم تسجيل الدخول أولاً.',
+      );
+    }
 
     try {
       final formData = FormData.fromMap({
@@ -96,10 +130,14 @@ class MarketplaceApi {
           },
         ),
       );
-      return true;
-    } catch (e) {
-      // debugPrint('Create Request Error: $e');
-      return false;
+      return const MarketplaceActionResult(ok: true);
+    } on DioException catch (e) {
+      return MarketplaceActionResult(ok: false, message: _extractDioMessage(e));
+    } catch (_) {
+      return const MarketplaceActionResult(
+        ok: false,
+        message: 'تعذر إرسال الطلب حالياً. حاول مرة أخرى.',
+      );
     }
   }
 

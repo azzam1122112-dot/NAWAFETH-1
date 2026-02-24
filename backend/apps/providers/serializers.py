@@ -110,6 +110,7 @@ class ProviderProfileMeSerializer(serializers.ModelSerializer):
 class ProviderPublicSerializer(serializers.ModelSerializer):
     followers_count = serializers.IntegerField(read_only=True)
     likes_count = serializers.IntegerField(read_only=True)
+    completed_requests = serializers.IntegerField(read_only=True, required=False)
     following_count = serializers.SerializerMethodField()
     phone = serializers.CharField(source="user.phone", read_only=True)
 
@@ -136,6 +137,7 @@ class ProviderPublicSerializer(serializers.ModelSerializer):
             "followers_count",
             "likes_count",
             "following_count",
+            "completed_requests",
         )
 
     def get_following_count(self, obj):

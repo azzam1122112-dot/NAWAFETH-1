@@ -54,6 +54,7 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
   Category? _selectedCategory;
   SubCategory? _selectedSubCategory;
   bool _isSubmitting = false;
+  String? _providerCity;
 
   @override
   void initState() {
@@ -81,6 +82,12 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
       if (providerId != null) {
         final providerSubs = await api.getProviderSubcategories(providerId);
         categories = _groupProviderSubcategories(providerSubs);
+        final providerDetail = await api.getProviderDetail(providerId);
+        final city = (providerDetail?.city ?? '').trim();
+        if (city.isNotEmpty && _cityController.text.trim().isEmpty) {
+          _cityController.text = city;
+        }
+        _providerCity = city.isEmpty ? null : city;
         if (categories.isEmpty) {
           _categoriesError = 'هذا المزود لم يسجل أقسامًا/تخصصات متاحة حالياً';
         }
@@ -364,6 +371,9 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
     final providerId = int.tryParse((widget.providerId ?? '').trim());
     final isTargeted = providerId != null;
     final requestType = isTargeted ? 'normal' : 'competitive';
+    final cityForRequest = isTargeted && (_providerCity ?? '').trim().isNotEmpty
+      ? _providerCity!.trim()
+      : _cityController.text.trim();
 
     if (!isTargeted && _deadline == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -401,11 +411,11 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
 
       // Note: deadline and attachments are now supported via updated MarketplaceApi.
 
-      final success = await MarketplaceApi().createRequest(
+      final result = await MarketplaceApi().createRequestDetailed(
         subcategoryId: subcategoryId,
         title: _titleController.text,
         description: _detailsController.text,
-        city: _cityController.text,
+        city: cityForRequest,
         requestType: requestType,
         providerId: providerId,
         images: _images,
@@ -414,8 +424,8 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
         audioPath: _audioPath,
       );
 
-      if (!success) {
-        throw Exception('تعذر إرسال الطلب');
+      if (!result.ok) {
+        throw Exception(result.message ?? 'تعذر إرسال الطلب');
       }
 
       if (mounted) {
@@ -474,6 +484,7 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
   @override
   Widget build(BuildContext context) {
     const Color mainColor = Colors.deepPurple;
+    final providerId = int.tryParse((widget.providerId ?? '').trim());
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -638,8 +649,11 @@ class _ServiceRequestFormScreenState extends State<ServiceRequestFormScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _cityController,
+                  readOnly: providerId != null && (_providerCity ?? '').isNotEmpty,
                   decoration: InputDecoration(
-                    hintText: "حدد المدينة",
+                    hintText: providerId != null && (_providerCity ?? '').isNotEmpty
+                        ? "مدينة المزود"
+                        : "حدد المدينة",
                     filled: true,
                      fillColor: Colors.white,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),

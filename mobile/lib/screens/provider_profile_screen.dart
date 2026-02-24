@@ -84,6 +84,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   int? _likesCount;
 
   int? _reviewersCount;
+  double? _ratingAvgOverride;
 
   final List<Map<String, dynamic>> tabs = const [
     {"title": "الملف الشخصي", "icon": Icons.person_outline},
@@ -109,7 +110,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   String get providerSubCategory =>
       (widget.providerSubCategory ?? '').trim();
 
-  double get providerRating => _fullProfile?.ratingAvg ?? widget.providerRating ?? 0.0;
+  double get providerRating => _ratingAvgOverride ?? _fullProfile?.ratingAvg ?? widget.providerRating ?? 0.0;
 
   int get providerOperations => _fullProfile?.ratingCount ?? widget.providerOperations ?? 0;
 
@@ -422,15 +423,65 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       final id = int.tryParse(widget.providerId!);
       if (id == null) return;
       
-      final profile = await ProvidersApi().getProviderDetail(id);
+      final api = ProvidersApi();
+      final results = await Future.wait<dynamic>([
+        api.getProviderDetail(id),
+        api.getProviderPublicStats(id),
+      ]);
+      final profile = results[0] as ProviderProfile?;
+      final publicStats = results[1] as Map<String, dynamic>?;
       if (profile != null && mounted) {
+        int? completedFromStats;
+        int? followersFromStats;
+        int? followingFromStats;
+        int? likesFromStats;
+        int? ratingCountFromStats;
+        double? ratingAvgFromStats;
+        final rawCompleted = publicStats?['completed_requests'];
+        final rawFollowers = publicStats?['followers_count'];
+        final rawFollowing = publicStats?['following_count'];
+        final rawLikes = publicStats?['likes_count'];
+        final rawRatingCount = publicStats?['rating_count'];
+        final rawRatingAvg = publicStats?['rating_avg'];
+        if (rawCompleted is int) {
+          completedFromStats = rawCompleted;
+        } else if (rawCompleted != null) {
+          completedFromStats = int.tryParse(rawCompleted.toString());
+        }
+        if (rawFollowers is int) {
+          followersFromStats = rawFollowers;
+        } else if (rawFollowers != null) {
+          followersFromStats = int.tryParse(rawFollowers.toString());
+        }
+        if (rawFollowing is int) {
+          followingFromStats = rawFollowing;
+        } else if (rawFollowing != null) {
+          followingFromStats = int.tryParse(rawFollowing.toString());
+        }
+        if (rawLikes is int) {
+          likesFromStats = rawLikes;
+        } else if (rawLikes != null) {
+          likesFromStats = int.tryParse(rawLikes.toString());
+        }
+        if (rawRatingCount is int) {
+          ratingCountFromStats = rawRatingCount;
+        } else if (rawRatingCount != null) {
+          ratingCountFromStats = int.tryParse(rawRatingCount.toString());
+        }
+        if (rawRatingAvg is num) {
+          ratingAvgFromStats = rawRatingAvg.toDouble();
+        } else if (rawRatingAvg != null) {
+          ratingAvgFromStats = double.tryParse(rawRatingAvg.toString());
+        }
+
         setState(() {
           _fullProfile = profile;
-          _completedRequests = profile.completedRequests;
-          _followersCount = profile.followersCount;
-          _followingCount = profile.followingCount;
-          _likesCount = profile.likesCount;
-          _reviewersCount = profile.ratingCount;
+          _completedRequests = completedFromStats ?? profile.completedRequests;
+          _followersCount = followersFromStats ?? profile.followersCount;
+          _followingCount = followingFromStats ?? profile.followingCount;
+          _likesCount = likesFromStats ?? profile.likesCount;
+          _reviewersCount = ratingCountFromStats ?? profile.ratingCount;
+          _ratingAvgOverride = ratingAvgFromStats;
         });
       }
     } catch (e) {
@@ -1093,7 +1144,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          '$providerOperations عملية',
+                          '${_completedRequests ?? providerOperations} عملية',
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontSize: 12,
@@ -1113,7 +1164,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                   children: [
                     _circleStat(
                       icon: Icons.business_center_outlined,
-                      value: _completedRequests,
+                      value: _completedRequests ?? widget.providerOperations ?? 0,
                       onTap: () {},
                       isDark: isDark,
                     ),

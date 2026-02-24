@@ -772,7 +772,7 @@ class _SearchProviderScreenState extends State<SearchProviderScreen> {
               providerId: provider.id.toString(),
               providerName: provider.displayName,
               providerRating: provider.ratingAvg,
-              providerOperations: provider.ratingCount,
+              providerOperations: provider.completedRequests ?? provider.ratingCount,
               providerVerified:
                   provider.isVerifiedBlue || provider.isVerifiedGreen,
               providerPhone: provider.phone,

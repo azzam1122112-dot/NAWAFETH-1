@@ -400,7 +400,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
           latitude: lat,
           longitude: lng,
           rating: p.ratingAvg,
-          operationsCount: p.ratingCount,
+          operationsCount: p.completedRequests ?? p.ratingCount,
           phoneNumber: (p.phone ?? '').trim(),
           urgentServices: const [],
           responseTime: 0,
