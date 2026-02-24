@@ -123,6 +123,7 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
           itemBuilder: (context, index) {
             final profile = _providers[index];
             final avatar = _providerImage(profile);
+            final ratingLabel = profile.ratingAvg > 0 ? profile.ratingAvg.toStringAsFixed(1) : '—';
             return GestureDetector(
               onTap: () => _openProfileDetail(context, profile),
               child: Container(
@@ -168,12 +169,15 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
                               border: Border.all(color: Colors.white, width: 1.2),
                             ),
                             alignment: Alignment.center,
-                            child: Text(
-                              (profile.ratingAvg > 0 ? profile.ratingAvg.round() : 4).toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                ratingLabel,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),

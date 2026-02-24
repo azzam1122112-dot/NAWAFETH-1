@@ -1,0 +1,141 @@
+import io
+import os
+import posixpath
+import shutil
+import subprocess
+import tempfile
+from typing import Optional
+
+from django.core.files.base import ContentFile
+
+from PIL import Image, ImageDraw
+
+
+def _thumbnail_storage_name(original_name: str) -> str:
+    original = (original_name or "").replace("\\", "/")
+    directory = posixpath.dirname(original)
+    base = posixpath.splitext(posixpath.basename(original))[0] or "media"
+    if directory:
+        return f"{directory}/thumbs/{base}_thumb.jpg"
+    return f"thumbs/{base}_thumb.jpg"
+
+
+def _ffmpeg_binary() -> Optional[str]:
+    return shutil.which("ffmpeg")
+
+
+def _try_extract_frame_with_ffmpeg(src_path: str) -> Optional[bytes]:
+    ffmpeg = _ffmpeg_binary()
+    if not ffmpeg or not src_path or not os.path.exists(src_path):
+        return None
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+    tmp.close()
+    try:
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-ss",
+            "0.2",
+            "-i",
+            src_path,
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            tmp.name,
+        ]
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+        if proc.returncode != 0:
+            return None
+        if not os.path.exists(tmp.name) or os.path.getsize(tmp.name) <= 0:
+            return None
+        with open(tmp.name, "rb") as fh:
+            return fh.read()
+    except Exception:
+        return None
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+
+def _build_fallback_video_poster() -> bytes:
+    width, height = 960, 540
+    image = Image.new("RGB", (width, height), (238, 234, 252))
+    draw = ImageDraw.Draw(image)
+
+    # Soft diagonal bands to avoid a flat placeholder.
+    draw.rectangle([0, 0, width, height], fill=(236, 232, 250))
+    draw.polygon([(0, 0), (width * 0.55, 0), (width * 0.18, height)], fill=(226, 219, 247))
+    draw.polygon([(width, height), (width * 0.45, height), (width * 0.82, 0)], fill=(216, 206, 242))
+
+    cx, cy = width // 2, height // 2
+    radius = 64
+    draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], fill=(87, 63, 138))
+    draw.polygon(
+        [(cx - 14, cy - 24), (cx - 14, cy + 24), (cx + 28, cy)],
+        fill=(255, 255, 255),
+    )
+
+    # Minimal text without custom fonts (keeps dependency simple).
+    label = "VIDEO"
+    tw = 6 * len(label)
+    draw.rounded_rectangle(
+        [cx - tw - 20, cy + 86, cx + tw + 20, cy + 120],
+        radius=14,
+        fill=(255, 255, 255),
+    )
+    draw.text((cx - tw, cy + 93), label, fill=(87, 63, 138))
+
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=88, optimize=True)
+    return out.getvalue()
+
+
+def ensure_video_thumbnail(instance, *, force: bool = False) -> bool:
+    """Best-effort thumbnail generation for ProviderPortfolio/Spotlight video items.
+
+    Returns True when a thumbnail is saved, otherwise False.
+    Never raises to avoid breaking upload flows.
+    """
+    try:
+        if getattr(instance, "file_type", None) != "video":
+            return False
+        if not getattr(instance, "file", None):
+            return False
+        thumb_field = getattr(instance, "thumbnail", None)
+        if thumb_field is None:
+            return False
+        if getattr(thumb_field, "name", "") and not force:
+            return False
+
+        src_path = None
+        try:
+            src_path = instance.file.path
+        except Exception:
+            src_path = None
+
+        payload = _try_extract_frame_with_ffmpeg(src_path) or _build_fallback_video_poster()
+        if not payload:
+            return False
+
+        storage_name = _thumbnail_storage_name(getattr(instance.file, "name", ""))
+        if getattr(thumb_field, "name", "") and thumb_field.name != storage_name:
+            try:
+                thumb_field.delete(save=False)
+            except Exception:
+                pass
+        thumb_field.save(storage_name, ContentFile(payload), save=False)
+        instance.save(update_fields=["thumbnail"])
+        return True
+    except Exception:
+        return False
+

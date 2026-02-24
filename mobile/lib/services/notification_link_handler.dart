@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../models/app_notification.dart';
@@ -47,6 +49,13 @@ class NotificationLinkHandler {
       title: notification.title,
       body: notification.body,
     );
+    assert(() {
+      debugPrint(
+        '[NotificationLinkHandler] openFromNotification kind=${notification.kind} url=${notification.url} -> '
+        'threadId=${target?.threadId} requestId=${target?.requestId} isDirect=${target?.isDirect}',
+      );
+      return true;
+    }());
     if (target == null) return false;
     return _openTarget(context, target, fallbackName: notification.title);
   }
@@ -66,6 +75,13 @@ class NotificationLinkHandler {
       body: body,
       payload: payload,
     );
+    assert(() {
+      debugPrint(
+        '[NotificationLinkHandler] openFromPayload kind=$kind url=$url -> '
+        'threadId=${target?.threadId} requestId=${target?.requestId} isDirect=${target?.isDirect}',
+      );
+      return true;
+    }());
     if (target == null) return false;
     return _openTarget(context, target, fallbackName: title);
   }
@@ -92,6 +108,7 @@ class NotificationLinkHandler {
         context,
         requestId: target.requestId,
         threadId: target.threadId,
+        isDirect: target.isDirect,
         name: fallbackName.trim().isEmpty ? 'محادثة الطلب' : fallbackName.trim(),
       );
       return true;
@@ -110,12 +127,16 @@ class NotificationLinkHandler {
     required String body,
     Map<String, dynamic>? payload,
   }) {
+    final isDirectFromPayload = _extractIsDirectFromPayload(payload) ?? false;
+
     final threadIdFromPayload = _extractThreadIdFromPayload(payload);
     if (threadIdFromPayload != null) {
+      final requestIdFromPayload = _extractRequestIdFromPayload(payload);
       return _Target(
         threadId: threadIdFromPayload,
-        requestId: _extractRequestIdFromPayload(payload),
+        requestId: requestIdFromPayload,
         supportTicketId: null,
+        isDirect: isDirectFromPayload || (requestIdFromPayload == null && _isDirectThreadUrl(kind: kind, url: url)),
         openInbox: false,
         openRequestDetails: false,
       );
@@ -127,6 +148,7 @@ class NotificationLinkHandler {
         threadId: null,
         requestId: null,
         supportTicketId: supportTicketIdFromPayload,
+        isDirect: false,
         openInbox: false,
         openRequestDetails: false,
       );
@@ -138,6 +160,7 @@ class NotificationLinkHandler {
         threadId: threadIdFromUrl,
         requestId: _extractRequestIdFromUrl(url),
         supportTicketId: null,
+        isDirect: isDirectFromPayload || _isDirectThreadUrl(kind: kind, url: url),
         openInbox: false,
         openRequestDetails: false,
       );
@@ -149,6 +172,7 @@ class NotificationLinkHandler {
         threadId: null,
         requestId: requestIdFromUrl,
         supportTicketId: null,
+        isDirect: false,
         openInbox: false,
         openRequestDetails: !_isChatUrl(url),
       );
@@ -160,6 +184,7 @@ class NotificationLinkHandler {
         threadId: null,
         requestId: null,
         supportTicketId: supportTicketIdFromUrl,
+        isDirect: false,
         openInbox: false,
         openRequestDetails: false,
       );
@@ -171,6 +196,7 @@ class NotificationLinkHandler {
         threadId: null,
         requestId: requestIdFromText,
         supportTicketId: null,
+        isDirect: false,
         openInbox: false,
         openRequestDetails: false,
       );
@@ -181,6 +207,7 @@ class NotificationLinkHandler {
         threadId: null,
         requestId: null,
         supportTicketId: null,
+        isDirect: false,
         openInbox: true,
         openRequestDetails: false,
       );
@@ -317,14 +344,82 @@ class NotificationLinkHandler {
         normalized == 'chat_message';
   }
 
+  static bool _isDirectThreadUrl({required String kind, required String? url}) {
+    if (!_isMessageKind(kind)) return false;
+    final s = (url ?? '').trim();
+    if (s.isEmpty) return false;
+
+    // Backend uses /threads/<id>/chat for direct threads.
+    // Request threads use /requests/<id>/chat.
+    final threadId = _extractThreadIdFromUrl(s);
+    if (threadId == null) return false;
+    final requestId = _extractRequestIdFromUrl(s);
+    return requestId == null;
+  }
+
+  static bool? _extractIsDirectFromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+
+    dynamic raw = payload['is_direct'] ?? payload['isDirect'];
+    if (raw == null) {
+      final meta = payload['meta'];
+      if (meta is Map) {
+        raw = meta['is_direct'] ?? meta['isDirect'];
+      } else if (meta is String && meta.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(meta);
+          if (decoded is Map) {
+            raw = decoded['is_direct'] ?? decoded['isDirect'];
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (raw is bool) return raw;
+    if (raw is num) return raw.toInt() == 1;
+    final s = (raw ?? '').toString().trim().toLowerCase();
+    if (s.isEmpty) return null;
+    if (s == 'true' || s == '1' || s == 'yes') return true;
+    if (s == 'false' || s == '0' || s == 'no') return false;
+    return null;
+  }
+
   static int? _extractThreadIdFromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
-    return _asInt(payload['thread_id'] ?? payload['threadId'] ?? payload['thread']);
+    dynamic raw = payload['thread_id'] ?? payload['threadId'] ?? payload['thread'];
+    if (raw == null) {
+      final meta = payload['meta'];
+      if (meta is Map) {
+        raw = meta['thread_id'] ?? meta['threadId'] ?? meta['thread'];
+      } else if (meta is String && meta.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(meta);
+          if (decoded is Map) {
+            raw = decoded['thread_id'] ?? decoded['threadId'] ?? decoded['thread'];
+          }
+        } catch (_) {}
+      }
+    }
+    return _asInt(raw);
   }
 
   static int? _extractRequestIdFromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
-    return _asInt(payload['request_id'] ?? payload['requestId'] ?? payload['request']);
+    dynamic raw = payload['request_id'] ?? payload['requestId'] ?? payload['request'];
+    if (raw == null) {
+      final meta = payload['meta'];
+      if (meta is Map) {
+        raw = meta['request_id'] ?? meta['requestId'] ?? meta['request'];
+      } else if (meta is String && meta.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(meta);
+          if (decoded is Map) {
+            raw = decoded['request_id'] ?? decoded['requestId'] ?? decoded['request'];
+          }
+        } catch (_) {}
+      }
+    }
+    return _asInt(raw);
   }
 
   static int? _extractSupportTicketIdFromPayload(Map<String, dynamic>? payload) {
@@ -433,6 +528,7 @@ class _Target {
   final int? threadId;
   final int? requestId;
   final int? supportTicketId;
+  final bool isDirect;
   final bool openInbox;
   final bool openRequestDetails;
 
@@ -440,6 +536,7 @@ class _Target {
     required this.threadId,
     required this.requestId,
     required this.supportTicketId,
+    required this.isDirect,
     required this.openInbox,
     required this.openRequestDetails,
   });

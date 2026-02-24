@@ -38,6 +38,7 @@ from .serializers import (
 	ProviderSpotlightItemSerializer,
 	UserPublicSerializer,
 )
+from .media_thumbnails import ensure_video_thumbnail
 
 
 class MyProviderProfileView(generics.RetrieveUpdateAPIView):
@@ -310,7 +311,8 @@ class MyProviderPortfolioListCreateView(generics.ListCreateAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			raise NotFound("provider_profile_not_found")
-		serializer.save(provider=pp)
+		item = serializer.save(provider=pp)
+		ensure_video_thumbnail(item)
 
 
 class MyProviderPortfolioDetailView(generics.RetrieveDestroyAPIView):
@@ -357,7 +359,8 @@ class MyProviderSpotlightListCreateView(generics.ListCreateAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			raise NotFound("provider_profile_not_found")
-		serializer.save(provider=pp)
+		item = serializer.save(provider=pp)
+		ensure_video_thumbnail(item)
 
 
 class MyProviderSpotlightDetailView(generics.RetrieveDestroyAPIView):

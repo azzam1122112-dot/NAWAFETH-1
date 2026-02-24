@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:dio/dio.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/provider.dart';
 import '../models/provider_portfolio_item.dart';
@@ -8,6 +10,7 @@ import '../services/account_api.dart';
 import '../services/chat_nav.dart';
 import '../services/providers_api.dart';
 import '../services/role_controller.dart';
+import '../utils/auth_guard.dart';
 import '../constants/colors.dart';
 import '../widgets/app_bar.dart';
 import '../widgets/bottom_nav.dart';
@@ -36,8 +39,9 @@ class InteractiveScreen extends StatefulWidget {
 }
 
 class _InteractiveScreenState extends State<InteractiveScreen>
-    with SingleTickerProviderStateMixin {
+  with TickerProviderStateMixin {
   late TabController _tabController;
+  late final AnimationController _shimmerController;
   late InteractiveMode _effectiveMode;
 
   final ProvidersApi _providersApi = ProvidersApi();
@@ -57,6 +61,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   Future<List<ProviderPortfolioItem>>? _favoritesFuture;
   final Set<int> _unfollowingProviderIds = <int>{};
   final Set<int> _unfavoritingItemIds = <int>{};
+  final Map<int, int> _favoriteMediaRetryNonce = <int, int>{};
+  final Set<String> _favoritePreviewsPrefetched = <String>{};
 
   List<ProviderProfile> _sortFollowing(List<ProviderProfile> items) {
     final out = List<ProviderProfile>.from(items);
@@ -76,6 +82,43 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return out;
   }
 
+  int _favoriteRetryNonceFor(int itemId) => _favoriteMediaRetryNonce[itemId] ?? 0;
+
+  void _retryFavoriteMedia(int itemId) {
+    if (!mounted) return;
+    setState(() {
+      _favoriteMediaRetryNonce[itemId] = _favoriteRetryNonceFor(itemId) + 1;
+    });
+  }
+
+  String _favoritePreviewUrl(String rawUrl, int itemId) {
+    final base = rawUrl.trim();
+    if (base.isEmpty) return base;
+    final nonce = _favoriteRetryNonceFor(itemId);
+    if (nonce <= 0) return base;
+    final sep = base.contains('?') ? '&' : '?';
+    return '$base${sep}retry=$nonce';
+  }
+
+  void _precacheFavoritePreviews(List<ProviderPortfolioItem> items) {
+    if (!mounted) return;
+    final candidates = items.take(8).map((item) {
+      if (item.fileType.toLowerCase() == 'video') {
+        return (item.thumbnailUrl ?? '').trim();
+      }
+      return item.fileUrl.trim();
+    }).where((u) => u.isNotEmpty);
+
+    for (final url in candidates) {
+      if (_favoritePreviewsPrefetched.contains(url)) continue;
+      _favoritePreviewsPrefetched.add(url);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        precacheImage(CachedNetworkImageProvider(url), context).catchError((_) {});
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,13 +131,55 @@ class _InteractiveScreenState extends State<InteractiveScreen>
       vsync: this, 
       initialIndex: 0 
     );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     
-    _loadCapabilitiesAndReload();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _guardAndLoadInitial();
+    });
     RoleController.instance.notifier.addListener(_onActiveRoleChanged);
   }
 
   void _onActiveRoleChanged() {
     _loadCapabilitiesAndReload();
+  }
+
+  Future<void> _guardAndLoadInitial() async {
+    final canOpen = await checkAuth(context);
+    if (!mounted) return;
+    if (!canOpen) {
+      setState(() {
+        _capabilitiesLoaded = true;
+        _followingError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
+        _followersError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
+        _favoritesError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
+        _followingFuture = Future<List<ProviderProfile>>.value(const <ProviderProfile>[]);
+        _followersFuture = Future<List<UserSummary>>.value(const <UserSummary>[]);
+        _favoritesFuture =
+            Future<List<ProviderPortfolioItem>>.value(const <ProviderPortfolioItem>[]);
+      });
+      return;
+    }
+    await _loadCapabilitiesAndReload();
+  }
+
+  String _mapInteractiveLoadError(
+    Object error, {
+    required String fallback,
+    String? forbiddenMessage,
+  }) {
+    if (error is DioException) {
+      final status = error.response?.statusCode;
+      if (status == 401) {
+        return 'انتهت الجلسة أو يلزم تسجيل الدخول مرة أخرى';
+      }
+      if (status == 403) {
+        return forbiddenMessage ?? 'لا تملك صلاحية الوصول لهذه البيانات';
+      }
+    }
+    return fallback;
   }
 
   Future<void> _loadCapabilitiesAndReload() async {
@@ -165,7 +250,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
       _followersError = null;
       _favoritesError = null;
       _followingFuture = _loadFollowingSafe();
-      _followersFuture = _loadFollowersSafe();
+      _followersFuture = _effectiveMode == InteractiveMode.provider
+          ? _loadFollowersSafe()
+          : Future<List<UserSummary>>.value(const <UserSummary>[]);
       _favoritesFuture = _loadFavoritesSafe();
     });
   }
@@ -176,8 +263,15 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     } on TimeoutException {
       if (mounted) setState(() => _followingError = 'انتهت مهلة تحميل قائمة المتابعة');
       return const [];
-    } catch (_) {
-      if (mounted) setState(() => _followingError = 'تعذر تحميل قائمة المتابعة');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _followingError = _mapInteractiveLoadError(
+            e,
+            fallback: 'تعذر تحميل قائمة المتابعة',
+          );
+        });
+      }
       return const [];
     }
   }
@@ -188,8 +282,16 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     } on TimeoutException {
       if (mounted) setState(() => _followersError = 'انتهت مهلة تحميل قائمة المتابعين');
       return const [];
-    } catch (_) {
-      if (mounted) setState(() => _followersError = 'تعذر تحميل قائمة المتابعين');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _followersError = _mapInteractiveLoadError(
+            e,
+            fallback: 'تعذر تحميل قائمة المتابعين',
+            forbiddenMessage: 'هذه القائمة متاحة لحسابات مزودي الخدمة فقط',
+          );
+        });
+      }
       return const [];
     }
   }
@@ -200,8 +302,15 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     } on TimeoutException {
       if (mounted) setState(() => _favoritesError = 'انتهت مهلة تحميل المفضلة');
       return const [];
-    } catch (_) {
-      if (mounted) setState(() => _favoritesError = 'تعذر تحميل المفضلة');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _favoritesError = _mapInteractiveLoadError(
+            e,
+            fallback: 'تعذر تحميل المفضلة',
+          );
+        });
+      }
       return const [];
     }
   }
@@ -254,6 +363,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   @override
   void dispose() {
     RoleController.instance.notifier.removeListener(_onActiveRoleChanged);
+    _shimmerController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -867,6 +977,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
             subtitle: _favoritesError ?? 'أي صور أو فيديوهات تعمل لها لايك ستظهر هنا.',
           );
         }
+        _precacheFavoritePreviews(list);
 
         return RefreshIndicator(
           onRefresh: _refreshInteractiveData,
@@ -875,7 +986,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
               final width = constraints.maxWidth;
               final crossAxisCount = width >= 980 ? 4 : (width >= 700 ? 3 : 2);
               final spacing = width >= 700 ? 14.0 : 12.0;
-              final ratio = width < 360 ? 0.75 : (width >= 700 ? 0.90 : 0.78);
+              // Slightly taller cards on phones to avoid text overflow.
+              final ratio = width < 360 ? 0.68 : (width >= 700 ? 0.92 : 0.72);
               return GridView.builder(
                 padding: EdgeInsets.fromLTRB(
                   width >= 700 ? 20 : 14,
@@ -904,9 +1016,14 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   Widget _buildFavoriteMediaCard(BuildContext context, ProviderPortfolioItem item) {
     final isVideo = item.fileType.toLowerCase() == 'video';
+    final mediaUrl = item.fileUrl.trim();
+    final rawPreviewUrl = isVideo ? ((item.thumbnailUrl ?? '').trim()) : mediaUrl;
+    final previewUrl = _favoritePreviewUrl(rawPreviewUrl, item.id);
+    final providerDisplayName = item.providerDisplayName.trim();
     final providerTag = ((item.providerUsername ?? '').trim().isNotEmpty)
         ? '@${item.providerUsername!.trim()}'
         : '@${item.providerId}';
+    final providerTitle = providerDisplayName.isNotEmpty ? providerDisplayName : providerTag;
     final caption = item.caption.trim().isEmpty
         ? 'اسم المشروع\nصورة المشروع الرئيسية\nأو لقطات مختصرة من ملفات المشروع'
         : item.caption.trim();
@@ -926,12 +1043,13 @@ class _InteractiveScreenState extends State<InteractiveScreen>
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
+          if (mediaUrl.isEmpty) return;
           if (isVideo) {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => NetworkVideoPlayerScreen(
-                  url: item.fileUrl,
+                  url: mediaUrl,
                   title: item.providerDisplayName,
                 ),
               ),
@@ -948,9 +1066,16 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 child: InteractiveViewer(
                   child: ClipRRect(
                      borderRadius: BorderRadius.circular(12),
-                     child: Image.network(
-                      item.fileUrl,
+                     child: CachedNetworkImage(
+                      imageUrl: mediaUrl,
                       fit: BoxFit.contain,
+                      fadeInDuration: const Duration(milliseconds: 220),
+                      placeholder: (context, url) => _favoriteMediaPlaceholder(),
+                      errorWidget: (context, url, error) => Container(
+                        color: AppColors.primaryLight,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image, color: Colors.grey, size: 36),
+                      ),
                     ),
                   ),
                 ),
@@ -958,104 +1083,281 @@ class _InteractiveScreenState extends State<InteractiveScreen>
             },
           );
         },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 4,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    item.fileUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: AppColors.primaryLight,
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
+        child: LayoutBuilder(
+          builder: (context, card) {
+            final isNarrowCard = card.maxWidth < 180;
+            final captionLines = isNarrowCard ? 2 : 3;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (!isVideo && mediaUrl.isEmpty)
+                        Container(
+                          color: AppColors.primaryLight,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                        )
+                      else if (isVideo && previewUrl.isEmpty)
+                        _favoriteVideoPlaceholder()
+                      else
+                        CachedNetworkImage(
+                          imageUrl: previewUrl,
+                          cacheKey: 'fav-${item.id}-${_favoriteRetryNonceFor(item.id)}-$previewUrl',
+                          fit: BoxFit.cover,
+                          fadeInDuration: const Duration(milliseconds: 220),
+                          fadeOutDuration: const Duration(milliseconds: 120),
+                          placeholder: (context, url) => _favoriteMediaPlaceholder(),
+                          errorWidget: (context, url, error) => Container(
+                            color: AppColors.primaryLight,
+                            child: isVideo
+                                ? _favoriteVideoPlaceholder(
+                                    onRetry: () => _retryFavoriteMedia(item.id),
+                                  )
+                                : _favoriteMediaPlaceholder(
+                                    isError: true,
+                                    onRetry: () => _retryFavoriteMedia(item.id),
+                                  ),
+                          ),
+                        ),
+                      if (isVideo)
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                          ),
+                        ),
+                      PositionedDirectional(
+                        top: 8,
+                        start: 8,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: _unfavoritingItemIds.contains(item.id)
+                                ? null
+                                : () => _removeFavoriteMedia(item),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                shape: BoxShape.circle,
+                              ),
+                              child: _unfavoritingItemIds.contains(item.id)
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.favorite,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          providerTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: isNarrowCard ? 11 : 12,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.deepPurple.shade300,
+                          ),
+                        ),
+                        if (providerDisplayName.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            providerTag,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: isNarrowCard ? 10 : 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 3),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: Text(
+                              caption,
+                              maxLines: captionLines,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: isNarrowCard ? 11 : 11.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.25,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (isVideo)
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
-                      ),
-                    ),
-                  PositionedDirectional(
-                    top: 8,
-                    start: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _favoriteMediaPlaceholder({bool isError = false, VoidCallback? onRetry}) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, _) {
+        final t = _shimmerController.value;
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1.8 + (t * 2.6), -0.2),
+              end: Alignment(-0.8 + (t * 2.6), 0.2),
+              colors: const [
+                Color(0xFFEDEBFA),
+                Color(0xFFF8F7FF),
+                Color(0xFFE8E5F7),
+              ],
+              stops: const [0.15, 0.5, 0.85],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isError ? Icons.broken_image_outlined : Icons.image_outlined,
+                  color: Colors.grey.shade500,
+                  size: 28,
+                ),
+                if (isError && onRetry != null) ...[
+                  const SizedBox(height: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: onRetry,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(999),
-                        onTap: _unfavoritingItemIds.contains(item.id)
-                            ? null
-                            : () => _removeFavoriteMedia(item),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh_rounded, size: 14, color: AppColors.deepPurple),
+                          SizedBox(width: 4),
+                          Text(
+                            'إعادة المحاولة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.deepPurple,
+                            ),
                           ),
-                          child: _unfavoritingItemIds.contains(item.id)
-                              ? const Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.favorite,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _favoriteVideoPlaceholder({VoidCallback? onRetry}) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryLight.withValues(alpha: 0.9),
+            Colors.deepPurple.shade50,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'فيديو',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: Colors.grey.shade700,
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      providerTag,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.deepPurple.shade300,
-                      ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: onRetry,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+                  ),
+                  child: const Text(
+                    'إعادة المحاولة',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.deepPurple,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      caption,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

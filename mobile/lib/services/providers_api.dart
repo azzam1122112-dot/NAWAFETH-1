@@ -322,8 +322,8 @@ class ProvidersApi {
         }
       }
       return out;
-    } catch (e) {
-      return [];
+    } catch (_) {
+      rethrow;
     }
   }
 
@@ -360,8 +360,8 @@ class ProvidersApi {
         } catch (_) {}
       }
       return out;
-    } catch (e) {
-      return [];
+    } catch (_) {
+      rethrow;
     }
   }
 
@@ -441,7 +441,7 @@ class ProvidersApi {
       }
       return out;
     } catch (_) {
-      return [];
+      rethrow;
     }
   }
 

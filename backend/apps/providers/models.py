@@ -96,6 +96,7 @@ class ProviderPortfolioItem(models.Model):
     )
     file_type = models.CharField(max_length=20, choices=FILE_TYPE_CHOICES)
     file = models.FileField(upload_to="providers/portfolio/%Y/%m/")
+    thumbnail = models.ImageField(upload_to="providers/portfolio/%Y/%m/thumbs/", null=True, blank=True)
     caption = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -116,6 +117,7 @@ class ProviderSpotlightItem(models.Model):
     )
     file_type = models.CharField(max_length=20, choices=FILE_TYPE_CHOICES)
     file = models.FileField(upload_to="providers/spotlights/%Y/%m/")
+    thumbnail = models.ImageField(upload_to="providers/spotlights/%Y/%m/thumbs/", null=True, blank=True)
     caption = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 

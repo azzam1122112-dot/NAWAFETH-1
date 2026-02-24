@@ -109,6 +109,48 @@ def test_client_favorites_returns_liked_portfolio_media(settings, tmp_path):
 
 
 @pytest.mark.django_db
+def test_client_favorites_video_includes_thumbnail_url(settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+
+    provider_api = APIClient()
+    provider_phone = "0500000703"
+    provider_access = _login_via_otp(provider_api, provider_phone)
+    _complete_registration(provider_api, provider_access, provider_phone)
+    _register_provider(provider_api)
+
+    video_bytes = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+    upload = SimpleUploadedFile("clip.mp4", video_bytes, content_type="video/mp4")
+
+    created = provider_api.post(
+        "/api/providers/me/portfolio/",
+        {
+            "file_type": "video",
+            "caption": "video clip",
+            "file": upload,
+        },
+        format="multipart",
+    )
+    assert created.status_code == 201
+    item_id = created.json()["id"]
+
+    client_api = APIClient()
+    client_phone = "0500000704"
+    client_access = _login_via_otp(client_api, client_phone)
+    _complete_registration(client_api, client_access, client_phone)
+
+    like = client_api.post(f"/api/providers/portfolio/{item_id}/like/")
+    assert like.status_code == 200
+
+    favorites = client_api.get("/api/providers/me/favorites/")
+    assert favorites.status_code == 200
+    payload = favorites.json()
+    item = next(x for x in payload if x["id"] == item_id)
+    assert item["file_type"] == "video"
+    assert item["file_url"]
+    assert item.get("thumbnail_url")
+
+
+@pytest.mark.django_db
 def test_following_is_ordered_by_latest_activity(settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
 

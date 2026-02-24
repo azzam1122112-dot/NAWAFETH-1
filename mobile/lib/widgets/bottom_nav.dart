@@ -16,8 +16,8 @@ class CustomBottomNav extends StatelessWidget {
     final role = RoleController.instance.notifier.value;
     if (index == 1 && role.isProvider) return;
 
-    // Guard profile and secondary tabs
-    if (index == 1 || index == 3) {
+    // Guard tabs that require an authenticated user session.
+    if (index == 1 || index == 2 || index == 3) {
       if (!await checkAuth(context)) return;
     }
 
