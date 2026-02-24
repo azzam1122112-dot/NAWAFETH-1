@@ -163,6 +163,14 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     return p.startsWith('http://') || p.startsWith('https://');
   }
 
+  bool _isValidRemoteMediaUrl(String? raw) {
+    final value = (raw ?? '').trim();
+    if (!_isRemoteImage(value)) return false;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return false;
+    return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+  }
+
   Widget _providerAvatar() {
     if (providerImage.trim().isEmpty) {
       return const Icon(Icons.person, size: 36);
@@ -368,7 +376,17 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   // Highlights are separate from portfolio and loaded from dedicated API.
-  List<ProviderPortfolioItem> get _highlightItems => _spotlightItems;
+  List<ProviderPortfolioItem> get _highlightItems {
+    return _spotlightItems.where((item) {
+      final fileUrlOk = _isValidRemoteMediaUrl(item.fileUrl);
+      if (!fileUrlOk) return false;
+      final isVideo = item.fileType.toLowerCase() == 'video';
+      if (!isVideo) return true;
+      final thumb = (item.thumbnailUrl ?? '').trim();
+      // Video can still be valid without thumbnail; the player uses fileUrl.
+      return thumb.isEmpty || _isValidRemoteMediaUrl(thumb);
+    }).toList(growable: false);
+  }
 
   Future<void> _loadProviderSpotlights() async {
     final id = int.tryParse(widget.providerId ?? '');
@@ -1452,6 +1470,12 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               final item = items[index];
               final isFav = _favoriteHighlightIndexes.contains(index);
               final isVideo = item.fileType.toLowerCase() == 'video';
+              final previewUrl = isVideo
+                  ? ((item.thumbnailUrl ?? '').trim().isNotEmpty
+                      ? item.thumbnailUrl!.trim()
+                      : item.fileUrl)
+                  : item.fileUrl;
+              final hasPreview = _isValidRemoteMediaUrl(previewUrl);
               return InkWell(
                 onTap: () => _openHighlights(index),
                 borderRadius: BorderRadius.circular(999),
@@ -1464,21 +1488,26 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
-                        image: DecorationImage(
-                          image: NetworkImage(item.fileUrl),
-                          fit: BoxFit.cover,
-                        ),
+                        image: hasPreview
+                            ? DecorationImage(
+                                image: NetworkImage(previewUrl),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                        color: hasPreview ? null : Colors.grey.shade200,
                       ),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.black.withValues(alpha: 0.18),
                         ),
-                        child: Center(
-                          child: Icon(
-                            isVideo ? Icons.play_circle_fill : Icons.image_outlined,
+                          child: Center(
+                            child: Icon(
+                            hasPreview
+                                ? (isVideo ? Icons.play_circle_fill : Icons.image_outlined)
+                                : Icons.broken_image_outlined,
                             size: 34,
-                            color: Colors.white,
+                            color: hasPreview ? Colors.white : Colors.grey.shade600,
                           ),
                         ),
                       ),
@@ -1522,11 +1551,19 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     if (items.isEmpty) return;
     final safeIndex = initialIndex.clamp(0, items.length - 1);
     final item = items[safeIndex];
+    final mediaUrl = item.fileUrl.trim();
+    if (!_isValidRemoteMediaUrl(mediaUrl)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح اللمحة: رابط الوسائط غير صالح')),
+      );
+      return;
+    }
     if (item.fileType.toLowerCase() == 'video') {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => NetworkVideoPlayerScreen(
-            url: item.fileUrl,
+            url: mediaUrl,
             title: providerName,
           ),
         ),
@@ -1546,8 +1583,13 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.network(
-                item.fileUrl,
+                mediaUrl,
                 fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.black87,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
+                ),
               ),
             ),
           ),

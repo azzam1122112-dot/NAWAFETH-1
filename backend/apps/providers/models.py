@@ -144,6 +144,63 @@ class ProviderPortfolioLike(models.Model):
         ]
 
 
+class ProviderPortfolioSave(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="portfolio_saves",
+    )
+    item = models.ForeignKey(
+        ProviderPortfolioItem,
+        on_delete=models.CASCADE,
+        related_name="saves",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_save_user_portfolio_item"),
+        ]
+
+
+class ProviderSpotlightLike(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="spotlight_likes",
+    )
+    item = models.ForeignKey(
+        ProviderSpotlightItem,
+        on_delete=models.CASCADE,
+        related_name="likes",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_like_user_spotlight_item"),
+        ]
+
+
+class ProviderSpotlightSave(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="spotlight_saves",
+    )
+    item = models.ForeignKey(
+        ProviderSpotlightItem,
+        on_delete=models.CASCADE,
+        related_name="saves",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_save_user_spotlight_item"),
+        ]
+
+
 class ProviderCategory(models.Model):
     provider = models.ForeignKey(ProviderProfile, on_delete=models.CASCADE)
     subcategory = models.ForeignKey(SubCategory, on_delete=models.CASCADE)

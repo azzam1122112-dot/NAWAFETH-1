@@ -18,9 +18,12 @@ from .models import (
 	ProviderCategory,
 	ProviderPortfolioItem,
 	ProviderPortfolioLike,
+	ProviderPortfolioSave,
 	ProviderProfile,
 	ProviderService,
 	ProviderSpotlightItem,
+	ProviderSpotlightLike,
+	ProviderSpotlightSave,
 	SubCategory,
 )
 from .serializers import (
@@ -300,7 +303,12 @@ class ProviderPortfolioListView(generics.ListAPIView):
 
 	def get_queryset(self):
 		provider_id = self.kwargs.get("provider_id")
-		return ProviderPortfolioItem.objects.filter(provider_id=provider_id).order_by("-created_at", "-id")
+		return (
+			ProviderPortfolioItem.objects.filter(provider_id=provider_id)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 
 class MyProviderPortfolioListCreateView(generics.ListCreateAPIView):
@@ -312,7 +320,12 @@ class MyProviderPortfolioListCreateView(generics.ListCreateAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			return ProviderPortfolioItem.objects.none()
-		return ProviderPortfolioItem.objects.filter(provider=pp).order_by("-created_at", "-id")
+		return (
+			ProviderPortfolioItem.objects.filter(provider=pp)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 	def get_serializer_class(self):
 		if self.request.method == "POST":
@@ -337,7 +350,12 @@ class MyProviderPortfolioDetailView(generics.RetrieveDestroyAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			return ProviderPortfolioItem.objects.none()
-		return ProviderPortfolioItem.objects.filter(provider=pp).order_by("-created_at", "-id")
+		return (
+			ProviderPortfolioItem.objects.filter(provider=pp)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 
 class ProviderSpotlightListView(generics.ListAPIView):
@@ -348,7 +366,12 @@ class ProviderSpotlightListView(generics.ListAPIView):
 
 	def get_queryset(self):
 		provider_id = self.kwargs.get("provider_id")
-		return ProviderSpotlightItem.objects.filter(provider_id=provider_id).order_by("-created_at", "-id")
+		return (
+			ProviderSpotlightItem.objects.filter(provider_id=provider_id)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 
 class MyProviderSpotlightListCreateView(generics.ListCreateAPIView):
@@ -360,7 +383,12 @@ class MyProviderSpotlightListCreateView(generics.ListCreateAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			return ProviderSpotlightItem.objects.none()
-		return ProviderSpotlightItem.objects.filter(provider=pp).order_by("-created_at", "-id")
+		return (
+			ProviderSpotlightItem.objects.filter(provider=pp)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 	def get_serializer_class(self):
 		if self.request.method == "POST":
@@ -385,7 +413,12 @@ class MyProviderSpotlightDetailView(generics.RetrieveDestroyAPIView):
 		pp = getattr(self.request.user, "provider_profile", None)
 		if not pp:
 			return ProviderSpotlightItem.objects.none()
-		return ProviderSpotlightItem.objects.filter(provider=pp).order_by("-created_at", "-id")
+		return (
+			ProviderSpotlightItem.objects.filter(provider=pp)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.order_by("-created_at", "-id")
+		)
 
 
 class MyLikedPortfolioItemsView(generics.ListAPIView):
@@ -397,6 +430,59 @@ class MyLikedPortfolioItemsView(generics.ListAPIView):
 	def get_queryset(self):
 		return (
 			ProviderPortfolioItem.objects.filter(likes__user=self.request.user)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.select_related("provider", "provider__user")
+			.distinct()
+			.order_by("-created_at", "-id")
+		)
+
+
+class MySavedPortfolioItemsView(generics.ListAPIView):
+	"""Portfolio media the current user saved (bookmarked)."""
+
+	serializer_class = ProviderPortfolioItemSerializer
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def get_queryset(self):
+		return (
+			ProviderPortfolioItem.objects.filter(saves__user=self.request.user)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.select_related("provider", "provider__user")
+			.distinct()
+			.order_by("-created_at", "-id")
+		)
+
+
+class MyLikedSpotlightItemsView(generics.ListAPIView):
+	"""Spotlight media the current user liked."""
+
+	serializer_class = ProviderSpotlightItemSerializer
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def get_queryset(self):
+		return (
+			ProviderSpotlightItem.objects.filter(likes__user=self.request.user)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
+			.select_related("provider", "provider__user")
+			.distinct()
+			.order_by("-created_at", "-id")
+		)
+
+
+class MySavedSpotlightItemsView(generics.ListAPIView):
+	"""Spotlight media the current user saved (bookmarked)."""
+
+	serializer_class = ProviderSpotlightItemSerializer
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def get_queryset(self):
+		return (
+			ProviderSpotlightItem.objects.filter(saves__user=self.request.user)
+			.annotate(likes_count=Count("likes", distinct=True))
+			.annotate(saves_count=Count("saves", distinct=True))
 			.select_related("provider", "provider__user")
 			.distinct()
 			.order_by("-created_at", "-id")
@@ -417,6 +503,57 @@ class UnlikePortfolioItemView(APIView):
 
 	def post(self, request, item_id: int):
 		ProviderPortfolioLike.objects.filter(user=request.user, item_id=item_id).delete()
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class SavePortfolioItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		item = generics.get_object_or_404(ProviderPortfolioItem, id=item_id)
+		ProviderPortfolioSave.objects.get_or_create(user=request.user, item=item)
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class UnsavePortfolioItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		ProviderPortfolioSave.objects.filter(user=request.user, item_id=item_id).delete()
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class LikeSpotlightItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		item = generics.get_object_or_404(ProviderSpotlightItem, id=item_id)
+		ProviderSpotlightLike.objects.get_or_create(user=request.user, item=item)
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class UnlikeSpotlightItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		ProviderSpotlightLike.objects.filter(user=request.user, item_id=item_id).delete()
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class SaveSpotlightItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		item = generics.get_object_or_404(ProviderSpotlightItem, id=item_id)
+		ProviderSpotlightSave.objects.get_or_create(user=request.user, item=item)
+		return Response({"ok": True}, status=status.HTTP_200_OK)
+
+
+class UnsaveSpotlightItemView(APIView):
+	permission_classes = [IsAtLeastPhoneOnly]
+
+	def post(self, request, item_id: int):
+		ProviderSpotlightSave.objects.filter(user=request.user, item_id=item_id).delete()
 		return Response({"ok": True}, status=status.HTTP_200_OK)
 
 

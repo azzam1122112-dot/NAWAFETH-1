@@ -19,6 +19,7 @@ import '../../services/extras_api.dart';
 import '../../services/promo_api.dart';
 import '../../constants/colors.dart';
 import '../../models/provider_portfolio_item.dart';
+import '../../models/user_summary.dart';
 
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/custom_drawer.dart';
@@ -1226,7 +1227,11 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
         const SizedBox(width: 8),
         _miniCounter(icon: Icons.person_add_alt_1_rounded, value: (_followersCount ?? 0).toString()),
         const SizedBox(width: 8),
-        _miniCounter(icon: Icons.thumb_up_alt_outlined, value: (_likesReceivedCount ?? 0).toString()),
+        _miniCounter(
+          icon: Icons.thumb_up_alt_outlined,
+          value: (_likesReceivedCount ?? 0).toString(),
+          onTap: _showLikersSheet,
+        ),
       ],
     );
   }
@@ -1234,21 +1239,128 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
   Widget _miniCounter({
     required IconData icon,
     required String value,
+    VoidCallback? onTap,
   }) {
-    return Column(
-      children: [
-        Icon(icon, color: AppColors.deepPurple, size: 18),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            color: AppColors.deepPurple,
-            fontWeight: FontWeight.w800,
-            fontSize: 12,
-          ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.deepPurple, size: 18),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                color: AppColors.deepPurple,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Future<void> _showLikersSheet() async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: SizedBox(
+            height: 380,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 48,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.thumb_up_alt_outlined, color: Colors.black87),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'المعجبون بملفك',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: FutureBuilder<List<UserSummary>>(
+                    future: ProvidersApi().getMyProviderLikers(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final list = snapshot.data ?? [];
+                      if (list.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text(
+                              'لا يوجد معجبون حالياً',
+                              style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      }
+                      return ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: list.length,
+                        separatorBuilder: (context, index) => const Divider(),
+                        itemBuilder: (context, i) {
+                          final user = list[i];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.deepPurple.withValues(alpha: 0.12),
+                              child: const Icon(Icons.person, color: AppColors.deepPurple),
+                            ),
+                            title: Text(
+                              user.displayName,
+                              style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: (user.username ?? '').trim().isEmpty
+                                ? null
+                                : Text('@${user.username}', style: const TextStyle(fontFamily: 'Cairo')),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1866,6 +1978,23 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
               color: AppColors.deepPurple,
               fontWeight: FontWeight.w700,
             ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.thumb_up_alt_outlined, size: 12, color: AppColors.deepPurple),
+              const SizedBox(width: 3),
+              Text(
+                item.likeCount.toString(),
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 10,
+                  color: AppColors.deepPurple,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ],
       ),

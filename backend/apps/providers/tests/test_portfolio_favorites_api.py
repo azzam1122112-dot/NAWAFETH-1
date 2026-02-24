@@ -283,3 +283,44 @@ def test_spotlights_are_separate_from_portfolio(settings, tmp_path):
 
     assert ProviderPortfolioItem.objects.filter(id=portfolio_id).exists()
     assert ProviderSpotlightItem.objects.filter(id=spotlight_id).exists()
+
+
+@pytest.mark.django_db
+def test_spotlight_like_and_count_are_exposed(settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+
+    provider_api = APIClient()
+    provider_phone = "0500000741"
+    provider_access = _login_via_otp(provider_api, provider_phone)
+    _complete_registration(provider_api, provider_access, provider_phone)
+    provider_profile = _register_provider(provider_api)
+
+    video_bytes = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+    spotlight_upload = SimpleUploadedFile("spotlight_like.mp4", video_bytes, content_type="video/mp4")
+
+    created = provider_api.post(
+        "/api/providers/me/spotlights/",
+        {"file_type": "video", "caption": "spotlight like", "file": spotlight_upload},
+        format="multipart",
+    )
+    assert created.status_code == 201
+    spotlight_id = created.json()["id"]
+
+    client_api = APIClient()
+    client_phone = "0500000742"
+    client_access = _login_via_otp(client_api, client_phone)
+    _complete_registration(client_api, client_access, client_phone)
+
+    like = client_api.post(f"/api/providers/spotlights/{spotlight_id}/like/")
+    assert like.status_code == 200
+
+    liked_spotlights = client_api.get("/api/providers/me/favorites/spotlights/")
+    assert liked_spotlights.status_code == 200
+    liked_payload = liked_spotlights.json()
+    liked_item = next(x for x in liked_payload if x["id"] == spotlight_id)
+    assert liked_item.get("likes_count") == 1
+
+    public_spotlights = client_api.get(f"/api/providers/{provider_profile.id}/spotlights/")
+    assert public_spotlights.status_code == 200
+    public_item = next(x for x in public_spotlights.json() if x["id"] == spotlight_id)
+    assert public_item.get("likes_count") == 1

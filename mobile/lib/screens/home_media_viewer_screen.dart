@@ -12,13 +12,13 @@ import 'provider_profile_screen.dart';
 class HomeMediaViewerScreen extends StatefulWidget {
   final List<ProviderPortfolioItem> items;
   final int initialIndex;
-  final bool favoritesEnabled;
+  final bool isSpotlightFeed;
 
   const HomeMediaViewerScreen({
     super.key,
     required this.items,
     this.initialIndex = 0,
-    this.favoritesEnabled = true,
+    this.isSpotlightFeed = false,
   });
 
   @override
@@ -33,10 +33,12 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
 
   VideoPlayerController? _video;
   bool _videoReady = false;
-  final Set<int> _favoritePortfolioIds = <int>{};
-  final Set<int> _likedProviderIds = <int>{};
-  final Set<int> _favoriteBusy = <int>{};
-  final Set<int> _providerLikeBusy = <int>{};
+  final Set<int> _likedMediaIds = <int>{};
+  final Set<int> _savedMediaIds = <int>{};
+  final Set<int> _likeBusy = <int>{};
+  final Set<int> _saveBusy = <int>{};
+  final Map<int, int> _likeDeltaByItem = <int, int>{};
+  final Map<int, int> _saveDeltaByItem = <int, int>{};
   bool _showSwipeHint = true;
   Timer? _hintTimer;
 
@@ -56,27 +58,31 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
   Future<void> _primeSocialState() async {
     if (widget.items.isEmpty) return;
 
-    // Favorites == liked portfolio items (backend: /providers/me/favorites/).
+    // Item likes.
     try {
-      final favorites = await _providersApi.getMyFavoriteMedia();
+      final likes = widget.isSpotlightFeed
+          ? await _providersApi.getMyLikedSpotlights()
+          : await _providersApi.getMyLikedMedia();
       if (!mounted) return;
       setState(() {
-        _favoritePortfolioIds
+        _likedMediaIds
           ..clear()
-          ..addAll(favorites.map((e) => e.id));
+          ..addAll(likes.map((e) => e.id));
       });
     } catch (_) {
       // Unauthenticated / network failure: ignore.
     }
 
-    // Provider likes (thumb-up on the right menu).
+    // Item saves.
     try {
-      final likedProviders = await _providersApi.getMyLikedProviders();
+      final saved = widget.isSpotlightFeed
+          ? await _providersApi.getMyFavoriteSpotlights()
+          : await _providersApi.getMyFavoriteMedia();
       if (!mounted) return;
       setState(() {
-        _likedProviderIds
+        _savedMediaIds
           ..clear()
-          ..addAll(likedProviders.map((e) => e.id));
+          ..addAll(saved.map((e) => e.id));
       });
     } catch (_) {
       // Unauthenticated / network failure: ignore.
@@ -146,98 +152,118 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
     );
   }
 
-  Future<void> _toggleFavorite(ProviderPortfolioItem item) async {
+  int _displayLikeCount(ProviderPortfolioItem item) {
+    final delta = _likeDeltaByItem[item.id] ?? 0;
+    final next = item.likeCount + delta;
+    return next < 0 ? 0 : next;
+  }
+
+  int _displaySaveCount(ProviderPortfolioItem item) {
+    final delta = _saveDeltaByItem[item.id] ?? 0;
+    final next = item.saveCount + delta;
+    return next < 0 ? 0 : next;
+  }
+
+  String _formatCounter(int value) {
+    if (value < 1000) return '$value';
+    if (value < 1000000) {
+      final k = value / 1000;
+      return k >= 10 ? '${k.toStringAsFixed(0)}K' : '${k.toStringAsFixed(1)}K';
+    }
+    final m = value / 1000000;
+    return m >= 10 ? '${m.toStringAsFixed(0)}M' : '${m.toStringAsFixed(1)}M';
+  }
+
+  Future<void> _toggleLikeMedia(ProviderPortfolioItem item) async {
     final authed = await checkAuth(context);
     if (!authed || !mounted) return;
 
-    if (!widget.favoritesEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('المفضلة متاحة في معرض الخدمات فقط')),
-      );
-      return;
-    }
-
     final itemId = item.id;
-    if (_favoriteBusy.contains(itemId)) return;
+    if (_likeBusy.contains(itemId)) return;
 
-    final wasFav = _favoritePortfolioIds.contains(itemId);
+    final wasLiked = _likedMediaIds.contains(itemId);
     setState(() {
-      _favoriteBusy.add(itemId);
-      if (wasFav) {
-        _favoritePortfolioIds.remove(itemId);
+      _likeBusy.add(itemId);
+      if (wasLiked) {
+        _likedMediaIds.remove(itemId);
       } else {
-        _favoritePortfolioIds.add(itemId);
+        _likedMediaIds.add(itemId);
       }
     });
 
-    final ok = wasFav
+    final ok = widget.isSpotlightFeed
+      ? (wasLiked
+        ? await _providersApi.unlikeSpotlightItem(itemId)
+        : await _providersApi.likeSpotlightItem(itemId))
+      : (wasLiked
         ? await _providersApi.unlikePortfolioItem(itemId)
-        : await _providersApi.likePortfolioItem(itemId);
+        : await _providersApi.likePortfolioItem(itemId));
 
     if (!mounted) return;
     setState(() {
-      _favoriteBusy.remove(itemId);
+      _likeBusy.remove(itemId);
       if (!ok) {
-        // Revert on failure.
-        if (wasFav) {
-          _favoritePortfolioIds.add(itemId);
+        if (wasLiked) {
+          _likedMediaIds.add(itemId);
         } else {
-          _favoritePortfolioIds.remove(itemId);
+          _likedMediaIds.remove(itemId);
         }
+      } else {
+        final delta = _likeDeltaByItem[itemId] ?? 0;
+        _likeDeltaByItem[itemId] = delta + (wasLiked ? -1 : 1);
       }
     });
 
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ العنصر في المفضلة حالياً')),
+        const SnackBar(content: Text('تعذر حفظ الإعجاب بهذا المحتوى حالياً')),
       );
     }
   }
 
-  Future<void> _toggleProviderLike(ProviderPortfolioItem item) async {
+  Future<void> _toggleSaveMedia(ProviderPortfolioItem item) async {
     final authed = await checkAuth(context);
     if (!authed || !mounted) return;
 
-    final providerId = item.providerId;
-    if (providerId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('بيانات المزود غير متاحة حالياً')),
-      );
-      return;
-    }
-    if (_providerLikeBusy.contains(providerId)) return;
+    final itemId = item.id;
+    if (_saveBusy.contains(itemId)) return;
 
-    final wasLiked = _likedProviderIds.contains(providerId);
+    final wasSaved = _savedMediaIds.contains(itemId);
     setState(() {
-      _providerLikeBusy.add(providerId);
-      if (wasLiked) {
-        _likedProviderIds.remove(providerId);
+      _saveBusy.add(itemId);
+      if (wasSaved) {
+        _savedMediaIds.remove(itemId);
       } else {
-        _likedProviderIds.add(providerId);
+        _savedMediaIds.add(itemId);
       }
     });
 
-    final ok = wasLiked
-        ? await _providersApi.unlikeProvider(providerId)
-        : await _providersApi.likeProvider(providerId);
+    final ok = widget.isSpotlightFeed
+        ? (wasSaved
+            ? await _providersApi.unsaveSpotlightItem(itemId)
+            : await _providersApi.saveSpotlightItem(itemId))
+        : (wasSaved
+            ? await _providersApi.unsavePortfolioItem(itemId)
+            : await _providersApi.savePortfolioItem(itemId));
 
     if (!mounted) return;
     setState(() {
-      _providerLikeBusy.remove(providerId);
+      _saveBusy.remove(itemId);
       if (!ok) {
-        // Revert on failure.
-        if (wasLiked) {
-          _likedProviderIds.add(providerId);
+        if (wasSaved) {
+          _savedMediaIds.add(itemId);
         } else {
-          _likedProviderIds.remove(providerId);
+          _savedMediaIds.remove(itemId);
         }
+      } else {
+        final delta = _saveDeltaByItem[itemId] ?? 0;
+        _saveDeltaByItem[itemId] = delta + (wasSaved ? -1 : 1);
       }
     });
 
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ الإعجاب بالمزوّد حالياً')),
+        const SnackBar(content: Text('تعذر حفظ المحتوى في المحفوظات حالياً')),
       );
     }
   }
@@ -317,10 +343,12 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
               builder: (context) {
                 final current = widget.items[_index];
                 final hasProviderTarget = current.providerId > 0;
-                final liked = _likedProviderIds.contains(current.providerId);
-                final saved = _favoritePortfolioIds.contains(current.id);
-                final likeBusy = _providerLikeBusy.contains(current.providerId);
-                final saveBusy = _favoriteBusy.contains(current.id);
+                final liked = _likedMediaIds.contains(current.id);
+                final saved = _savedMediaIds.contains(current.id);
+                final likeBusy = _likeBusy.contains(current.id);
+                final saveBusy = _saveBusy.contains(current.id);
+                final likesCount = _formatCounter(_displayLikeCount(current));
+                final savesCount = _formatCounter(_displaySaveCount(current));
                 return Column(
                   children: [
                     GestureDetector(
@@ -353,19 +381,17 @@ class _HomeMediaViewerScreenState extends State<HomeMediaViewerScreen> {
                     const SizedBox(height: 16),
                     _CircleAction(
                       icon: liked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                      onTap: (!hasProviderTarget || likeBusy)
-                          ? null
-                          : () => _toggleProviderLike(current),
+                      onTap: likeBusy ? null : () => _toggleLikeMedia(current),
                       loading: likeBusy,
+                      label: likesCount,
                     ),
-                    if (widget.favoritesEnabled) ...[
-                      const SizedBox(height: 14),
-                      _CircleAction(
-                        icon: saved ? Icons.bookmark : Icons.bookmark_border,
-                        onTap: saveBusy ? null : () => _toggleFavorite(current),
-                        loading: saveBusy,
-                      ),
-                    ],
+                    const SizedBox(height: 14),
+                    _CircleAction(
+                      icon: saved ? Icons.bookmark : Icons.bookmark_border,
+                      onTap: saveBusy ? null : () => _toggleSaveMedia(current),
+                      loading: saveBusy,
+                      label: savesCount,
+                    ),
                     const SizedBox(height: 14),
                     _CircleAction(
                       icon: Icons.home_rounded,
@@ -441,47 +467,66 @@ class _CircleAction extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final bool loading;
+  final String? label;
 
   const _CircleAction({
     required this.icon,
     required this.onTap,
     this.loading = false,
+    this.label,
   });
 
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null && !loading;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(99),
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: disabled ? Colors.white70 : Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.24),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: loading
-            ? const Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: AppColors.deepPurple,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: disabled ? Colors.white70 : Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.24),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
-              )
-            : Icon(
-                icon,
-                color: disabled ? Colors.grey : AppColors.deepPurple,
-              ),
-      ),
+              ],
+            ),
+            child: loading
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: AppColors.deepPurple,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: disabled ? Colors.grey : AppColors.deepPurple,
+                  ),
+          ),
+        ),
+        if (label != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            label!,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

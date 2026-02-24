@@ -154,6 +154,8 @@ class ProviderPortfolioItemSerializer(serializers.ModelSerializer):
     provider_username = serializers.CharField(source="provider.user.username", read_only=True)
     file_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
+    likes_count = serializers.SerializerMethodField()
+    saves_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderPortfolioItem
@@ -166,6 +168,8 @@ class ProviderPortfolioItemSerializer(serializers.ModelSerializer):
             "file_url",
             "thumbnail_url",
             "caption",
+            "likes_count",
+            "saves_count",
             "created_at",
         )
 
@@ -188,6 +192,18 @@ class ProviderPortfolioItemSerializer(serializers.ModelSerializer):
 
     def get_thumbnail_url(self, obj):
         return self._safe_file_url(getattr(obj, "thumbnail", None))
+
+    def get_likes_count(self, obj):
+        try:
+            return int(getattr(obj, "likes_count", None) or obj.likes.count())
+        except Exception:
+            return 0
+
+    def get_saves_count(self, obj):
+        try:
+            return int(getattr(obj, "saves_count", None) or obj.saves.count())
+        except Exception:
+            return 0
 
 
 class ProviderPortfolioItemCreateSerializer(serializers.ModelSerializer):
@@ -209,6 +225,8 @@ class ProviderSpotlightItemSerializer(serializers.ModelSerializer):
     provider_username = serializers.CharField(source="provider.user.username", read_only=True)
     file_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
+    likes_count = serializers.SerializerMethodField()
+    saves_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProviderSpotlightItem
@@ -221,6 +239,8 @@ class ProviderSpotlightItemSerializer(serializers.ModelSerializer):
             "file_url",
             "thumbnail_url",
             "caption",
+            "likes_count",
+            "saves_count",
             "created_at",
         )
 
@@ -243,6 +263,18 @@ class ProviderSpotlightItemSerializer(serializers.ModelSerializer):
 
     def get_thumbnail_url(self, obj):
         return self._safe_file_url(getattr(obj, "thumbnail", None))
+
+    def get_likes_count(self, obj):
+        try:
+            return int(getattr(obj, "likes_count", None) or obj.likes.count())
+        except Exception:
+            return 0
+
+    def get_saves_count(self, obj):
+        try:
+            return int(getattr(obj, "saves_count", None) or obj.saves.count())
+        except Exception:
+            return 0
 
 
 class ProviderSpotlightItemCreateSerializer(serializers.ModelSerializer):

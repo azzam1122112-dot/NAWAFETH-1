@@ -16,7 +16,7 @@ import '../widgets/app_bar.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/custom_drawer.dart';
 import 'network_video_player_screen.dart';
-import 'service_request_form_screen.dart';
+import 'provider_profile_screen.dart';
 
 enum InteractiveMode {
   auto,
@@ -690,9 +690,15 @@ class _InteractiveScreenState extends State<InteractiveScreen>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ServiceRequestFormScreen(
+                builder: (_) => ProviderProfileScreen(
                   providerId: p.id.toString(),
                   providerName: name.isEmpty ? null : name,
+                  providerRating: p.ratingAvg,
+                  providerOperations: p.completedRequests ?? p.ratingCount,
+                  providerVerified: p.isVerifiedBlue || p.isVerifiedGreen,
+                  providerPhone: p.phone,
+                  providerLat: p.lat,
+                  providerLng: p.lng,
                 ),
               ),
             );
@@ -752,48 +758,12 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                         ],
                       ),
                     ),
-                    // Action Button
+                    // Actions
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       alignment: WrapAlignment.end,
                       children: [
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ServiceRequestFormScreen(
-                                  providerId: p.id.toString(),
-                                  providerName: name.isEmpty ? null : name,
-                                ),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 11,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.deepPurple.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.deepPurple.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: const Text(
-                              'طلب خدمة',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.deepPurple,
-                              ),
-                            ),
-                          ),
-                        ),
                         InkWell(
                           onTap: _unfollowingProviderIds.contains(p.id)
                               ? null
@@ -842,40 +812,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                     ),
                   ),
                 ],
-                const SizedBox(height: 16),
-                const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                SizedBox(height: isNarrow ? 10 : 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _miniStat(Icons.thumb_up_alt_rounded, '${p.likesCount} إعجاب'),
-                    _miniStat(Icons.groups_rounded, '${p.followersCount} متابع'),
-                  ],
-                ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _miniStat(IconData icon, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: Colors.grey[400]),
-        const SizedBox(width: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF757575),
-          ),
-        ),
-      ],
     );
   }
 

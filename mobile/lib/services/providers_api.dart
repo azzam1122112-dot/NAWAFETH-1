@@ -460,6 +460,26 @@ class ProvidersApi {
     }
   }
 
+  Future<List<ProviderPortfolioItem>> getMyLikedMedia() async {
+    try {
+      final res = await _dio.get(
+        '${ApiConfig.apiPrefix}/providers/me/likes/media/',
+      );
+      final rawList = _extractList(res.data);
+      final out = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<ProviderPortfolioItem>> getProviderPortfolio(
     int providerId,
   ) async {
@@ -543,6 +563,8 @@ class ProvidersApi {
           fileUrl: '',
           thumbnailUrl: null,
           caption: (data['caption'] ?? caption).toString(),
+          likeCount: 0,
+          saveCount: 0,
           createdAt: createdAt,
         );
       }
@@ -806,6 +828,8 @@ class ProvidersApi {
           fileUrl: '',
           thumbnailUrl: null,
           caption: (data['caption'] ?? caption).toString(),
+          likeCount: 0,
+          saveCount: 0,
           createdAt: createdAt,
         );
       }
@@ -842,6 +866,112 @@ class ProvidersApi {
     } catch (_) {
       lastProviderPortfolioRequestFailed = true;
       return [];
+    }
+  }
+
+  Future<List<ProviderPortfolioItem>> getMyFavoriteSpotlights() async {
+    try {
+      final res = await _dio.get(
+        '${ApiConfig.apiPrefix}/providers/me/favorites/spotlights/',
+      );
+      final rawList = _extractList(res.data);
+      final out = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  Future<List<ProviderPortfolioItem>> getMyLikedSpotlights() async {
+    try {
+      final res = await _dio.get(
+        '${ApiConfig.apiPrefix}/providers/me/likes/spotlights/',
+      );
+      final rawList = _extractList(res.data);
+      final out = <ProviderPortfolioItem>[];
+      for (final row in rawList) {
+        final json = _tryJsonMap(row);
+        if (json == null) continue;
+        try {
+          out.add(ProviderPortfolioItem.fromJson(json));
+        } catch (_) {}
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> likeSpotlightItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/spotlights/$itemId/like/',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> unlikeSpotlightItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/spotlights/$itemId/unlike/',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> savePortfolioItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/portfolio/$itemId/save/',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> unsavePortfolioItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/portfolio/$itemId/unsave/',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> saveSpotlightItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/spotlights/$itemId/save/',
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> unsaveSpotlightItem(int itemId) async {
+    try {
+      await _dio.post(
+        '${ApiConfig.apiPrefix}/providers/spotlights/$itemId/unsave/',
+      );
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

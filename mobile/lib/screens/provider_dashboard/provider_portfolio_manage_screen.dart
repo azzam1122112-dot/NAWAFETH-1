@@ -436,6 +436,37 @@ class _ProviderPortfolioManageScreenState
                                           child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 22),
                                         ),
                                       Positioned(
+                                        left: 6,
+                                        top: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.45),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.thumb_up_alt_outlined,
+                                                color: Colors.white,
+                                                size: 12,
+                                              ),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                item.likeCount.toString(),
+                                                style: const TextStyle(
+                                                  fontFamily: 'Cairo',
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
                                         top: 6,
                                         right: 6,
                                         child: InkWell(
