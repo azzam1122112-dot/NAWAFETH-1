@@ -28,7 +28,7 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
   Future<void> _fetchProviders() async {
     final list = await HomeFeedService.instance.getTopProviders(
       limit: 10,
-      forceRefresh: true,
+      forceRefresh: false,
     );
     if (mounted) {
       if (list.isEmpty) {
@@ -124,6 +124,8 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
             final profile = _providers[index];
             final avatar = _providerImage(profile);
             final ratingLabel = profile.ratingAvg > 0 ? profile.ratingAvg.toStringAsFixed(1) : '—';
+            final showVerified = profile.isVerifiedBlue || profile.isVerifiedGreen;
+            final verifiedColor = profile.isVerifiedGreen ? const Color(0xFF27AE60) : const Color(0xFF2D9CDB);
             return GestureDetector(
               onTap: () => _openProfileDetail(context, profile),
               child: Container(
@@ -152,11 +154,12 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
                                 : null,
                           ),
                         ),
-                        const Positioned(
-                          top: -4,
-                          left: -4,
-                          child: Icon(Icons.verified, size: 14, color: Color(0xFF2D9CDB)),
-                        ),
+                        if (showVerified)
+                          Positioned(
+                            top: -4,
+                            left: -4,
+                            child: Icon(Icons.verified, size: 14, color: verifiedColor),
+                          ),
                         Positioned(
                           left: -2,
                           bottom: -2,
@@ -182,19 +185,20 @@ class _ProfilesSliderState extends State<ProfilesSlider> {
                             ),
                           ),
                         ),
-                        Positioned(
-                          right: -1,
-                          top: -1,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2ECC71),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1),
+                        if (profile.isOnline)
+                          Positioned(
+                            right: -1,
+                            top: -1,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2ECC71),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1),
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ],

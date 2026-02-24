@@ -193,6 +193,7 @@ class _PromoRequestsScreenState extends State<PromoRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final compactForm = MediaQuery.sizeOf(context).width < 370;
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -231,49 +232,79 @@ class _PromoRequestsScreenState extends State<PromoRequestsScreen> {
                         onChanged: (v) => setState(() => _adType = v ?? _adType),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _dropdownField(
-                              label: 'التكرار',
-                              value: _frequency,
-                              icon: Icons.timer_outlined,
-                              items: _frequencyLabels,
-                              onChanged: (v) => setState(() => _frequency = v ?? _frequency),
+                      if (compactForm) ...[
+                        _dropdownField(
+                          label: 'التكرار',
+                          value: _frequency,
+                          icon: Icons.timer_outlined,
+                          items: _frequencyLabels,
+                          onChanged: (v) => setState(() => _frequency = v ?? _frequency),
+                        ),
+                        const SizedBox(height: 10),
+                        _dropdownField(
+                          label: 'الموضع',
+                          value: _position,
+                          icon: Icons.vertical_align_top_outlined,
+                          items: _positionLabels,
+                          onChanged: (v) => setState(() => _position = v ?? _position),
+                        ),
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _dropdownField(
+                                label: 'التكرار',
+                                value: _frequency,
+                                icon: Icons.timer_outlined,
+                                items: _frequencyLabels,
+                                onChanged: (v) => setState(() => _frequency = v ?? _frequency),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _dropdownField(
-                              label: 'الموضع',
-                              value: _position,
-                              icon: Icons.vertical_align_top_outlined,
-                              items: _positionLabels,
-                              onChanged: (v) => setState(() => _position = v ?? _position),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _dropdownField(
+                                label: 'الموضع',
+                                value: _position,
+                                icon: Icons.vertical_align_top_outlined,
+                                items: _positionLabels,
+                                onChanged: (v) => setState(() => _position = v ?? _position),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DateButton(
-                              label: _startAt == null ? 'تاريخ البداية' : _formatDateTime(_startAt!),
-                              icon: Icons.event_available_outlined,
-                              onTap: () => _pickDateTime(isStart: true),
+                      if (compactForm) ...[
+                        _DateButton(
+                          label: _startAt == null ? 'تاريخ البداية' : _formatDateTime(_startAt!),
+                          icon: Icons.event_available_outlined,
+                          onTap: () => _pickDateTime(isStart: true),
+                        ),
+                        const SizedBox(height: 10),
+                        _DateButton(
+                          label: _endAt == null ? 'تاريخ النهاية' : _formatDateTime(_endAt!),
+                          icon: Icons.event_busy_outlined,
+                          onTap: () => _pickDateTime(isStart: false),
+                        ),
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DateButton(
+                                label: _startAt == null ? 'تاريخ البداية' : _formatDateTime(_startAt!),
+                                icon: Icons.event_available_outlined,
+                                onTap: () => _pickDateTime(isStart: true),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _DateButton(
-                              label: _endAt == null ? 'تاريخ النهاية' : _formatDateTime(_endAt!),
-                              icon: Icons.event_busy_outlined,
-                              onTap: () => _pickDateTime(isStart: false),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DateButton(
+                                label: _endAt == null ? 'تاريخ النهاية' : _formatDateTime(_endAt!),
+                                icon: Icons.event_busy_outlined,
+                                onTap: () => _pickDateTime(isStart: false),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       const SizedBox(height: 10),
                       _inputField(
                         controller: _targetCategoryCtrl,
@@ -406,6 +437,7 @@ class _PromoRequestsScreenState extends State<PromoRequestsScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.deepPurple),
+        isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       style: const TextStyle(fontFamily: 'Cairo'),
@@ -425,6 +457,7 @@ class _PromoRequestsScreenState extends State<PromoRequestsScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.deepPurple),
+        isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       items: items.entries

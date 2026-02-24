@@ -362,6 +362,7 @@ class _ReviewCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _Stars(value: ratingValue, size: 18),
                 const SizedBox(width: 8),
@@ -374,12 +375,17 @@ class _ReviewCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (createdAt != null)
-                  Text(
-                    createdAt.toString(),
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
+                  Flexible(
+                    child: Text(
+                      _formatDateLabel(createdAt),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ),
               ],
@@ -397,9 +403,9 @@ class _ReviewCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple.withOpacity(0.05),
+                  color: Colors.deepPurple.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.deepPurple.withOpacity(0.15)),
+                  border: Border.all(color: Colors.deepPurple.withValues(alpha: 0.15)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,7 +425,7 @@ class _ReviewCard extends StatelessWidget {
                         const Spacer(),
                         if (providerReplyAt != null)
                           Text(
-                            providerReplyAt.toString(),
+                            _formatDateLabel(providerReplyAt),
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 11,
@@ -433,7 +439,7 @@ class _ReviewCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.12),
+                          color: Colors.orange.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -466,6 +472,33 @@ class _ReviewCard extends StatelessWidget {
     if (v == null) return 0;
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? 0;
+  }
+
+  static String _formatDateLabel(dynamic raw) {
+    final s = raw?.toString().trim() ?? '';
+    if (s.isEmpty) return '';
+    final dt = DateTime.tryParse(s);
+    if (dt == null) {
+      return s.length > 20 ? s.substring(0, 20) : s;
+    }
+    const months = <int, String>{
+      1: 'يناير',
+      2: 'فبراير',
+      3: 'مارس',
+      4: 'أبريل',
+      5: 'مايو',
+      6: 'يونيو',
+      7: 'يوليو',
+      8: 'أغسطس',
+      9: 'سبتمبر',
+      10: 'أكتوبر',
+      11: 'نوفمبر',
+      12: 'ديسمبر',
+    };
+    final monthLabel = months[dt.month] ?? dt.month.toString();
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} $monthLabel ${dt.year} • $hh:$mm';
   }
 }
 
@@ -849,16 +882,16 @@ class _ReviewOptions extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+          const SizedBox(width: 2),
           Text(
-            'خيارات التقييم',
+            'خيارات',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontSize: 11,
               color: Colors.grey.shade700,
             ),
           ),
-          const SizedBox(width: 2),
-          Icon(Icons.more_vert, size: 18, color: Colors.grey.shade700),
         ],
       ),
     );

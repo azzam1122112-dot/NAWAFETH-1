@@ -205,7 +205,7 @@ class _ExtraServicesScreenState extends State<ExtraServicesScreen>
             itemBuilder: (context, index) {
               final item = items[index];
               final sku = (item['sku'] ?? '').toString().trim();
-              final title = (item['title'] ?? sku.isEmpty ? 'إضافة' : sku).toString();
+              final title = (item['title'] ?? (sku.isEmpty ? 'إضافة' : sku)).toString();
               final desc = (item['description'] ?? item['summary'] ?? '').toString().trim();
               final price = (item['price'] ?? '-').toString();
               final buying = sku.isNotEmpty && _buyingSkus.contains(sku);
