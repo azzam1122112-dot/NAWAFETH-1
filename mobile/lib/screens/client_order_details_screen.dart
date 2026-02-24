@@ -220,7 +220,14 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
           ),
         ),
       );
-      await _save(fromReviewFlow: true);
+      // Do not chain review submission to the generic request save flow.
+      // _save() can fail on unrelated request actions (reminders/updates),
+      // which makes a successful review look like it failed.
+      try {
+        await _refreshFromBackend(silent: true);
+      } catch (_) {
+        // Best effort only; the review has already been created.
+      }
     } on DioException catch (e) {
       if (!mounted) return;
       final msg =

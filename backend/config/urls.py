@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.urls import include, path
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 
 from apps.core.health import HealthCheckView, HealthLiveView, HealthReadyView
 
@@ -57,3 +59,6 @@ urlpatterns = [
     path("api/analytics/", include(("apps.analytics.urls", "analytics"), namespace="analytics")),
 
 ]
+
+if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

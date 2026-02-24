@@ -7,6 +7,25 @@
 
 Render health checks should typically point at the liveness endpoint.
 
+## Persistent media files (fix /media 404 on Render)
+
+If you upload provider portfolio images/videos and see `404` on `/media/...` in Render logs, the cause is usually that uploaded files are being stored inside the container filesystem, which is **not persistent** across deploys/restarts.
+
+Recommended (simple) production setup on Render:
+
+1. Create a **Persistent Disk** for the `nawafeth-backend` service.
+2. Mount it (example mount path): `/var/data`
+3. Set environment variables on the service:
+	- `RENDER_DISK_PATH=/var/data`
+	- (optional) `DJANGO_MEDIA_ROOT=/var/data/media` (overrides the path above)
+	- `DJANGO_SERVE_MEDIA=1`
+
+Notes:
+
+- The app will store uploads under `${RENDER_DISK_PATH}/media/` by default.
+- The backend will serve `/media/` through Django when `DJANGO_SERVE_MEDIA=1` (this is the simplest approach on Render when you don't have a separate static/media server).
+- Render free plans may not support persistent disks; you might need to upgrade the plan.
+
 ## Redis for Channels
 
 `REDIS_URL` enables the Redis channel layer automatically.

@@ -132,7 +132,19 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+_media_root_override = (os.getenv("DJANGO_MEDIA_ROOT", "") or "").strip()
+_render_disk_path = (os.getenv("RENDER_DISK_PATH", "") or "").strip()
+if _media_root_override:
+    MEDIA_ROOT = Path(_media_root_override)
+elif _render_disk_path:
+    # On Render, mount your persistent disk (e.g. /var/data) and store media under it.
+    MEDIA_ROOT = Path(_render_disk_path) / "media"
+else:
+    MEDIA_ROOT = BASE_DIR / "media"
+
+# Serve /media/ via Django when no reverse proxy/static host is configured.
+# On Render this is the simplest option when using a persistent disk.
+SERVE_MEDIA = (os.getenv("DJANGO_SERVE_MEDIA", "1") == "1")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
