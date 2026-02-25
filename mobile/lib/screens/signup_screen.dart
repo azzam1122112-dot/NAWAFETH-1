@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../constants/colors.dart';
 import '../widgets/custom_drawer.dart';
-import '../widgets/app_bar.dart';
 
 import '../services/auth_api.dart';
 import '../services/account_api.dart';
@@ -36,7 +33,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _loading = false;
 
   final _nameAllowedChars = RegExp(r'[A-Za-z\u0600-\u06FF ]');
-  
+
   final List<String> _saudiCities = [
     'الرياض',
     'جدة',
@@ -65,7 +62,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.initState();
     _loadPhoneAndSetUsername();
   }
-  
+
   Future<void> _loadPhoneAndSetUsername() async {
     final phone = await const SessionStorage().readPhone();
     if (phone != null && phone.isNotEmpty) {
@@ -122,7 +119,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('تم المتابعة برقم الجوال فقط. يمكنك إكمال البيانات لاحقاً.'),
+        content: Text(
+          'تم المتابعة برقم الجوال فقط. يمكنك إكمال البيانات لاحقاً.',
+        ),
       ),
     );
     Navigator.pushReplacement(
@@ -135,7 +134,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!_agreeToTerms) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يجب الموافقة على الشروط والأحكام لإكمال التسجيل')),
+        const SnackBar(
+          content: Text('يجب الموافقة على الشروط والأحكام لإكمال التسجيل'),
+        ),
       );
       return;
     }
@@ -179,7 +180,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           return s.isEmpty ? null : s;
         }
 
-        final userId = me['id'] is int ? me['id'] as int : int.tryParse((me['id'] ?? '').toString());
+        final userId = me['id'] is int
+            ? me['id'] as int
+            : int.tryParse((me['id'] ?? '').toString());
         if (userId != null) {
           await LocalUserState.setActiveUserId(userId);
         }
@@ -188,9 +191,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
           userId: userId,
           username: nonEmpty(me['username']) ?? _usernameController.text.trim(),
           email: nonEmpty(me['email']) ?? _emailController.text.trim(),
-          firstName: nonEmpty(me['first_name']) ?? _firstNameController.text.trim(),
-          lastName: nonEmpty(me['last_name']) ?? _lastNameController.text.trim(),
-          phone: nonEmpty(me['phone']) ?? (await const SessionStorage().readPhone())?.trim(),
+          firstName:
+              nonEmpty(me['first_name']) ?? _firstNameController.text.trim(),
+          lastName:
+              nonEmpty(me['last_name']) ?? _lastNameController.text.trim(),
+          phone:
+              nonEmpty(me['phone']) ??
+              (await const SessionStorage().readPhone())?.trim(),
         );
       } catch (_) {
         await const SessionStorage().saveProfile(
@@ -211,18 +218,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ تم إكمال التسجيل بنجاح')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('✅ تم إكمال التسجيل بنجاح')));
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إكمال التسجيل: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر إكمال التسجيل: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -232,7 +239,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -281,14 +288,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [
-                          Colors.grey[850]!,
-                          Colors.grey[800]!,
-                        ]
-                      : [
-                          Colors.white,
-                          Colors.grey[50]!,
-                        ],
+                      ? [Colors.grey[850]!, Colors.grey[800]!]
+                      : [Colors.white, Colors.grey[50]!],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -311,10 +312,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF6366F1),
-                            Color(0xFFA855F7),
-                          ],
+                          colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
                           begin: Alignment.topRight,
                           end: Alignment.bottomLeft,
                         ),
@@ -341,10 +339,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               ),
                             ),
                             child: const Center(
-                              child: Text(
-                                '🎯',
-                                style: TextStyle(fontSize: 28),
-                              ),
+                              child: Text('🎯', style: TextStyle(fontSize: 28)),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -377,7 +372,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    
+
                     // الاسم الأول والأخير في صف واحد
                     Row(
                       children: [
@@ -389,7 +384,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             isDark: isDark,
                             keyboardType: TextInputType.name,
                             inputFormatters: [
-                              FilteringTextInputFormatter.allow(_nameAllowedChars),
+                              FilteringTextInputFormatter.allow(
+                                _nameAllowedChars,
+                              ),
                             ],
                             onChanged: (_) => setState(() {}),
                           ),
@@ -403,7 +400,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             isDark: isDark,
                             keyboardType: TextInputType.name,
                             inputFormatters: [
-                              FilteringTextInputFormatter.allow(_nameAllowedChars),
+                              FilteringTextInputFormatter.allow(
+                                _nameAllowedChars,
+                              ),
                             ],
                             onChanged: (_) => setState(() {}),
                           ),
@@ -411,7 +410,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    
+
                     // اسم المستخدم (تلقائي)
                     _buildEnhancedField(
                       "اسم المستخدم",
@@ -422,11 +421,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       hint: "يتم إنشاؤه تلقائياً",
                     ),
                     const SizedBox(height: 18),
-                    
+
                     // المدينة
                     _buildCityDropdown(isDark),
                     const SizedBox(height: 18),
-                    
+
                     // البريد الإلكتروني
                     _buildEnhancedField(
                       "البريد الإلكتروني",
@@ -437,7 +436,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 18),
-                    
+
                     // كلمة المرور
                     _buildEnhancedField(
                       "كلمة المرور",
@@ -450,7 +449,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     const SizedBox(height: 12),
                     _buildPasswordValidation(),
                     const SizedBox(height: 18),
-                    
+
                     // تأكيد كلمة المرور
                     _buildEnhancedField(
                       "تأكيد كلمة المرور",
@@ -461,7 +460,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // الموافقة على الشروط
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -525,16 +524,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    
+
                     // زر إنشاء الحساب
                     Container(
                       decoration: BoxDecoration(
                         gradient: _isAllValid && !_loading
                             ? const LinearGradient(
-                                colors: [
-                                  Color(0xFF6366F1),
-                                  Color(0xFFA855F7),
-                                ],
+                                colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
                                 begin: Alignment.centerRight,
                                 end: Alignment.centerLeft,
                               )
@@ -546,8 +542,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         boxShadow: _isAllValid && !_loading
                             ? [
                                 BoxShadow(
-                                  color:
-                                      const Color(0xFF6366F1).withOpacity(0.4),
+                                  color: const Color(
+                                    0xFF6366F1,
+                                  ).withOpacity(0.4),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -557,8 +554,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap:
-                              (_isAllValid && !_loading) ? _onRegisterPressed : null,
+                          onTap: (_isAllValid && !_loading)
+                              ? _onRegisterPressed
+                              : null,
                           borderRadius: BorderRadius.circular(18),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -687,8 +685,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ),
             textAlign: TextAlign.right,
             decoration: InputDecoration(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
               border: InputBorder.none,
               hintText: hint,
               hintStyle: TextStyle(
@@ -767,8 +767,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
               color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
             decoration: const InputDecoration(
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
               border: InputBorder.none,
             ),
             dropdownColor: isDark ? Colors.grey[850] : Colors.white,
@@ -806,51 +808,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildField(
-    String label,
-    TextEditingController controller,
-    IconData icon, {
-    bool obscure = false,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-    void Function(String)? onChanged,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      onChanged: onChanged,
-      style: const TextStyle(fontFamily: 'Cairo'),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo'),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: FaIcon(icon, size: 20, color: AppColors.deepPurple),
-        ),
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.deepPurple, width: 1.6),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 18,
-          horizontal: 14,
-        ),
-      ),
     );
   }
 

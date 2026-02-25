@@ -28,31 +28,8 @@ import 'services/app_navigation.dart';
 import 'services/fcm_notification_service.dart';
 import 'services/notifications_badge_controller.dart';
 import 'services/role_controller.dart';
+import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
-
-/// 🌙 وحدة تحكم للثيم واللغة
-class MyThemeController extends InheritedWidget {
-  final void Function(ThemeMode) changeTheme;
-  final void Function(Locale) changeLanguage;
-  final ThemeMode themeMode;
-  final Locale locale;
-
-  const MyThemeController({
-    super.key,
-    required this.changeTheme,
-    required this.themeMode,
-    required this.changeLanguage,
-    required this.locale,
-    required super.child,
-  });
-
-  static MyThemeController? of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<MyThemeController>();
-
-  @override
-  bool updateShouldNotify(MyThemeController oldWidget) =>
-      oldWidget.themeMode != themeMode || oldWidget.locale != locale;
-}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

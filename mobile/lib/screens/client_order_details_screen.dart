@@ -10,6 +10,7 @@ import '../models/offer.dart';
 import '../services/chat_nav.dart';
 import '../services/marketplace_api.dart';
 import '../services/reviews_api.dart';
+import '../utils/platform_feedback.dart';
 
 class ClientOrderDetailsScreen extends StatefulWidget {
   final ClientOrder order;
@@ -63,6 +64,20 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       order.ratingOnTime,
     ];
     return criteria.any((v) => v != null && v > 0);
+  }
+
+  void _showWebAwareMessage(
+    String message, {
+    bool error = false,
+    bool success = false,
+  }) {
+    if (!mounted) return;
+    PlatformFeedback.show(
+      context,
+      message,
+      error: error,
+      success: success,
+    );
   }
 
   @override
@@ -120,14 +135,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       });
     } catch (_) {
       if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'تعذر تحديث بيانات الطلب حالياً',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
-          ),
-        );
+        _showWebAwareMessage('تعذر تحديث بيانات الطلب حالياً', error: true);
       }
     }
   }
@@ -154,27 +162,13 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     if (_isSubmittingReview) return;
 
     if (_order.status != 'مكتمل') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'لا يمكن إرسال التقييم إلا بعد اكتمال الطلب',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('لا يمكن إرسال التقييم إلا بعد اكتمال الطلب', error: true);
       return;
     }
 
     final requestId = _requestIdValue();
     if (requestId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'لا يمكن إرسال التقييم: رقم الطلب غير صالح',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('لا يمكن إرسال التقييم: رقم الطلب غير صالح', error: true);
       return;
     }
 
@@ -186,14 +180,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       _ratingOnTime,
     ];
     if (!values.every(_isValidCriterion)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'فضلاً اختر تقييمًا لكل خيار (من 1 إلى 5)',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('فضلاً اختر تقييمًا لكل خيار (من 1 إلى 5)', error: true);
       return;
     }
 
@@ -212,14 +199,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       _didSubmitReview = true;
       _showRatingForm = false;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تم إرسال التقييم بنجاح',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('تم إرسال التقييم بنجاح', success: true);
       // Do not chain review submission to the generic request save flow.
       // _save() can fail on unrelated request actions (reminders/updates),
       // which makes a successful review look like it failed.
@@ -239,21 +219,10 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
           _showRatingForm = false;
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')),
-        ),
-      );
+      _showWebAwareMessage(msg, error: true);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تعذر إرسال التقييم',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('تعذر إرسال التقييم', error: true);
     } finally {
       if (mounted) setState(() => _isSubmittingReview = false);
     }
@@ -311,22 +280,16 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
 
     if (confirmed == true) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('جاري قبول العرض...')));
+      _showWebAwareMessage('جاري قبول العرض...');
 
       final success = await MarketplaceApi().acceptOffer(offer.id);
       if (success && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم قبول العرض بنجاح')));
+        _showWebAwareMessage('تم قبول العرض بنجاح', success: true);
         await _refreshFromBackend();
         if (!mounted) return;
         Navigator.pop(context, _order.copyWith(status: 'جديد'));
       } else if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('فشل قبول العرض')));
+        _showWebAwareMessage('فشل قبول العرض', error: true);
       }
     }
   }
@@ -365,14 +328,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
   void _openChat() {
     final requestId = _requestIdValue();
     if (requestId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'رقم الطلب غير صالح لفتح المحادثة',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('رقم الطلب غير صالح لفتح المحادثة', error: true);
       return;
     }
 
@@ -393,14 +349,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     final requestId = _requestIdValue();
     if (requestId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'رقم الطلب غير صالح',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      _showWebAwareMessage('رقم الطلب غير صالح', error: true);
       return;
     }
 
@@ -417,14 +366,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
         );
         if (!ok) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'تعذر إعادة فتح الطلب حالياً',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          );
+          _showWebAwareMessage('تعذر إعادة فتح الطلب حالياً', error: true);
           return;
         }
         didAnyAction = true;
@@ -440,14 +382,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
         );
         if (!ok) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'تعذر إلغاء الطلب حالياً',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          );
+          _showWebAwareMessage('تعذر إلغاء الطلب حالياً', error: true);
           return;
         }
         didAnyAction = true;
@@ -468,14 +403,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
           );
           if (updated == null) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'تعذر تحديث بيانات الطلب حالياً',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
-              ),
-            );
+            _showWebAwareMessage('تعذر تحديث بيانات الطلب حالياً', error: true);
             return;
           }
           didAnyAction = true;
@@ -497,14 +425,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
         );
         if (!ok) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'تعذر إرسال قرار الاعتماد/الرفض حالياً',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          );
+          _showWebAwareMessage('تعذر إرسال قرار الاعتماد/الرفض حالياً', error: true);
           return;
         }
         didAnyAction = true;
@@ -520,14 +441,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               (_approveProviderInputs || _rejectProviderInputs))) {
         if ((_order.providerName ?? '').trim().isEmpty) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'لا يمكن إرسال تذكير قبل تعيين مقدم خدمة للطلب',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          );
+          _showWebAwareMessage('لا يمكن إرسال تذكير قبل تعيين مقدم خدمة للطلب', error: true);
           return;
         }
         final ok = await api.sendRequestReminder(
@@ -536,14 +450,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
         );
         if (!ok) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'تعذر إرسال التذكير حالياً',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          );
+          _showWebAwareMessage('تعذر إرسال التذكير حالياً', error: true);
           return;
         }
         didAnyAction = true;
@@ -558,15 +465,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
 
       await _refreshFromBackend(silent: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            successMessage,
-            style: const TextStyle(fontFamily: 'Cairo'),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showWebAwareMessage(successMessage, success: true);
       Navigator.pop(context, _order);
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -693,9 +592,14 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final width = MediaQuery.sizeOf(context).width;
     final isCompact = width < 370;
+    final desktopLike = width >= 1100;
     final pagePadding = isCompact ? 12.0 : 16.0;
     final cardPadding = isCompact ? 12.0 : 14.0;
     final cardRadius = isCompact ? 12.0 : 14.0;
+    final desktopContentWidth = width > 1320 ? 1240.0 : 1120.0;
+    final horizontalInset = desktopLike
+        ? ((width - desktopContentWidth) / 2).clamp(16.0, 220.0)
+        : pagePadding;
     final statusColor = _statusColor(_order.status);
     final canEditOrderFields =
         _order.status == 'جديد' || _order.status == 'أُرسل';
@@ -732,10 +636,15 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refreshFromBackend,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.all(pagePadding),
-                    children: [
+                   child: ListView(
+                     physics: const AlwaysScrollableScrollPhysics(),
+                     padding: EdgeInsets.fromLTRB(
+                       horizontalInset,
+                       pagePadding,
+                       horizontalInset,
+                       pagePadding,
+                     ),
+                     children: [
                       // Header card
                       Container(
                         padding: EdgeInsets.all(cardPadding),
@@ -1605,52 +1514,59 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               // Bottom buttons
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: Colors.grey.shade400),
-                        ),
-                        child: const Text(
-                          'إلغاء',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.bold,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: desktopLike ? 760 : double.infinity,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: Colors.grey.shade400),
+                            ),
+                            child: const Text(
+                              'إلغاء',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isSaving ? null : _save,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: _mainColor,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _save,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              backgroundColor: _mainColor,
+                            ),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'حفظ',
+                                    style: TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                          ),
                         ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'حفظ',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],

@@ -5,16 +5,10 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/service_provider_location.dart';
 import '../constants/colors.dart';
-import '../services/messaging_api.dart';
-import '../utils/auth_guard.dart';
-import '../utils/whatsapp_helper.dart';
 import '../services/providers_api.dart';
 import 'provider_profile_screen.dart';
-import 'chat_detail_screen.dart';
-import 'service_request_form_screen.dart';
 
 class ProvidersMapScreen extends StatefulWidget {
   final String category;
@@ -41,10 +35,10 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
   bool _isLoadingLocation = true;
   List<Marker> _markers = [];
   ServiceProviderLocation? _selectedProvider;
-  
+
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
-  
+
   // بيانات تجريبية لمقدمي الخدمات
   List<ServiceProviderLocation> _providers = [];
   List<ServiceProviderLocation> _filteredProviders = [];
@@ -55,211 +49,6 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
     "خدمات المنازل": Colors.green,
     "استشارات قانونية": Colors.purple,
   };
-
-  String _formatPhoneE164(String rawPhone) {
-    final phone = rawPhone.replaceAll(RegExp(r'\s+'), '');
-    if (phone.startsWith('+')) return phone;
-
-    // KSA common formats: 05XXXXXXXX or 5XXXXXXXX
-    if (phone.startsWith('05') && phone.length == 10) {
-      return '+966${phone.substring(1)}';
-    }
-    if (phone.startsWith('5') && phone.length == 9) {
-      return '+966$phone';
-    }
-
-    return phone;
-  }
-
-  String _buildWhatsAppMessage(ServiceProviderLocation provider) {
-    final serviceLine = widget.subCategory != null && widget.subCategory!.isNotEmpty
-        ? '${widget.category} - ${widget.subCategory}'
-        : widget.category;
-
-    final buffer = StringBuffer();
-    buffer.writeln('@${provider.name}');
-    buffer.writeln('السلام عليكم');
-    buffer.writeln('أنا عميل في منصة (نوافذ)');
-    buffer.writeln('أتواصل معك بخصوص طلب خدمة في $serviceLine');
-
-    final desc = widget.requestDescription?.trim();
-    if (desc != null && desc.isNotEmpty) {
-      buffer.writeln('الوصف: $desc');
-    }
-
-    return buffer.toString().trim();
-  }
-
-  Future<void> _openPhoneCall(ServiceProviderLocation provider) async {
-    final e164 = _formatPhoneE164(provider.phoneNumber);
-    final uri = Uri(scheme: 'tel', path: e164);
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تعذر فتح الاتصال')),
-    );
-  }
-
-  Future<void> _openWhatsApp(ServiceProviderLocation provider) async {
-    await WhatsAppHelper.open(
-      context: context,
-      contact: provider.phoneNumber,
-      message: _buildWhatsAppMessage(provider),
-    );
-  }
-
-  Future<void> _openChat(ServiceProviderLocation provider) async {
-    if (!await checkAuth(context)) return;
-
-    final providerId = int.tryParse(provider.id);
-    if (providerId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر فتح المحادثة')),
-      );
-      return;
-    }
-
-    try {
-      final api = MessagingApi();
-      final thread = await api.getOrCreateDirectThread(providerId);
-      final threadIdRaw = thread['id'];
-      final threadId = (threadIdRaw is int)
-          ? threadIdRaw
-          : int.tryParse(threadIdRaw?.toString() ?? '');
-      if (threadId == null) throw Exception('invalid thread id');
-
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatDetailScreen(
-            name: provider.name,
-            isOnline: provider.isAvailable,
-            requestId: null,
-            threadId: threadId,
-            requestCode: '',
-            requestTitle: '',
-            isDirect: true,
-            peerId: provider.id,
-            peerName: provider.name,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر فتح المحادثة')),
-      );
-    }
-  }
-
-  Future<void> _showProviderContactActions(ServiceProviderLocation provider) async {
-    final e164 = _formatPhoneE164(provider.phoneNumber);
-
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.deepPurple.withValues(alpha: 0.35)),
-                    borderRadius: BorderRadius.circular(12),
-                    color: AppColors.deepPurple.withValues(alpha: 0.04),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.call, size: 18, color: AppColors.deepPurple),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Call $e164',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.deepPurple,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.deepPurple.withValues(alpha: 0.35)),
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildContactIcon(
-                        icon: FontAwesomeIcons.whatsapp,
-                        label: 'واتس',
-                        color: const Color(0xFF25D366),
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _openWhatsApp(provider);
-                        },
-                      ),
-                      _buildContactIcon(
-                        icon: Icons.call,
-                        label: 'اتصال',
-                        color: AppColors.deepPurple,
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _openPhoneCall(provider);
-                        },
-                      ),
-                      _buildContactIcon(
-                        icon: Icons.chat_bubble_outline,
-                        label: 'محادثة',
-                        color: AppColors.deepPurple,
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _openChat(provider);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildContactIcon({
     required IconData icon,
@@ -325,7 +114,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
     try {
       // التحقق من الصلاحيات
       LocationPermission permission = await Geolocator.checkPermission();
-      
+
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
@@ -382,7 +171,8 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
 
       double? distanceKm;
       if (_currentPosition != null) {
-        distanceKm = Geolocator.distanceBetween(
+        distanceKm =
+            Geolocator.distanceBetween(
               _currentPosition!.latitude,
               _currentPosition!.longitude,
               lat,
@@ -394,7 +184,9 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
       mapped.add(
         ServiceProviderLocation(
           id: p.id.toString(),
-          name: (p.displayName ?? '').trim().isEmpty ? 'مزود خدمة' : p.displayName!.trim(),
+          name: (p.displayName ?? '').trim().isEmpty
+              ? 'مزود خدمة'
+              : p.displayName!.trim(),
           category: widget.category,
           subCategory: (widget.subCategory ?? '').trim(),
           latitude: lat,
@@ -444,11 +236,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
           ),
           width: 80,
           height: 80,
-          child: const Icon(
-            Icons.my_location,
-            color: Colors.blue,
-            size: 40,
-          ),
+          child: const Icon(Icons.my_location, color: Colors.blue, size: 40),
         ),
       );
     }
@@ -456,7 +244,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
     // مقدمو الخدمات
     for (var provider in _filteredProviders) {
       final color = _categoryColors[provider.category] ?? Colors.red;
-      
+
       markers.add(
         Marker(
           point: LatLng(provider.latitude, provider.longitude),
@@ -481,11 +269,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    Icons.location_on,
-                    color: color,
-                    size: 32,
-                  ),
+                  child: Icon(Icons.location_on, color: color, size: 32),
                 ),
                 if (_selectedProvider?.id == provider.id)
                   Container(
@@ -498,10 +282,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 4,
-                        ),
+                        BoxShadow(color: Colors.black26, blurRadius: 4),
                       ],
                     ),
                     child: Text(
@@ -528,10 +309,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
   // ✅ تحريك الخريطة لموقع المزود
   void _animateToProvider(ServiceProviderLocation provider) {
     // Avoid calling move() before FlutterMap is rendered at least once.
-    _moveMapIfReady(
-      LatLng(provider.latitude, provider.longitude),
-      15.0,
-    );
+    _moveMapIfReady(LatLng(provider.latitude, provider.longitude), 15.0);
   }
 
   // ✅ فتح بروفايل مقدم الخدمة
@@ -540,7 +318,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
       _selectedProvider = provider;
     });
     _animateToProvider(provider);
-    
+
     // فتح صفحة البروفايل
     await Navigator.push(
       context,
@@ -637,229 +415,14 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
     );
   }
 
-  // ✅ عرض dialog تأكيد إرسال الطلب مع التفاصيل
-  Future<void> _showSendRequestDialog(ServiceProviderLocation provider) async {
-    final navigator = Navigator.of(context);
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.send, color: AppColors.deepPurple),
-              const SizedBox(width: 8),
-              const Text(
-                'تأكيد إرسال الطلب',
-                style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // معلومات المزود
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          color: Colors.grey.shade300,
-                          child: provider.profileImage != null
-                              ? (provider.profileImage!.startsWith('http://') ||
-                                      provider.profileImage!.startsWith('https://')
-                                  ? Image.network(
-                                      provider.profileImage!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.person, size: 24),
-                                    )
-                                  : Image.asset(
-                                      provider.profileImage!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.person, size: 24),
-                                    ))
-                              : const Icon(Icons.person, size: 24),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    provider.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ),
-                                if (provider.verified) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.verified,
-                                      color: Colors.green, size: 14),
-                                ],
-                              ],
-                            ),
-                            Text(
-                              provider.subCategory,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // تفاصيل الطلب
-                const Text(
-                  'تفاصيل الطلب:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'التصنيف: ${widget.category}',
-                  style: const TextStyle(fontSize: 13, fontFamily: 'Cairo'),
-                ),
-                if (widget.subCategory != null)
-                  Text(
-                    'التصنيف الفرعي: ${widget.subCategory}',
-                    style: const TextStyle(fontSize: 13, fontFamily: 'Cairo'),
-                  ),
-                if (widget.requestDescription != null &&
-                    widget.requestDescription!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  const Text(
-                    'الوصف:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Text(
-                      widget.requestDescription!,
-                      style: const TextStyle(fontSize: 13, fontFamily: 'Cairo'),
-                    ),
-                  ),
-                ],
-                if (widget.attachments != null &&
-                    widget.attachments!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  Row(
-                    children: [
-                      const Icon(Icons.attach_file, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        'المرفقات: ${widget.attachments!.length}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 16, color: Colors.orange.shade700),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'سيتم إرسال هذا الطلب إلى ${provider.name}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange.shade700,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
-            ),
-            ElevatedButton.icon(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                await _showProviderContactActions(provider);
-                if (!mounted) return;
-                navigator.pop({
-                  'provider': provider,
-                  'description': widget.requestDescription,
-                  'attachments': widget.attachments,
-                });
-              },
-              icon: const Icon(Icons.send, size: 16),
-              label: const Text('إرسال', style: TextStyle(fontFamily: 'Cairo')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.deepPurple,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _isLoadingLocation
           ? _buildLoadingScreen()
           : _filteredProviders.isEmpty
-              ? _buildEmptyState()
-              : _buildMapWithSheet(),
+          ? _buildEmptyState()
+          : _buildMapWithSheet(),
     );
   }
 
@@ -899,11 +462,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.search_off,
-                size: 80,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.search_off, size: 80, color: Colors.grey.shade400),
               const SizedBox(height: 24),
               const Text(
                 'لا يوجد مزودون قريبون حالياً',
@@ -953,7 +512,10 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
           mapController: _mapController,
           options: MapOptions(
             initialCenter: _currentPosition != null
-                ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+                ? LatLng(
+                    _currentPosition!.latitude,
+                    _currentPosition!.longitude,
+                  )
                 : const LatLng(24.7136, 46.6753),
             initialZoom: 14.0,
             minZoom: 5.0,
@@ -968,9 +530,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.nawafeth',
             ),
-            MarkerLayer(
-              markers: _markers,
-            ),
+            MarkerLayer(markers: _markers),
           ],
         ),
 
@@ -1069,10 +629,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                 );
               }
             },
-            child: const Icon(
-              Icons.my_location,
-              color: AppColors.deepPurple,
-            ),
+            child: const Icon(Icons.my_location, color: AppColors.deepPurple),
           ),
         ),
 
@@ -1086,9 +643,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
             return Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black26,
@@ -1166,12 +721,12 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.deepPurple.withValues(alpha: 0.05) : Colors.white,
+          color: isSelected
+              ? AppColors.deepPurple.withValues(alpha: 0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected
-                ? AppColors.deepPurple
-                : Colors.grey.shade200,
+            color: isSelected ? AppColors.deepPurple : Colors.grey.shade200,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -1188,19 +743,19 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                     color: Colors.grey.shade200,
                     child: provider.profileImage != null
                         ? (provider.profileImage!.startsWith('http://') ||
-                                provider.profileImage!.startsWith('https://')
-                            ? Image.network(
-                                provider.profileImage!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.person, size: 32),
-                              )
-                            : Image.asset(
-                                provider.profileImage!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.person, size: 32),
-                              ))
+                                  provider.profileImage!.startsWith('https://')
+                              ? Image.network(
+                                  provider.profileImage!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.person, size: 32),
+                                )
+                              : Image.asset(
+                                  provider.profileImage!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.person, size: 32),
+                                ))
                         : const Icon(Icons.person, size: 32),
                   ),
                 ),
@@ -1230,10 +785,8 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                         children: [
                           RatingBarIndicator(
                             rating: provider.rating,
-                            itemBuilder: (_, __) => const Icon(
-                              Icons.star,
-                              color: Colors.amber,
-                            ),
+                            itemBuilder: (_, __) =>
+                                const Icon(Icons.star, color: Colors.amber),
                             itemCount: 5,
                             itemSize: 14,
                           ),
@@ -1316,10 +869,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
                 // زر اختياري لعرض نفس الخيارات كبوتوم شيت
                 IconButton(
                   onPressed: () => _showProviderContactActions(provider),
-                  icon: const Icon(
-                    Icons.more_horiz,
-                    color: Colors.grey,
-                  ),
+                  icon: const Icon(Icons.more_horiz, color: Colors.grey),
                 ),
               ],
             ),

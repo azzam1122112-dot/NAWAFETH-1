@@ -55,9 +55,8 @@ class _RegisterServiceProviderPageState
 
   String _accountTypeAr = 'فرد';
   bool _acceptsUrgent = false;
-  int? _selectedCategoryId;
   List<int> _selectedSubcategoryIds = [];
-  
+
   // تتبع نسبة إكمال كل صفحة (من 0.0 إلى 1.0)
   Map<int, double> _stepCompletion = {
     0: 0.0, // المعلومات الأساسية
@@ -191,10 +190,14 @@ class _RegisterServiceProviderPageState
       final localFull = (await storage.readFullName())?.trim();
       final localPhone = (await storage.readPhone())?.trim();
 
-      if (_phoneCtrl.text.trim().isEmpty && localPhone != null && localPhone.isNotEmpty) {
+      if (_phoneCtrl.text.trim().isEmpty &&
+          localPhone != null &&
+          localPhone.isNotEmpty) {
         _phoneCtrl.text = localPhone;
       }
-      if (_displayNameCtrl.text.trim().isEmpty && localFull != null && localFull.isNotEmpty) {
+      if (_displayNameCtrl.text.trim().isEmpty &&
+          localFull != null &&
+          localFull.isNotEmpty) {
         _displayNameCtrl.text = localFull;
       }
     } catch (_) {
@@ -220,6 +223,7 @@ class _RegisterServiceProviderPageState
         final s = (v ?? '').toString().trim();
         return s.isEmpty ? null : s;
       }
+
       await const SessionStorage().saveProfile(
         username: nonEmpty(me['username']),
         email: nonEmpty(me['email']),
@@ -309,7 +313,9 @@ class _RegisterServiceProviderPageState
     if (displayName.isEmpty || bio.isEmpty || city.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('أكمل البيانات المطلوبة: الاسم، النبذة، المدينة، رقم الهاتف.'),
+          content: Text(
+            'أكمل البيانات المطلوبة: الاسم، النبذة، المدينة، رقم الهاتف.',
+          ),
         ),
       );
       return;
@@ -332,13 +338,13 @@ class _RegisterServiceProviderPageState
         bio: bio,
         city: city,
         acceptsUrgent: _acceptsUrgent,
-        subcategoryIds: _selectedSubcategoryIds.isNotEmpty ? _selectedSubcategoryIds : null,
+        subcategoryIds: _selectedSubcategoryIds.isNotEmpty
+            ? _selectedSubcategoryIds
+            : null,
       );
       final whatsapp = _whatsappCtrl.text.trim();
       if (whatsapp.isNotEmpty) {
-        await ProvidersApi().updateMyProviderProfile({
-          'whatsapp': whatsapp,
-        });
+        await ProvidersApi().updateMyProviderProfile({'whatsapp': whatsapp});
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -352,13 +358,13 @@ class _RegisterServiceProviderPageState
         _showSuccessOverlay = true;
       });
     } on DioException catch (e) {
-        final apiErr = ApiError.fromDio(e);
-        String msg = apiErr.messageAr;
+      final apiErr = ApiError.fromDio(e);
+      String msg = apiErr.messageAr;
 
-        // Keep old behavior: if backend blocks by role, guide user to complete registration.
-        if ((e.response?.statusCode ?? 0) == 403) {
-          msg = 'يلزم إكمال تسجيل الحساب أولاً قبل التسجيل كمقدم خدمة.';
-        }
+      // Keep old behavior: if backend blocks by role, guide user to complete registration.
+      if ((e.response?.statusCode ?? 0) == 403) {
+        msg = 'يلزم إكمال تسجيل الحساب أولاً قبل التسجيل كمقدم خدمة.';
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
@@ -396,12 +402,12 @@ class _RegisterServiceProviderPageState
 
     final Color activeColor = Colors.deepPurple;
     final Color completedColor = Colors.green;
-    final Color circleColor =
-        isCompleted
-            ? completedColor
-            : (isActive ? activeColor : Colors.grey.shade300);
-    final Color iconColor =
-        isActive || isCompleted ? Colors.white : Colors.black87;
+    final Color circleColor = isCompleted
+        ? completedColor
+        : (isActive ? activeColor : Colors.grey.shade300);
+    final Color iconColor = isActive || isCompleted
+        ? Colors.white
+        : Colors.black87;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -414,16 +420,15 @@ class _RegisterServiceProviderPageState
           decoration: BoxDecoration(
             color: circleColor,
             shape: BoxShape.circle,
-            boxShadow:
-                isActive
-                    ? [
-                      BoxShadow(
-                        color: activeColor.withOpacity(0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                    : [],
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: activeColor.withOpacity(0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : [],
           ),
           child: Center(
             child: Icon(
@@ -503,9 +508,8 @@ class _RegisterServiceProviderPageState
                   itemCount: stepTitles.length,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   separatorBuilder: (_, __) => const SizedBox(width: 16),
-                  itemBuilder:
-                      (context, index) =>
-                          _buildStepItem(stepTitles[index], index),
+                  itemBuilder: (context, index) =>
+                      _buildStepItem(stepTitles[index], index),
                 ),
               ),
             ),
@@ -579,7 +583,6 @@ class _RegisterServiceProviderPageState
         onValidationChanged: (percent) => _updateStepCompletion(1, percent),
         onUrgentChanged: (v) => _acceptsUrgent = v,
         onCategoriesChanged: (categoryId, subcategoryIds) {
-          _selectedCategoryId = categoryId;
           _selectedSubcategoryIds = subcategoryIds;
         },
       ),
@@ -596,10 +599,7 @@ class _RegisterServiceProviderPageState
     ];
 
     // Keep step widgets mounted to avoid losing user input when navigating back.
-    return IndexedStack(
-      index: _currentStep,
-      children: steps,
-    );
+    return IndexedStack(index: _currentStep, children: steps);
   }
 
   Widget _buildSuccessCard(BuildContext context) {
@@ -666,7 +666,10 @@ class _RegisterServiceProviderPageState
 
                 // نسبة إكمال الملف الشخصي (30% فقط بعد التسجيل)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(20),
@@ -747,7 +750,7 @@ class _RegisterServiceProviderPageState
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool('isProviderRegistered', true);
                     await RoleController.instance.setProviderMode(true);
-                    
+
                     if (!context.mounted) return;
                     Navigator.pushNamedAndRemoveUntil(
                       context,
@@ -775,7 +778,7 @@ class _RegisterServiceProviderPageState
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool('isProviderRegistered', true);
                     await RoleController.instance.setProviderMode(true);
-                    
+
                     if (!context.mounted) return;
                     // الرجوع للصفحة الرئيسية
                     Navigator.of(context).popUntil((route) => route.isFirst);

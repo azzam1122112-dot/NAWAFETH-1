@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import (
+from .api import (
     AcceptOfferView,
     AvailableUrgentRequestsView,
     AvailableCompetitiveRequestsView,
@@ -13,16 +13,19 @@ from .views import (
     ProviderAssignedRequestRejectView,
     ProviderProgressUpdateView,
     ProviderInputsDecisionView,
-    provider_requests,
     RequestCancelView,
     RequestCompleteView,
     RequestReopenView,
-    request_action,
-    request_detail,
     RequestOffersListView,
     RequestStartView,
     ServiceRequestCreateView,
     UrgentRequestAcceptView,
+)
+
+from .views import (
+    provider_requests,
+    request_action,
+    request_detail,
 )
 
 app_name = "marketplace"

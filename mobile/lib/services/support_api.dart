@@ -94,8 +94,63 @@ class SupportApi {
     return const [];
   }
 
+  Future<List<Map<String, dynamic>>> getBackofficeTickets({
+    String? status,
+    String? type,
+    String? priority,
+    String? q,
+  }) async {
+    final res = await _dio.get(
+      '${ApiConfig.apiPrefix}/support/backoffice/tickets/',
+      queryParameters: {
+        if ((status ?? '').trim().isNotEmpty) 'status': status,
+        if ((type ?? '').trim().isNotEmpty) 'type': type,
+        if ((priority ?? '').trim().isNotEmpty) 'priority': priority,
+        if ((q ?? '').trim().isNotEmpty) 'q': q,
+      },
+    );
+
+    final data = res.data;
+    if (data is List) {
+      return data.map((e) => _asMap(e)).toList();
+    }
+    return const [];
+  }
+
   Future<Map<String, dynamic>> getTicketDetail(int ticketId) async {
     final res = await _dio.get('${ApiConfig.apiPrefix}/support/tickets/$ticketId/');
+    return _asMap(res.data);
+  }
+
+  Future<Map<String, dynamic>> assignTicket({
+    required int ticketId,
+    int? assignedTeamId,
+    int? assignedToUserId,
+    String? note,
+  }) async {
+    final res = await _dio.patch(
+      '${ApiConfig.apiPrefix}/support/backoffice/tickets/$ticketId/assign/',
+      data: {
+        if (assignedTeamId != null) 'assigned_team': assignedTeamId,
+        if (assignedToUserId != null) 'assigned_to': assignedToUserId,
+        if ((note ?? '').trim().isNotEmpty) 'note': note,
+      },
+    );
+    return _asMap(res.data);
+  }
+
+  Future<Map<String, dynamic>> updateTicketStatus({
+    required int ticketId,
+    required String status,
+    String? note,
+  }) async {
+    final res = await _dio.patch(
+      '${ApiConfig.apiPrefix}/support/backoffice/tickets/$ticketId/status/',
+      data: {
+        'status': status,
+        if ((note ?? '').trim().isNotEmpty) 'note': note,
+      },
+    );
     return _asMap(res.data);
   }
 

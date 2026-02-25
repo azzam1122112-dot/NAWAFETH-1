@@ -13,6 +13,7 @@ import '../services/messaging_api.dart';
 import '../services/role_controller.dart';
 import '../services/session_storage.dart';
 import '../models/provider_order.dart';
+import '../widgets/chat_web_shared_widgets.dart';
 import 'service_request_form_screen.dart';
 import 'provider_dashboard/provider_order_details_screen.dart';
 
@@ -1577,26 +1578,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    _peerTyping
-                        ? 'يكتب الآن...'
-                        : (showPeerOnline ? 'متصل' : 'غير متصل'),
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
-                  ),
-                ],
+              child: ChatConversationTitleBlock(
+                title: widget.name,
+                subtitle: _peerTyping
+                    ? 'يكتب الآن...'
+                    : (showPeerOnline ? 'متصل' : 'غير متصل'),
               ),
             ),
             if (_isProviderAccount) ...[  
@@ -2352,27 +2338,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
+                  ChatMessageMetaRow(
+                    timeText:
                         '${sentAt.hour.toString().padLeft(2, '0')}:${sentAt.minute.toString().padLeft(2, '0')}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isMe ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                      if (isMe) ...[
-                        const SizedBox(width: 6),
-                        Icon(
-                          readByPeer ? Icons.done_all : Icons.done,
-                          size: 14,
-                          color: readByPeer
-                              ? Colors.lightBlueAccent
-                              : Colors.white70,
-                        ),
-                      ],
-                    ],
+                    isMine: isMe,
+                    readByPeer: readByPeer,
+                    mineColor: Colors.white70,
+                    otherColor: Colors.black54,
                   ),
                 ],
               ),

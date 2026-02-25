@@ -1,15 +1,23 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/account_api.dart';
 import '../../services/reviews_api.dart';
 import '../../services/support_api.dart';
+import '../../services/web_inline_banner.dart';
+import '../../services/web_loading_overlay.dart';
 
 class ReviewsTab extends StatefulWidget {
   final int? providerId;
   final bool embedded;
   final bool allowProviderReply;
   final Future<void> Function(String customerName)? onOpenChat;
+  final String? initialSearchQuery;
+  final String? initialReplyFilter;
+  final int? initialMinRating;
 
   const ReviewsTab({
     super.key,
@@ -17,6 +25,9 @@ class ReviewsTab extends StatefulWidget {
     this.embedded = false,
     this.allowProviderReply = false,
     this.onOpenChat,
+    this.initialSearchQuery,
+    this.initialReplyFilter,
+    this.initialMinRating,
   });
 
   @override
@@ -30,11 +41,29 @@ class _ReviewsTabState extends State<ReviewsTab> {
   int? _providerId;
   Map<String, dynamic>? _rating;
   List<Map<String, dynamic>> _reviews = const [];
+  final TextEditingController _searchController = TextEditingController();
+  String _replyFilter = 'الكل';
+  int _minRating = 0;
+  Timer? _searchRouteSyncDebounce;
 
   @override
   void initState() {
     super.initState();
+    _searchController.text = (widget.initialSearchQuery ?? '').trim();
+    _replyFilter = _normalizeReplyFilter(widget.initialReplyFilter);
+    _minRating = (widget.initialMinRating ?? 0).clamp(0, 5);
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+      _scheduleWebUrlSync();
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchRouteSyncDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -68,6 +97,13 @@ class _ReviewsTabState extends State<ReviewsTab> {
     }
   }
 
+  Future<void> _loadWithOverlay() {
+    return WebLoadingOverlayController.instance.run(
+      _load,
+      message: 'جاري تحديث المراجعات...',
+    );
+  }
+
   Future<void> _replyToReview(Map<String, dynamic> review) async {
     final reviewIdRaw = review['id'];
     final reviewId = (reviewIdRaw is int)
@@ -75,9 +111,7 @@ class _ReviewsTabState extends State<ReviewsTab> {
         : int.tryParse(reviewIdRaw?.toString() ?? '');
     if (reviewId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تحديد رقم المراجعة')),
-      );
+      WebInlineBannerController.instance.error('تعذر تحديد رقم المراجعة.');
       return;
     }
 
@@ -121,23 +155,20 @@ class _ReviewsTabState extends State<ReviewsTab> {
       if (reply == null) return;
       if (reply.trim().isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('الرد مطلوب')),
-        );
+        WebInlineBannerController.instance.info('الرد مطلوب.');
         return;
       }
 
-      await ReviewsApi().replyToReviewAsProvider(reviewId: reviewId, reply: reply);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم حفظ الرد على المراجعة')),
+      await WebLoadingOverlayController.instance.run(
+        () => ReviewsApi().replyToReviewAsProvider(reviewId: reviewId, reply: reply),
+        message: existingReply.isEmpty ? 'جاري إرسال الرد...' : 'جاري تحديث الرد...',
       );
-      await _load();
+      if (!mounted) return;
+      WebInlineBannerController.instance.success('تم حفظ الرد على المراجعة.');
+      await _loadWithOverlay();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyErrorMessage(e))),
-      );
+      WebInlineBannerController.instance.error(_friendlyErrorMessage(e));
     } finally {
       controller.dispose();
     }
@@ -177,17 +208,16 @@ class _ReviewsTabState extends State<ReviewsTab> {
     if (confirmed != true) return;
 
     try {
-      await ReviewsApi().deleteReviewReplyAsProvider(reviewId: reviewId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم حذف رد المراجعة')),
+      await WebLoadingOverlayController.instance.run(
+        () => ReviewsApi().deleteReviewReplyAsProvider(reviewId: reviewId),
+        message: 'جاري حذف رد المراجعة...',
       );
-      await _load();
+      if (!mounted) return;
+      WebInlineBannerController.instance.success('تم حذف رد المراجعة.');
+      await _loadWithOverlay();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyErrorMessage(e))),
-      );
+      WebInlineBannerController.instance.error(_friendlyErrorMessage(e));
     }
   }
 
@@ -210,6 +240,374 @@ class _ReviewsTabState extends State<ReviewsTab> {
     throw StateError('Cannot resolve provider_profile_id from /accounts/me/.');
   }
 
+  int _ratingCountValue() {
+    final raw = _rating?['rating_count'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+
+  double _ratingAverageValue() {
+    final raw = _rating?['rating_avg'];
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+
+  String _normalizeReplyFilter(String? raw) {
+    final v = (raw ?? '').trim().toLowerCase();
+    switch (v) {
+      case 'replied':
+      case 'with_reply':
+      case 'مردود':
+        return 'مردود';
+      case 'unreplied':
+      case 'without_reply':
+      case 'بدون رد':
+        return 'بدون رد';
+      case 'all':
+      case 'الكل':
+      default:
+        return 'الكل';
+    }
+  }
+
+  double _reviewRatingValue(Map<String, dynamic> review) {
+    final raw = review['rating'] ?? review['stars'];
+    if (raw is num) return raw.toDouble();
+    return double.tryParse((raw ?? '').toString()) ?? 0;
+  }
+
+  List<Map<String, dynamic>> _filteredReviews() {
+    Iterable<Map<String, dynamic>> out = _reviews;
+
+    if (_replyFilter == 'مردود') {
+      out = out.where((r) => (r['provider_reply'] ?? '').toString().trim().isNotEmpty);
+    } else if (_replyFilter == 'بدون رد') {
+      out = out.where((r) => (r['provider_reply'] ?? '').toString().trim().isEmpty);
+    }
+
+    if (_minRating > 0) {
+      out = out.where((r) => _reviewRatingValue(r) >= _minRating);
+    }
+
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      out = out.where((r) {
+        final client = (r['client_name'] ?? '').toString().toLowerCase();
+        final phone = (r['client_phone'] ?? '').toString().toLowerCase();
+        final comment = (r['comment'] ?? r['text'] ?? r['review'] ?? '').toString().toLowerCase();
+        final reply = (r['provider_reply'] ?? '').toString().toLowerCase();
+        return client.contains(q) || phone.contains(q) || comment.contains(q) || reply.contains(q);
+      });
+    }
+    return out.toList();
+  }
+
+  void _scheduleWebUrlSync() {
+    if (!(kIsWeb && widget.embedded)) return;
+    _searchRouteSyncDebounce?.cancel();
+    _searchRouteSyncDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _syncWebUrl();
+    });
+  }
+
+  void _syncWebUrl() {
+    if (!(kIsWeb && widget.embedded)) return;
+    final reply = switch (_replyFilter) {
+      'مردود' => 'replied',
+      'بدون رد' => 'unreplied',
+      _ => 'all',
+    };
+    final query = <String, String>{
+      'reply': reply,
+      if (_minRating > 0) 'min_rating': '$_minRating',
+      if (_searchController.text.trim().isNotEmpty) 'q': _searchController.text.trim(),
+    };
+    SystemNavigator.routeInformationUpdated(
+      uri: Uri(path: '/provider_dashboard/reviews', queryParameters: query),
+      replace: true,
+    );
+  }
+
+  void _setReplyFilter(String value) {
+    if (_replyFilter == value) return;
+    setState(() => _replyFilter = value);
+    _syncWebUrl();
+  }
+
+  void _setMinRating(int value) {
+    if (_minRating == value) return;
+    setState(() => _minRating = value);
+    _syncWebUrl();
+  }
+
+  Widget _filtersPanel() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.search_rounded, color: Colors.deepPurple, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _syncWebUrl(),
+                  decoration: const InputDecoration(
+                    hintText: 'بحث في اسم العميل أو المراجعة أو الرد...',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                ),
+              ),
+              if (_searchController.text.trim().isNotEmpty)
+                IconButton(
+                  tooltip: 'مسح',
+                  onPressed: () {
+                    _searchController.clear();
+                    _syncWebUrl();
+                  },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              IconButton(
+                tooltip: 'تحديث',
+                onPressed: _loading ? null : _loadWithOverlay,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['الكل', 'مردود', 'بدون رد'].map((label) {
+              return ChoiceChip(
+                selected: _replyFilter == label,
+                onSelected: (_) => _setReplyFilter(label),
+                label: Text(label, style: const TextStyle(fontFamily: 'Cairo')),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                'الحد الأدنى للتقييم',
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+              ...[0, 1, 2, 3, 4, 5].map((v) {
+                final selected = _minRating == v;
+                return ChoiceChip(
+                  selected: selected,
+                  onSelected: (_) => _setMinRating(v),
+                  label: Text(v == 0 ? 'الكل' : '$v+', style: const TextStyle(fontFamily: 'Cairo', fontSize: 11.5)),
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopInfoChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopEmbeddedLayout() {
+    final avg = _ratingAverageValue();
+    final count = _ratingCountValue();
+    final filtered = _filteredReviews();
+
+    final reviewsList = filtered.isEmpty
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: Text(
+                'لا توجد مراجعات حتى الآن',
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+          )
+        : Column(
+            children: filtered
+                .map(
+                  (r) => _ReviewCard(
+                    review: r,
+                    providerId: _providerId,
+                    onOpenChat: widget.onOpenChat,
+                    onReply: widget.allowProviderReply ? () => _replyToReview(r) : null,
+                    onClearReply: widget.allowProviderReply ? () => _clearReplyForReview(r) : null,
+                  ),
+                )
+                .toList(),
+          );
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _desktopInfoChip(
+                icon: Icons.star_rounded,
+                label: 'متوسط التقييم',
+                value: avg.toStringAsFixed(1),
+                color: Colors.amber.shade800,
+              ),
+              _desktopInfoChip(
+                icon: Icons.rate_review_rounded,
+                label: 'عدد المراجعات',
+                value: count.toString(),
+                color: Colors.deepPurple,
+              ),
+              _desktopInfoChip(
+                icon: Icons.reply_all_rounded,
+                label: 'الردود',
+                value: widget.allowProviderReply ? 'مفعّل' : 'غير مفعّل',
+                color: widget.allowProviderReply ? Colors.green : Colors.grey,
+              ),
+              _desktopInfoChip(
+                icon: Icons.filter_alt_rounded,
+                label: 'المعروضة',
+                value: filtered.length.toString(),
+                color: Colors.blue,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _filtersPanel(),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 5,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionHeader(title: 'المراجعات'),
+                      const SizedBox(height: 10),
+                      reviewsList,
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  children: [
+                    _RatingSummaryCard(rating: _rating),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ملخص الجودة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _CriteriaBreakdownSection(rating: _rating),
+                          if ((_ratingCountValue() <= 0))
+                            Text(
+                              'سيظهر التحليل التفصيلي بعد وصول مراجعات كافية.',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -227,13 +625,14 @@ class _ReviewsTabState extends State<ReviewsTab> {
               const SizedBox(height: 8),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _load, child: const Text('إعادة المحاولة')),
+              FilledButton(onPressed: _loadWithOverlay, child: const Text('إعادة المحاولة')),
             ],
           ),
         ),
       );
     }
 
+    final filteredReviews = _filteredReviews();
     final list = ListView(
       padding: const EdgeInsets.all(16),
       shrinkWrap: widget.embedded,
@@ -244,12 +643,14 @@ class _ReviewsTabState extends State<ReviewsTab> {
         _RatingSummaryCard(rating: _rating),
         const SizedBox(height: 12),
         _CriteriaBreakdownSection(rating: _rating),
+        const SizedBox(height: 12),
+        _filtersPanel(),
         const SizedBox(height: 14),
         _SectionHeader(
           title: 'المراجعات',
         ),
         const SizedBox(height: 10),
-        if (_reviews.isEmpty)
+        if (filteredReviews.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(
@@ -260,7 +661,7 @@ class _ReviewsTabState extends State<ReviewsTab> {
             ),
           )
         else
-          ..._reviews.map(
+          ...filteredReviews.map(
             (r) => _ReviewCard(
               review: r,
               providerId: _providerId,
@@ -278,6 +679,13 @@ class _ReviewsTabState extends State<ReviewsTab> {
             onRefresh: _load,
             child: list,
           );
+
+    if (widget.embedded && MediaQuery.of(context).size.width >= 980) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: _desktopEmbeddedLayout(),
+      );
+    }
 
     if (widget.embedded) {
       return Directionality(textDirection: TextDirection.rtl, child: body);
@@ -804,17 +1212,13 @@ class _ReviewOptions extends StatelessWidget {
             if (comment.trim().isEmpty) return;
             await Clipboard.setData(ClipboardData(text: comment));
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('تم نسخ نص المراجعة')),
-            );
+            WebInlineBannerController.instance.success('تم نسخ نص المراجعة.');
             return;
           case _ReviewAction.copyPhone:
             if (clientPhone.trim().isEmpty) return;
             await Clipboard.setData(ClipboardData(text: clientPhone));
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('تم نسخ رقم العميل')),
-            );
+            WebInlineBannerController.instance.success('تم نسخ رقم العميل.');
             return;
           case _ReviewAction.report:
             try {
@@ -831,18 +1235,12 @@ class _ReviewOptions extends StatelessWidget {
               );
               if (!context.mounted) return;
               final code = (res['code'] ?? '').toString().trim();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    code.isEmpty ? 'تم إرسال البلاغ' : 'تم إرسال البلاغ: $code',
-                  ),
-                ),
+              WebInlineBannerController.instance.success(
+                code.isEmpty ? 'تم إرسال البلاغ.' : 'تم إرسال البلاغ: $code',
               );
             } catch (_) {
               if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تعذر إرسال البلاغ حالياً')),
-              );
+              WebInlineBannerController.instance.error('تعذر إرسال البلاغ حالياً.');
             }
             return;
         }

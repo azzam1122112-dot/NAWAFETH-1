@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import '../models/offer.dart';
 import 'api_config.dart';
@@ -24,6 +22,12 @@ class MarketplaceApi {
     configureDioForLocalhost(_dio, ApiConfig.baseUrl);
   }
 
+  String? _uploadPathOf(dynamic fileLike) {
+    final path = (fileLike as dynamic).path;
+    if (path is String && path.trim().isNotEmpty) return path.trim();
+    return null;
+  }
+
   Future<bool> createRequest({
     required int subcategoryId,
     required String title,
@@ -32,9 +36,9 @@ class MarketplaceApi {
     required String city,
     String? dispatchMode,
     int? providerId,
-    List<File>? images,
-    List<File>? videos,
-    List<File>? files,
+    List<dynamic>? images,
+    List<dynamic>? videos,
+    List<dynamic>? files,
     String? audioPath,
   }) async {
     final result = await createRequestDetailed(
@@ -61,9 +65,9 @@ class MarketplaceApi {
     required String city,
     String? dispatchMode,
     int? providerId,
-    List<File>? images,
-    List<File>? videos,
-    List<File>? files,
+    List<dynamic>? images,
+    List<dynamic>? videos,
+    List<dynamic>? files,
     String? audioPath,
   }) async {
     final token = await _session.readAccessToken();
@@ -89,8 +93,10 @@ class MarketplaceApi {
       // Add Images
       if (images != null) {
         for (var file in images) {
+          final path = _uploadPathOf(file);
+          if (path == null) continue;
           formData.files.add(
-            MapEntry('images', await MultipartFile.fromFile(file.path)),
+            MapEntry('images', await MultipartFile.fromFile(path)),
           );
         }
       }
@@ -98,8 +104,10 @@ class MarketplaceApi {
       // Add Videos
       if (videos != null) {
         for (var file in videos) {
+          final path = _uploadPathOf(file);
+          if (path == null) continue;
           formData.files.add(
-            MapEntry('videos', await MultipartFile.fromFile(file.path)),
+            MapEntry('videos', await MultipartFile.fromFile(path)),
           );
         }
       }
@@ -107,8 +115,10 @@ class MarketplaceApi {
       // Add Files
       if (files != null) {
         for (var file in files) {
+          final path = _uploadPathOf(file);
+          if (path == null) continue;
           formData.files.add(
-            MapEntry('files', await MultipartFile.fromFile(file.path)),
+            MapEntry('files', await MultipartFile.fromFile(path)),
           );
         }
       }

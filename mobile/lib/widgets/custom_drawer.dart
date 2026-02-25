@@ -8,13 +8,13 @@ import '../screens/twofa_screen.dart';
 import '../screens/terms_screen.dart';
 import '../screens/about_screen.dart';
 import '../screens/contact_screen.dart';
-import '../main.dart';
 import '../services/session_storage.dart';
 import '../utils/local_user_state.dart';
 import '../services/account_api.dart';
 import '../services/app_snackbar.dart';
 import '../services/account_switcher.dart';
 import '../services/api_config.dart';
+import '../services/theme_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 

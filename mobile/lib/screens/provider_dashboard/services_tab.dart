@@ -1,13 +1,26 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/category.dart';
 import '../../models/provider_service.dart';
 import '../../services/providers_api.dart';
+import '../../services/web_inline_banner.dart';
+import '../../services/web_loading_overlay.dart';
 
 class ServicesTab extends StatefulWidget {
   final bool embedded;
+  final String? initialSearchQuery;
+  final String? initialStatusFilter;
 
-  const ServicesTab({super.key, this.embedded = false});
+  const ServicesTab({
+    super.key,
+    this.embedded = false,
+    this.initialSearchQuery,
+    this.initialStatusFilter,
+  });
 
   @override
   State<ServicesTab> createState() => _ServicesTabState();
@@ -19,11 +32,27 @@ class _ServicesTabState extends State<ServicesTab> {
   bool _loading = true;
   List<ProviderService> _services = const [];
   List<Category> _categories = const [];
+  final TextEditingController _searchController = TextEditingController();
+  String _statusFilter = 'الكل';
+  Timer? _searchRouteSyncDebounce;
 
   @override
   void initState() {
     super.initState();
+    _searchController.text = (widget.initialSearchQuery ?? '').trim();
+    _statusFilter = _normalizeStatusFilter(widget.initialStatusFilter);
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+      _scheduleWebUrlSync();
+    });
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _searchRouteSyncDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -45,6 +74,91 @@ class _ServicesTabState extends State<ServicesTab> {
     final sub = s.subcategory?.name;
     if (sub != null && sub.trim().isNotEmpty) return sub;
     return 'بدون تصنيف فرعي';
+  }
+
+  Future<void> _refreshWithOverlay() {
+    return WebLoadingOverlayController.instance.run(
+      _refresh,
+      message: 'جاري تحديث الخدمات...',
+    );
+  }
+
+  String _serviceCategoryPath(ProviderService s) {
+    final category = s.subcategory?.categoryName?.trim();
+    final sub = s.subcategory?.name.trim();
+    if ((category ?? '').isNotEmpty && (sub ?? '').isNotEmpty) {
+      return '$category / $sub';
+    }
+    if ((sub ?? '').isNotEmpty) return sub!;
+    return 'غير محدد';
+  }
+
+  String _normalizeStatusFilter(String? raw) {
+    final v = (raw ?? '').trim().toLowerCase();
+    switch (v) {
+      case 'active':
+      case 'نشطة':
+        return 'نشطة';
+      case 'inactive':
+      case 'hidden':
+      case 'مخفية':
+        return 'مخفية';
+      case 'all':
+      case 'الكل':
+      default:
+        return 'الكل';
+    }
+  }
+
+  List<ProviderService> _filteredServices() {
+    Iterable<ProviderService> out = _services;
+    if (_statusFilter == 'نشطة') {
+      out = out.where((s) => s.isActive == true);
+    } else if (_statusFilter == 'مخفية') {
+      out = out.where((s) => s.isActive == false);
+    }
+
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      out = out.where((s) {
+        return s.title.toLowerCase().contains(q) ||
+            s.description.toLowerCase().contains(q) ||
+            _serviceCategoryPath(s).toLowerCase().contains(q);
+      });
+    }
+    return out.toList();
+  }
+
+  void _scheduleWebUrlSync() {
+    if (!(kIsWeb && widget.embedded)) return;
+    _searchRouteSyncDebounce?.cancel();
+    _searchRouteSyncDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _syncWebUrl();
+    });
+  }
+
+  void _syncWebUrl() {
+    if (!(kIsWeb && widget.embedded)) return;
+    final status = switch (_statusFilter) {
+      'نشطة' => 'active',
+      'مخفية' => 'inactive',
+      _ => 'all',
+    };
+    final query = <String, String>{
+      'status': status,
+      if (_searchController.text.trim().isNotEmpty) 'q': _searchController.text.trim(),
+    };
+    SystemNavigator.routeInformationUpdated(
+      uri: Uri(path: '/provider_dashboard/services', queryParameters: query),
+      replace: true,
+    );
+  }
+
+  void _setStatusFilter(String value) {
+    if (_statusFilter == value) return;
+    setState(() => _statusFilter = value);
+    _syncWebUrl();
   }
 
   Future<void> _confirmDelete(ProviderService s) async {
@@ -70,17 +184,16 @@ class _ServicesTabState extends State<ServicesTab> {
     final success = await ProvidersApi().deleteMyService(s.id);
     if (!mounted) return;
     if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حذف الخدمة')),
-      );
+      WebInlineBannerController.instance.error('تعذر حذف الخدمة.');
       return;
     }
-    await _refresh();
+    WebInlineBannerController.instance.success('تم حذف الخدمة.');
+    await _refreshWithOverlay();
   }
 
   Future<void> _openEditor({ProviderService? existing}) async {
     if (_categories.isEmpty) {
-      await _refresh();
+      await _refreshWithOverlay();
     }
 
     final titleCtrl = TextEditingController(text: existing?.title ?? '');
@@ -100,6 +213,7 @@ class _ServicesTabState extends State<ServicesTab> {
     }
     selectedCategoryId ??= _categories.isNotEmpty ? _categories.first.id : null;
 
+    if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -146,7 +260,7 @@ class _ServicesTabState extends State<ServicesTab> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<int>(
-                        value: selectedCategoryId,
+                        initialValue: selectedCategoryId,
                         items: cats
                             .map(
                               (c) => DropdownMenuItem<int>(
@@ -168,7 +282,7 @@ class _ServicesTabState extends State<ServicesTab> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<int>(
-                        value: selectedSubId,
+                        initialValue: selectedSubId,
                         items: subs
                             .map(
                               (s) => DropdownMenuItem<int>(
@@ -198,7 +312,7 @@ class _ServicesTabState extends State<ServicesTab> {
                         value: isActive,
                         onChanged: (v) => setModalState(() => isActive = v),
                         title: const Text('عرض الخدمة للعملاء', style: TextStyle(fontFamily: 'Cairo')),
-                        activeColor: _mainColor,
+                        activeThumbColor: _mainColor,
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
@@ -208,27 +322,23 @@ class _ServicesTabState extends State<ServicesTab> {
                             final title = titleCtrl.text.trim();
                             final subId = selectedSubId;
                             if (title.isEmpty || subId == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('أكمل اسم الخدمة والتصنيف')),
+                              WebInlineBannerController.instance.info(
+                                'أكمل اسم الخدمة والتصنيف.',
                               );
                               return;
                             }
 
-                            if (existing == null) {
-                              final created = await ProvidersApi().createMyService(
-                                title: title,
-                                subcategoryId: subId,
-                                description: descCtrl.text,
-                                isActive: isActive,
-                              );
-                              if (created == null) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تعذر إضافة الخدمة')),
+                            final saved = await WebLoadingOverlayController.instance.run(() async {
+                              if (existing == null) {
+                                final created = await ProvidersApi().createMyService(
+                                  title: title,
+                                  subcategoryId: subId,
+                                  description: descCtrl.text,
+                                  isActive: isActive,
                                 );
-                                return;
+                                return created != null;
                               }
-                            } else {
+
                               final patch = <String, dynamic>{
                                 'title': title,
                                 'description': descCtrl.text.trim(),
@@ -236,18 +346,22 @@ class _ServicesTabState extends State<ServicesTab> {
                                 'subcategory_id': subId,
                               };
                               final updated = await ProvidersApi().updateMyService(existing.id, patch);
-                              if (updated == null) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تعذر حفظ التعديل')),
-                                );
-                                return;
-                              }
+                              return updated != null;
+                            }, message: existing == null ? 'جاري إضافة الخدمة...' : 'جاري حفظ الخدمة...');
+                            if (!saved) {
+                              if (!mounted) return;
+                              WebInlineBannerController.instance.error(
+                                existing == null ? 'تعذر إضافة الخدمة.' : 'تعذر حفظ التعديل.',
+                              );
+                              return;
                             }
 
-                            if (!mounted) return;
+                            if (!mounted || !ctx2.mounted) return;
                             Navigator.pop(ctx2);
-                            await _refresh();
+                            WebInlineBannerController.instance.success(
+                              existing == null ? 'تمت إضافة الخدمة.' : 'تم حفظ تعديلات الخدمة.',
+                            );
+                            await _refreshWithOverlay();
                           },
                           icon: const Icon(Icons.save, color: Colors.white),
                           label: const Text('حفظ', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
@@ -270,21 +384,355 @@ class _ServicesTabState extends State<ServicesTab> {
     );
   }
 
+  Widget _desktopStatsBar() {
+    final activeCount = _services.where((s) => s.isActive == true).length;
+    final inactiveCount = _services.where((s) => s.isActive == false).length;
+    final visibleCount = _filteredServices().length;
+
+    Widget chip({
+      required IconData icon,
+      required String label,
+      required String value,
+      required Color color,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        chip(
+          icon: Icons.design_services_rounded,
+          label: 'إجمالي الخدمات',
+          value: _services.length.toString(),
+          color: _mainColor,
+        ),
+        chip(
+          icon: Icons.visibility_rounded,
+          label: 'نشطة',
+          value: activeCount.toString(),
+          color: Colors.green,
+        ),
+        chip(
+          icon: Icons.visibility_off_rounded,
+          label: 'مخفية',
+          value: inactiveCount.toString(),
+          color: Colors.orange,
+        ),
+        chip(
+          icon: Icons.filter_alt_rounded,
+          label: 'المعروضة',
+          value: visibleCount.toString(),
+          color: Colors.blue,
+        ),
+      ],
+    );
+  }
+
+  Widget _servicesFilterPanel() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.search_rounded, color: _mainColor, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _syncWebUrl(),
+                  decoration: const InputDecoration(
+                    hintText: 'بحث في اسم الخدمة أو الوصف أو التصنيف...',
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                ),
+              ),
+              if (_searchController.text.trim().isNotEmpty)
+                IconButton(
+                  tooltip: 'مسح',
+                  onPressed: () {
+                    _searchController.clear();
+                    _syncWebUrl();
+                  },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['الكل', 'نشطة', 'مخفية'].map((label) {
+              return ChoiceChip(
+                selected: _statusFilter == label,
+                onSelected: (_) => _setStatusFilter(label),
+                label: Text(label, style: const TextStyle(fontFamily: 'Cairo')),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopTableHeader() {
+    const headerStyle = TextStyle(
+      fontFamily: 'Cairo',
+      fontSize: 11.5,
+      fontWeight: FontWeight.w800,
+      color: Colors.black54,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: const Row(
+        children: [
+          Expanded(flex: 4, child: Text('الخدمة', style: headerStyle)),
+          Expanded(flex: 3, child: Text('التصنيف', style: headerStyle)),
+          Expanded(flex: 2, child: Text('التسعير', style: headerStyle)),
+          Expanded(flex: 2, child: Text('الحالة', style: headerStyle)),
+          SizedBox(width: 96),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopServiceRow(ProviderService s) {
+    final active = s.isActive != false;
+    final statusColor = active ? Colors.green : Colors.orange;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                if (s.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    s.description.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11.5,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              _serviceCategoryPath(s),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              s.priceText(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  active ? 'نشطة' : 'مخفية',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () => _openEditor(existing: s),
+                icon: const Icon(Icons.edit, size: 20),
+                tooltip: 'تعديل',
+              ),
+              IconButton(
+                onPressed: () => _confirmDelete(s),
+                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                tooltip: 'حذف',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopBody() {
+    final filtered = _filteredServices();
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: [
+          _desktopStatsBar(),
+          const SizedBox(height: 12),
+          _servicesFilterPanel(),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'إدارة الخدمات',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 30),
+                    child: Center(
+                      child: Text(
+                        'لا توجد خدمات مطابقة للفلاتر الحالية',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  _desktopTableHeader(),
+                  ...filtered.map(_desktopServiceRow),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_services.isEmpty) {
+    final filtered = _filteredServices();
+    final desktopLike = widget.embedded && MediaQuery.of(context).size.width >= 980;
+    if (desktopLike) {
+      return _buildDesktopBody();
+    }
+
+    if (filtered.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [
-            SizedBox(height: 80),
-            Center(
+          padding: const EdgeInsets.all(12),
+          children: [
+            _servicesFilterPanel(),
+            const SizedBox(height: 60),
+            const Center(
               child: Text(
-                'لا توجد خدمات مضافة بعد',
+                'لا توجد خدمات مطابقة للفلاتر الحالية',
                 style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
               ),
             ),
@@ -298,10 +746,11 @@ class _ServicesTabState extends State<ServicesTab> {
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
-        itemCount: _services.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemCount: filtered.length + 1,
+        separatorBuilder: (_, index) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final s = _services[index];
+          if (index == 0) return _servicesFilterPanel();
+          final s = filtered[index - 1];
           return Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -370,6 +819,13 @@ class _ServicesTabState extends State<ServicesTab> {
                     fontSize: 16,
                   ),
                 ),
+                actions: [
+                  IconButton(
+                    tooltip: 'تحديث',
+                    onPressed: _loading ? null : _refreshWithOverlay,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
               body: content,
             ),

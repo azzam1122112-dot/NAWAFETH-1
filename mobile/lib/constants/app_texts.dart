@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
+import '../services/theme_controller.dart';
 
 class AppTexts {
   static Map<String, Map<String, String>> translations = {

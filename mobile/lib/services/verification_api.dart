@@ -28,8 +28,48 @@ class VerificationApi {
     return const [];
   }
 
+  Future<List<Map<String, dynamic>>> getBackofficeRequests({
+    String? status,
+    String? q,
+  }) async {
+    final res = await _dio.get(
+      '${ApiConfig.apiPrefix}/verification/backoffice/requests/',
+      queryParameters: {
+        if ((status ?? '').trim().isNotEmpty) 'status': status,
+        if ((q ?? '').trim().isNotEmpty) 'q': q,
+      },
+    );
+    final data = res.data;
+    if (data is List) {
+      return data.map((e) => _asMap(e)).toList();
+    }
+    return const [];
+  }
+
   Future<Map<String, dynamic>> getRequestDetail(int requestId) async {
     final res = await _dio.get('${ApiConfig.apiPrefix}/verification/requests/$requestId/');
+    return _asMap(res.data);
+  }
+
+  Future<Map<String, dynamic>> backofficeAssign({
+    required int requestId,
+    int? assignedToUserId,
+  }) async {
+    final res = await _dio.patch(
+      '${ApiConfig.apiPrefix}/verification/backoffice/requests/$requestId/assign/',
+      data: {
+        'assigned_to': assignedToUserId,
+      },
+    );
+    return _asMap(res.data);
+  }
+
+  Future<Map<String, dynamic>> backofficeFinalize({
+    required int requestId,
+  }) async {
+    final res = await _dio.post(
+      '${ApiConfig.apiPrefix}/verification/backoffice/requests/$requestId/finalize/',
+    );
     return _asMap(res.data);
   }
 

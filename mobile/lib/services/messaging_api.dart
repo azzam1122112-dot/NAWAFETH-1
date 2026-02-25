@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -13,6 +13,51 @@ class MessagingApi {
 
   MessagingApi({Dio? dio}) : _dio = dio ?? ApiDio.dio {
     configureDioForLocalhost(_dio, ApiConfig.baseUrl);
+  }
+
+  String? _uploadPathOf(dynamic fileLike) {
+    final path = (fileLike as dynamic).path;
+    if (path is String && path.trim().isNotEmpty) return path.trim();
+    return null;
+  }
+
+  Uint8List? _uploadBytesOf(dynamic fileLike) {
+    final bytes = (fileLike as dynamic).bytes;
+    if (bytes is Uint8List && bytes.isNotEmpty) return bytes;
+    if (bytes is List<int> && bytes.isNotEmpty) return Uint8List.fromList(bytes);
+    return null;
+  }
+
+  String? _uploadNameOf(dynamic fileLike) {
+    final name = (fileLike as dynamic).name;
+    if (name is String && name.trim().isNotEmpty) return name.trim();
+    return null;
+  }
+
+  String _fileNameFromPath(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final idx = normalized.lastIndexOf('/');
+    if (idx < 0 || idx >= normalized.length - 1) return normalized;
+    return normalized.substring(idx + 1);
+  }
+
+  Future<MultipartFile> _multipartFromDynamic(
+    dynamic fileLike, {
+    String? fallbackName,
+  }) async {
+    final bytes = _uploadBytesOf(fileLike);
+    final path = _uploadPathOf(fileLike);
+    final filename = _uploadNameOf(fileLike) ??
+        (path != null ? _fileNameFromPath(path) : null) ??
+        (fallbackName?.trim().isNotEmpty == true ? fallbackName!.trim() : 'attachment');
+
+    if (bytes != null) {
+      return MultipartFile.fromBytes(bytes, filename: filename);
+    }
+    if (path != null) {
+      return MultipartFile.fromFile(path, filename: filename);
+    }
+    throw ArgumentError('Invalid attachment file');
   }
 
   Future<Map<String, dynamic>> getOrCreateThread(int requestId) async {
@@ -49,16 +94,17 @@ class MessagingApi {
 
   Future<Map<String, dynamic>> sendMessageAttachment({
     required int requestId,
-    required File file,
+    required dynamic file,
     String body = '',
     String attachmentType = 'file',
   }) async {
-    final filename = file.path.split(Platform.pathSeparator).last;
+    final filename =
+        _uploadNameOf(file) ?? (_uploadPathOf(file) != null ? _fileNameFromPath(_uploadPathOf(file)!) : 'attachment');
     final form = FormData.fromMap({
       'body': body,
       'attachment_type': attachmentType,
       'attachment_name': filename,
-      'attachment': await MultipartFile.fromFile(file.path, filename: filename),
+      'attachment': await _multipartFromDynamic(file, fallbackName: filename),
     });
     final res = await _dio.post(
       '${ApiConfig.apiPrefix}/messaging/requests/$requestId/messages/send/',
@@ -231,16 +277,17 @@ class MessagingApi {
 
   Future<Map<String, dynamic>> sendDirectAttachment({
     required int threadId,
-    required File file,
+    required dynamic file,
     String body = '',
     String attachmentType = 'file',
   }) async {
-    final filename = file.path.split(Platform.pathSeparator).last;
+    final filename =
+        _uploadNameOf(file) ?? (_uploadPathOf(file) != null ? _fileNameFromPath(_uploadPathOf(file)!) : 'attachment');
     final form = FormData.fromMap({
       'body': body,
       'attachment_type': attachmentType,
       'attachment_name': filename,
-      'attachment': await MultipartFile.fromFile(file.path, filename: filename),
+      'attachment': await _multipartFromDynamic(file, fallbackName: filename),
     });
     final res = await _dio.post(
       '${ApiConfig.apiPrefix}/messaging/direct/thread/$threadId/messages/send/',

@@ -64,7 +64,8 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
   String _formatPhoneE164(String rawPhone) {
     final phone = rawPhone.replaceAll(RegExp(r'\s+'), '');
     if (phone.startsWith('+')) return phone;
-    if (phone.startsWith('05') && phone.length == 10) return '+966${phone.substring(1)}';
+    if (phone.startsWith('05') && phone.length == 10)
+      return '+966${phone.substring(1)}';
     if (phone.startsWith('5') && phone.length == 9) return '+966$phone';
     return phone;
   }
@@ -88,9 +89,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
       return;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تعذر فتح الاتصال')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تعذر فتح الاتصال')));
   }
 
   Future<void> _openWhatsApp({
@@ -167,7 +168,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
     }
   }
 
-  Future<void> _requestServiceFromProvider(Map<String, dynamic> provider) async {
+  Future<void> _requestServiceFromProvider(
+    Map<String, dynamic> provider,
+  ) async {
     final providerId = (provider['id'] as num?)?.toInt();
     if (providerId == null || _busyProviderId != null) return;
     setState(() => _busyProviderId = providerId);
@@ -337,9 +340,11 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                             .map((provider) {
                               final lat = _asDouble(provider['lat'])!;
                               final lng = _asDouble(provider['lng'])!;
-                              final providerId = (provider['id'] as num?)?.toInt();
+                              final providerId = (provider['id'] as num?)
+                                  ?.toInt();
                               final isSelected =
-                                  providerId != null && providerId == _selectedProviderId;
+                                  providerId != null &&
+                                  providerId == _selectedProviderId;
                               return Marker(
                                 point: LatLng(lat, lng),
                                 width: 42,
@@ -365,8 +370,12 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                     minChildSize: 0.22,
                     maxChildSize: 0.80,
                     builder: (context, scrollController) {
-                      final selected = _providers.cast<Map<String, dynamic>>().firstWhere(
-                            (p) => ((p['id'] as num?)?.toInt()) == _selectedProviderId,
+                      final selected = _providers
+                          .cast<Map<String, dynamic>>()
+                          .firstWhere(
+                            (p) =>
+                                ((p['id'] as num?)?.toInt()) ==
+                                _selectedProviderId,
                             orElse: () => _providers.first,
                           );
                       final selectedName = _nameOf(selected);
@@ -375,14 +384,18 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                       final whatsapp = _asNonEmptyString(selected['whatsapp']);
                       final contact = whatsapp ?? phone;
                       final canCall = phone != null;
-                      final canWhatsApp = contact != null || (_myPhone?.isNotEmpty == true);
+                      final canWhatsApp =
+                          contact != null || (_myPhone?.isNotEmpty == true);
                       final providerId = (selected['id'] as num?)?.toInt();
-                      final isBusy = providerId != null && _busyProviderId == providerId;
+                      final isBusy =
+                          providerId != null && _busyProviderId == providerId;
 
                       return Container(
                         decoration: const BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
                         ),
                         child: Column(
                           children: [
@@ -396,7 +409,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                              ),
                               child: Row(
                                 children: [
                                   Text(
@@ -409,7 +424,10 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                   ),
                                   const Spacer(),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF3E5F5),
                                       borderRadius: BorderRadius.circular(999),
@@ -429,26 +447,40 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                             ),
                             const SizedBox(height: 8),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF9F7FF),
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFE3D8FF)),
+                                  border: Border.all(
+                                    color: const Color(0xFFE3D8FF),
+                                  ),
                                 ),
                                 child: Column(
                                   children: [
                                     Row(
                                       children: [
                                         InkWell(
-                                          onTap: () => _openProviderProfile(selected),
-                                          borderRadius: BorderRadius.circular(999),
+                                          onTap: () =>
+                                              _openProviderProfile(selected),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
                                           child: CircleAvatar(
                                             radius: 21,
-                                            backgroundColor: const Color(0xFFEDE7F6),
+                                            backgroundColor: const Color(
+                                              0xFFEDE7F6,
+                                            ),
                                             child: Text(
-                                              selectedName.isEmpty ? 'م' : selectedName.substring(0, 1),
+                                              selectedName.isEmpty
+                                                  ? 'م'
+                                                  : selectedName.substring(
+                                                      0,
+                                                      1,
+                                                    ),
                                               style: const TextStyle(
                                                 fontFamily: 'Cairo',
                                                 fontWeight: FontWeight.w800,
@@ -460,14 +492,17 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                         const SizedBox(width: 10),
                                         Expanded(
                                           child: InkWell(
-                                            onTap: () => _openProviderProfile(selected),
+                                            onTap: () =>
+                                                _openProviderProfile(selected),
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   selectedName,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontFamily: 'Cairo',
                                                     fontWeight: FontWeight.w800,
@@ -476,7 +511,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  selectedCity.isEmpty ? widget.city : selectedCity,
+                                                  selectedCity.isEmpty
+                                                      ? widget.city
+                                                      : selectedCity,
                                                   style: const TextStyle(
                                                     fontFamily: 'Cairo',
                                                     fontSize: 12,
@@ -487,7 +524,8 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                                 Text(
                                                   'وسيلة الاتصال: ${contact ?? 'غير متاحة'}',
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontFamily: 'Cairo',
                                                     fontSize: 11.5,
@@ -509,7 +547,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                           label: 'اتصال',
                                           icon: Icons.call_rounded,
                                           color: Colors.blue,
-                                          onTap: canCall ? () => _openPhoneCall(phone!) : null,
+                                          onTap: canCall
+                                              ? () => _openPhoneCall(phone)
+                                              : null,
                                         ),
                                         _QuickActionButton(
                                           label: 'واتساب',
@@ -517,29 +557,36 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                           color: const Color(0xFF25D366),
                                           onTap: canWhatsApp
                                               ? () => _openWhatsApp(
-                                                    providerName: selectedName,
-                                                    rawPhone: contact ?? '',
-                                                  )
+                                                  providerName: selectedName,
+                                                  rawPhone: contact ?? '',
+                                                )
                                               : null,
                                         ),
                                         _QuickActionButton(
                                           label: 'محادثة',
-                                          icon: Icons.chat_bubble_outline_rounded,
+                                          icon:
+                                              Icons.chat_bubble_outline_rounded,
                                           color: const Color(0xFF6A1B9A),
                                           onTap: providerId == null
                                               ? null
                                               : () => _openInAppChat(
-                                                    providerName: selectedName,
-                                                    providerId: providerId.toString(),
-                                                  ),
+                                                  providerName: selectedName,
+                                                  providerId: providerId
+                                                      .toString(),
+                                                ),
                                         ),
                                         _QuickActionButton(
-                                          label: isBusy ? 'جارٍ...' : 'اطلب خدمة',
+                                          label: isBusy
+                                              ? 'جارٍ...'
+                                              : 'اطلب خدمة',
                                           icon: Icons.add_task_rounded,
                                           color: const Color(0xFFE53935),
                                           onTap: (providerId == null || isBusy)
                                               ? null
-                                              : () => _requestServiceFromProvider(selected),
+                                              : () =>
+                                                    _requestServiceFromProvider(
+                                                      selected,
+                                                    ),
                                         ),
                                       ],
                                     ),
@@ -551,21 +598,33 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                             Expanded(
                               child: ListView.separated(
                                 controller: scrollController,
-                                padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
                                 itemCount: _providers.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 6),
                                 itemBuilder: (context, index) {
                                   final p = _providers[index];
                                   final pid = (p['id'] as num?)?.toInt();
-                                  final isSelected = pid != null && pid == _selectedProviderId;
+                                  final isSelected =
+                                      pid != null && pid == _selectedProviderId;
                                   return Material(
-                                    color: isSelected ? const Color(0xFFF3E5F5) : Colors.white,
+                                    color: isSelected
+                                        ? const Color(0xFFF3E5F5)
+                                        : Colors.white,
                                     borderRadius: BorderRadius.circular(12),
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
                                       onTap: () => _selectProvider(p),
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 10,
+                                        ),
                                         child: Row(
                                           children: [
                                             CircleAvatar(
@@ -576,7 +635,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                               child: Icon(
                                                 Icons.person,
                                                 size: 16,
-                                                color: isSelected ? Colors.white : const Color(0xFFE53935),
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : const Color(0xFFE53935),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
@@ -588,7 +649,9 @@ class _UrgentProvidersMapScreenState extends State<UrgentProvidersMapScreen> {
                                                 style: TextStyle(
                                                   fontFamily: 'Cairo',
                                                   fontSize: 13.5,
-                                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.w800
+                                                      : FontWeight.w700,
                                                 ),
                                               ),
                                             ),
@@ -653,7 +716,11 @@ class _QuickActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(iconData ?? icon, size: 15.5, color: disabled ? Colors.grey : color),
+            Icon(
+              iconData ?? icon,
+              size: 15.5,
+              color: disabled ? Colors.grey : color,
+            ),
             const SizedBox(width: 6),
             Text(
               label,

@@ -1,11 +1,10 @@
 from django.urls import path
 
-from .views import (
+from .api import (
     GetOrCreateThreadView,
     MarkThreadReadView,
     SendMessageView,
     ThreadMessagesListView,
-    post_message,
     DirectThreadGetOrCreateView,
     DirectThreadMessagesListView,
     DirectThreadSendMessageView,
@@ -21,6 +20,9 @@ from .views import (
     ThreadDeleteMessageView,
     ThreadFavoriteLabelView,
     ThreadClientLabelView,
+)
+from .views import (
+    post_message,
 )
 
 app_name = "messaging"

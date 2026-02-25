@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../models/provider_order.dart';
 import '../../services/marketplace_api.dart';
 import '../../services/role_controller.dart';
+import '../../services/web_inline_banner.dart';
+import '../../services/web_loading_overlay.dart';
 import '../client_orders_screen.dart';
 import 'provider_order_details_screen.dart';
 
@@ -20,8 +26,19 @@ import 'provider_order_details_screen.dart';
 ///
 class ProviderOrdersScreen extends StatefulWidget {
   final bool embedded;
+  final int initialTabIndex;
+  final String? initialSearchQuery;
+  final String? initialAssignedStatus;
+  final String? initialUrgentStatus;
 
-  const ProviderOrdersScreen({super.key, this.embedded = false});
+  const ProviderOrdersScreen({
+    super.key,
+    this.embedded = false,
+    this.initialTabIndex = 0,
+    this.initialSearchQuery,
+    this.initialAssignedStatus,
+    this.initialUrgentStatus,
+  });
 
   @override
   State<ProviderOrdersScreen> createState() => _ProviderOrdersScreenState();
@@ -49,18 +66,30 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
   List<Map<String, dynamic>> _urgent = const [];
   List<Map<String, dynamic>> _competitive = const [];
 
+  Timer? _searchRouteSyncDebounce;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _selectedAssignedStatus = _normalizeStatusLabel(widget.initialAssignedStatus);
+    _selectedUrgentStatus = _normalizeStatusLabel(widget.initialUrgentStatus);
+    _searchController.text = (widget.initialSearchQuery ?? '').trim();
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
+    );
+    _tabController.addListener(_onTabChangedForWebUrl);
     _searchController.addListener(() {
       if (mounted) setState(() {});
+      _scheduleWebOrdersUrlSync();
     });
     _ensureProviderAccount();
   }
 
   @override
   void dispose() {
+    _searchRouteSyncDebounce?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -91,6 +120,92 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
 
   Future<void> _refreshAll() async {
     await Future.wait([_fetchAssigned(), _fetchUrgent(), _fetchCompetitive()]);
+  }
+
+  Future<void> _refreshAllWithOverlay() {
+    return WebLoadingOverlayController.instance.run(
+      _refreshAll,
+      message: 'جاري تحديث طلبات مقدم الخدمة...',
+    );
+  }
+
+  void _onTabChangedForWebUrl() {
+    if (!mounted) return;
+    if (_tabController.indexIsChanging) return;
+    _syncWebOrdersUrl();
+  }
+
+  void _scheduleWebOrdersUrlSync() {
+    if (!(kIsWeb && widget.embedded)) return;
+    _searchRouteSyncDebounce?.cancel();
+    _searchRouteSyncDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _syncWebOrdersUrl();
+    });
+  }
+
+  void _syncWebOrdersUrl() {
+    if (!(kIsWeb && widget.embedded)) return;
+
+    String tabValue;
+    switch (_tabController.index) {
+      case 1:
+        tabValue = 'urgent';
+        break;
+      case 2:
+        tabValue = 'competitive';
+        break;
+      case 0:
+      default:
+        tabValue = 'assigned';
+        break;
+    }
+
+    String statusToParam(String label) {
+      switch (label.trim()) {
+        case 'تحت التنفيذ':
+          return 'in_progress';
+        case 'مكتمل':
+          return 'completed';
+        case 'ملغي':
+          return 'cancelled';
+        case 'جديد':
+        default:
+          return 'new';
+      }
+    }
+
+    final query = <String, String>{
+      'tab': tabValue,
+      if (_searchController.text.trim().isNotEmpty) 'q': _searchController.text.trim(),
+      'assigned_status': statusToParam(_selectedAssignedStatus),
+      'urgent_status': statusToParam(_selectedUrgentStatus),
+    };
+
+    final uri = Uri(path: '/provider_dashboard/orders', queryParameters: query);
+    SystemNavigator.routeInformationUpdated(uri: uri, replace: true);
+  }
+
+  String _normalizeStatusLabel(String? raw) {
+    final v = (raw ?? '').trim().toLowerCase();
+    switch (v) {
+      case 'new':
+      case 'جديد':
+        return 'جديد';
+      case 'in_progress':
+      case 'progress':
+      case 'تحت التنفيذ':
+        return 'تحت التنفيذ';
+      case 'completed':
+      case 'مكتمل':
+        return 'مكتمل';
+      case 'cancelled':
+      case 'canceled':
+      case 'ملغي':
+        return 'ملغي';
+      default:
+        return 'جديد';
+    }
   }
 
   Future<void> _fetchAssigned() async {
@@ -393,6 +508,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedAssignedStatus == 'جديد',
             onTap: () {
               setState(() => _selectedAssignedStatus = 'جديد');
+              _syncWebOrdersUrl();
               _fetchAssigned();
             },
           ),
@@ -402,6 +518,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedAssignedStatus == 'تحت التنفيذ',
             onTap: () {
               setState(() => _selectedAssignedStatus = 'تحت التنفيذ');
+              _syncWebOrdersUrl();
               _fetchAssigned();
             },
           ),
@@ -411,6 +528,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedAssignedStatus == 'مكتمل',
             onTap: () {
               setState(() => _selectedAssignedStatus = 'مكتمل');
+              _syncWebOrdersUrl();
               _fetchAssigned();
             },
           ),
@@ -420,6 +538,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedAssignedStatus == 'ملغي',
             onTap: () {
               setState(() => _selectedAssignedStatus = 'ملغي');
+              _syncWebOrdersUrl();
               _fetchAssigned();
             },
           ),
@@ -438,6 +557,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedUrgentStatus == 'جديد',
             onTap: () {
               setState(() => _selectedUrgentStatus = 'جديد');
+              _syncWebOrdersUrl();
               _fetchUrgent();
             },
           ),
@@ -447,6 +567,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedUrgentStatus == 'تحت التنفيذ',
             onTap: () {
               setState(() => _selectedUrgentStatus = 'تحت التنفيذ');
+              _syncWebOrdersUrl();
               _fetchUrgent();
             },
           ),
@@ -456,6 +577,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedUrgentStatus == 'مكتمل',
             onTap: () {
               setState(() => _selectedUrgentStatus = 'مكتمل');
+              _syncWebOrdersUrl();
               _fetchUrgent();
             },
           ),
@@ -465,6 +587,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             selected: _selectedUrgentStatus == 'ملغي',
             onTap: () {
               setState(() => _selectedUrgentStatus = 'ملغي');
+              _syncWebOrdersUrl();
               _fetchUrgent();
             },
           ),
@@ -674,6 +797,17 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
     required bool urgentTab,
   }) async {
     final requestId = _extractRequestId(req);
+    if (kIsWeb && widget.embedded && requestId != null && requestId > 0) {
+      final changed = await Navigator.pushNamed<bool>(
+        context,
+        '/provider_dashboard/orders/$requestId',
+      );
+      if (changed == true && mounted) {
+        await _refreshAll();
+      }
+      return;
+    }
+
     Map<String, dynamic> details = req;
     if (requestId != null) {
       final fresh = await MarketplaceApi().getProviderRequestDetail(
@@ -685,14 +819,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
     }
     if (!mounted) return;
     if (requestId == null || requestId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'رقم الطلب غير صالح',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
+      WebInlineBannerController.instance.error('رقم الطلب غير صالح.');
       return;
     }
     final order = _toProviderOrder(details);
@@ -714,7 +841,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
       ),
     );
     if (changed == true && mounted) {
-      await _refreshAll();
+      await _refreshAllWithOverlay();
     }
   }
 
@@ -722,15 +849,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
     final requestId = _extractRequestId(req);
     if (requestId == null || requestId <= 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'رقم الطلب غير صالح',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      WebInlineBannerController.instance.error('رقم الطلب غير صالح.');
       return;
     }
 
@@ -777,13 +896,9 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
     if (confirm != true || !mounted) return;
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'يرجى تعبئة بيانات "تحت التنفيذ" الإلزامية داخل تفاصيل الطلب.',
-          style: TextStyle(fontFamily: 'Cairo'),
-        ),
-      ),
+    WebInlineBannerController.instance.info(
+      'يرجى تعبئة بيانات "تحت التنفيذ" الإلزامية داخل تفاصيل الطلب.',
+      duration: const Duration(seconds: 4),
     );
     await _openRequestDetails(req, urgentTab: false);
   }
@@ -803,6 +918,7 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
           Expanded(
             child: TextField(
               controller: _searchController,
+              onSubmitted: (_) => _syncWebOrdersUrl(),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 hintText: 'ابحث بالعنوان/التخصص/المدينة...',
@@ -850,6 +966,328 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
     );
   }
 
+  Widget _desktopStatChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color color = _mainColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopRowHeader() {
+    TextStyle style = const TextStyle(
+      fontFamily: 'Cairo',
+      fontSize: 11.5,
+      fontWeight: FontWeight.w800,
+      color: Colors.black54,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 4, child: Text('الطلب', style: style)),
+          Expanded(flex: 2, child: Text('النوع', style: style)),
+          Expanded(flex: 2, child: Text('الحالة', style: style)),
+          Expanded(flex: 2, child: Text('المدينة', style: style)),
+          Expanded(flex: 2, child: Text('التاريخ', style: style)),
+          const SizedBox(width: 88),
+        ],
+      ),
+    );
+  }
+
+  Widget _requestDesktopRow(Map<String, dynamic> req, {required bool urgentTab}) {
+    final statusLabel = (req['status_label'] ?? '').toString().trim();
+    final statusAr = statusLabel.isNotEmpty
+        ? statusLabel
+        : _mapStatus((req['status'] ?? '').toString());
+    final statusColor = _statusColor(statusAr);
+    final type = (req['request_type'] ?? '').toString().trim().toLowerCase();
+    final isUrgent = type == 'urgent';
+    final isCompetitive = type == 'competitive';
+    final typeLabel = isUrgent ? 'عاجل' : (isCompetitive ? 'عروض' : 'عادي');
+    final typeColor = isUrgent
+        ? Colors.redAccent
+        : (isCompetitive ? Colors.blueGrey : _mainColor);
+    final rawStatus = (req['status'] ?? '').toString().trim().toLowerCase();
+    final showStartButton =
+        !urgentTab &&
+        (rawStatus == 'new' ||
+            rawStatus == 'sent' ||
+            rawStatus == 'open' ||
+            rawStatus == 'pending');
+    final id = _extractRequestId(req);
+    final title = (req['title'] ?? '').toString().trim();
+    final sub = (req['subcategory_name'] ?? '').toString().trim();
+    final city = (req['city'] ?? '').toString().trim();
+    final dateLabel = _formatDate(req['created_at']);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '#${id ?? '-'} ${title.isEmpty ? 'طلب خدمة' : title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                if (sub.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11.5,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: typeColor.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  typeLabel,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: typeColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  statusAr,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              city.isEmpty ? '-' : city,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              dateLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 11.5,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showStartButton)
+                IconButton(
+                  tooltip: 'بدء التنفيذ',
+                  onPressed: () => _startRequest(req),
+                  icon: const Icon(Icons.play_circle_outline, color: _mainColor),
+                ),
+              IconButton(
+                tooltip: 'تفاصيل الطلب',
+                onPressed: () => _openRequestDetails(req, urgentTab: urgentTab),
+                icon: const Icon(Icons.open_in_new_rounded),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _desktopTabLayout({
+    required List<Map<String, dynamic>> filtered,
+    required List<Map<String, dynamic>> rawList,
+    required bool isAssigned,
+    required bool isUrgent,
+    required bool isCompetitive,
+  }) {
+    final title = isUrgent
+        ? 'الطلبات العاجلة'
+        : (isCompetitive ? 'عروض الأسعار المتاحة' : 'الطلبات المسندة');
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _desktopStatChip(
+              icon: Icons.list_alt_rounded,
+              label: 'إجمالي النتائج',
+              value: filtered.length.toString(),
+            ),
+            _desktopStatChip(
+              icon: Icons.dataset_outlined,
+              label: 'المصدر',
+              value: rawList.length.toString(),
+              color: Colors.blueGrey,
+            ),
+            if (_searchController.text.trim().isNotEmpty)
+              _desktopStatChip(
+                icon: Icons.search_rounded,
+                label: 'بحث',
+                value: 'مفعل',
+                color: Colors.orange,
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _searchBar(),
+        const SizedBox(height: 12),
+        if (isAssigned) _assignedStatusChips(),
+        if (isAssigned) const SizedBox(height: 12),
+        if (isUrgent) _urgentStatusChips(),
+        if (isUrgent) const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (filtered.isEmpty)
+                _emptyState(
+                  isUrgent
+                      ? 'لا توجد طلبات عاجلة متاحة حالياً'
+                      : (isCompetitive
+                          ? 'لا توجد طلبات عروض متاحة حالياً'
+                          : 'لا توجد طلبات حالياً'),
+                  isUrgent
+                      ? 'تأكد من تفعيل الطلبات العاجلة واختيار تخصصاتك في إكمال الملف التعريفي.'
+                      : (isCompetitive
+                          ? 'ستظهر هنا طلبات العروض المطابقة لتخصصك ومدينتك لتقديم عروضك.'
+                          : 'ستظهر الطلبات هنا عندما يتم إسنادها لك.'),
+                )
+              else ...[
+                _desktopRowHeader(),
+                ...filtered.map((e) => _requestDesktopRow(e, urgentTab: isUrgent)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _tabBody({required int tabIndex}) {
     final isAssigned = tabIndex == 0;
     final isUrgent = tabIndex == 1;
@@ -865,36 +1303,47 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
       return const Center(child: CircularProgressIndicator());
     }
 
+    final desktopLike = widget.embedded &&
+        MediaQuery.of(context).size.width >= 980;
+
     return RefreshIndicator(
       onRefresh: isAssigned
           ? _fetchAssigned
           : (isUrgent ? _fetchUrgent : _fetchCompetitive),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (!widget.embedded) _searchBar(),
-          if (!widget.embedded) const SizedBox(height: 12),
-          if (isAssigned) _assignedStatusChips(),
-          if (isAssigned) const SizedBox(height: 12),
-          if (isUrgent) _urgentStatusChips(),
-          if (isUrgent) const SizedBox(height: 12),
-          if (filtered.isEmpty)
-            _emptyState(
-              isUrgent
-                  ? 'لا توجد طلبات عاجلة متاحة حالياً'
-                  : (isCompetitive
-                        ? 'لا توجد طلبات عروض متاحة حالياً'
-                        : 'لا توجد طلبات حالياً'),
-              isUrgent
-                  ? 'تأكد من تفعيل الطلبات العاجلة واختيار تخصصاتك في إكمال الملف التعريفي.'
-                  : (isCompetitive
-                        ? 'ستظهر هنا طلبات العروض المطابقة لتخصصك ومدينتك لتقديم عروضك.'
-                        : 'ستظهر الطلبات هنا عندما يتم إسنادها لك.'),
+      child: desktopLike
+          ? _desktopTabLayout(
+              filtered: filtered,
+              rawList: list,
+              isAssigned: isAssigned,
+              isUrgent: isUrgent,
+              isCompetitive: isCompetitive,
             )
-          else
-            ...filtered.map((e) => _requestCard(e, urgentTab: isUrgent)),
-        ],
-      ),
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (!widget.embedded) _searchBar(),
+                if (!widget.embedded) const SizedBox(height: 12),
+                if (isAssigned) _assignedStatusChips(),
+                if (isAssigned) const SizedBox(height: 12),
+                if (isUrgent) _urgentStatusChips(),
+                if (isUrgent) const SizedBox(height: 12),
+                if (filtered.isEmpty)
+                  _emptyState(
+                    isUrgent
+                        ? 'لا توجد طلبات عاجلة متاحة حالياً'
+                        : (isCompetitive
+                              ? 'لا توجد طلبات عروض متاحة حالياً'
+                              : 'لا توجد طلبات حالياً'),
+                    isUrgent
+                        ? 'تأكد من تفعيل الطلبات العاجلة واختيار تخصصاتك في إكمال الملف التعريفي.'
+                        : (isCompetitive
+                              ? 'ستظهر هنا طلبات العروض المطابقة لتخصصك ومدينتك لتقديم عروضك.'
+                              : 'ستظهر الطلبات هنا عندما يتم إسنادها لك.'),
+                  )
+                else
+                  ...filtered.map((e) => _requestCard(e, urgentTab: isUrgent)),
+              ],
+            ),
     );
   }
 
@@ -973,6 +1422,13 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
             'إدارة الطلبات',
             style: TextStyle(fontFamily: 'Cairo'),
           ),
+          actions: [
+            IconButton(
+              tooltip: 'تحديث',
+              onPressed: _refreshAllWithOverlay,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
           bottom: TabBar(
             controller: _tabController,
             indicator: BoxDecoration(
