@@ -27,6 +27,15 @@ services:
           type: keyvalue
           property: connectionString
 
+  - type: web
+    name: nawafeth-web
+    runtime: docker
+    plan: free
+    rootDir: mobile
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: commit
+    healthCheckPath: /
+
   - type: keyvalue
     name: nawafeth-redis
     plan: free
