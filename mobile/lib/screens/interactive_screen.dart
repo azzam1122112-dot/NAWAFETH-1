@@ -18,11 +18,7 @@ import '../widgets/custom_drawer.dart';
 import 'network_video_player_screen.dart';
 import 'provider_profile_screen.dart';
 
-enum InteractiveMode {
-  auto,
-  client,
-  provider,
-}
+enum InteractiveMode { auto, client, provider }
 
 class InteractiveScreen extends StatefulWidget {
   final InteractiveMode mode;
@@ -39,7 +35,7 @@ class InteractiveScreen extends StatefulWidget {
 }
 
 class _InteractiveScreenState extends State<InteractiveScreen>
-  with TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late final AnimationController _shimmerController;
   late InteractiveMode _effectiveMode;
@@ -80,13 +76,16 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return out;
   }
 
-  List<ProviderPortfolioItem> _sortFavorites(List<ProviderPortfolioItem> items) {
+  List<ProviderPortfolioItem> _sortFavorites(
+    List<ProviderPortfolioItem> items,
+  ) {
     final out = List<ProviderPortfolioItem>.from(items);
     out.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return out;
   }
 
-  int _favoriteRetryNonceFor(int itemId) => _favoriteMediaRetryNonce[itemId] ?? 0;
+  int _favoriteRetryNonceFor(int itemId) =>
+      _favoriteMediaRetryNonce[itemId] ?? 0;
 
   void _retryFavoriteMedia(int itemId) {
     if (!mounted) return;
@@ -106,19 +105,25 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   void _precacheFavoritePreviews(List<ProviderPortfolioItem> items) {
     if (!mounted) return;
-    final candidates = items.take(8).map((item) {
-      if (item.fileType.toLowerCase() == 'video') {
-        return (item.thumbnailUrl ?? '').trim();
-      }
-      return item.fileUrl.trim();
-    }).where((u) => u.isNotEmpty);
+    final candidates = items
+        .take(8)
+        .map((item) {
+          if (item.fileType.toLowerCase() == 'video') {
+            return (item.thumbnailUrl ?? '').trim();
+          }
+          return item.fileUrl.trim();
+        })
+        .where((u) => u.isNotEmpty);
 
     for (final url in candidates) {
       if (_favoritePreviewsPrefetched.contains(url)) continue;
       _favoritePreviewsPrefetched.add(url);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        precacheImage(CachedNetworkImageProvider(url), context).catchError((_) {});
+        precacheImage(
+          CachedNetworkImageProvider(url),
+          context,
+        ).catchError((_) {});
       });
     }
   }
@@ -126,20 +131,21 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   @override
   void initState() {
     super.initState();
-    _effectiveMode =
-        widget.mode == InteractiveMode.auto ? InteractiveMode.client : widget.mode;
-    
+    _effectiveMode = widget.mode == InteractiveMode.auto
+        ? InteractiveMode.client
+        : widget.mode;
+
     final initialLength = _effectiveMode == InteractiveMode.provider ? 3 : 2;
     _tabController = TabController(
-      length: initialLength, 
-      vsync: this, 
-      initialIndex: 0 
+      length: initialLength,
+      vsync: this,
+      initialIndex: 0,
     );
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _guardAndLoadInitial();
     });
@@ -159,10 +165,15 @@ class _InteractiveScreenState extends State<InteractiveScreen>
         _followingError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
         _followersError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
         _favoritesError = 'تسجيل الدخول مطلوب لعرض صفحة تفاعلي';
-        _followingFuture = Future<List<ProviderProfile>>.value(const <ProviderProfile>[]);
-        _followersFuture = Future<List<UserSummary>>.value(const <UserSummary>[]);
-        _favoritesFuture =
-            Future<List<ProviderPortfolioItem>>.value(const <ProviderPortfolioItem>[]);
+        _followingFuture = Future<List<ProviderProfile>>.value(
+          const <ProviderProfile>[],
+        );
+        _followersFuture = Future<List<UserSummary>>.value(
+          const <UserSummary>[],
+        );
+        _favoritesFuture = Future<List<ProviderPortfolioItem>>.value(
+          const <ProviderPortfolioItem>[],
+        );
       });
       return;
     }
@@ -190,30 +201,43 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     try {
       final me = await _accountApi.me().timeout(const Duration(seconds: 12));
       final hasProviderProfile = me['has_provider_profile'] == true;
-      final isProviderActive = RoleController.instance.notifier.value.isProvider;
+      final isProviderActive =
+          RoleController.instance.notifier.value.isProvider;
       final firstName = (me['first_name'] ?? '').toString().trim();
       final lastName = (me['last_name'] ?? '').toString().trim();
       final username = (me['username'] ?? '').toString().trim();
-      final providerDisplayName = (me['provider_display_name'] ?? '').toString().trim();
-      final fullName = [firstName, lastName].where((e) => e.isNotEmpty).join(' ').trim();
+      final providerDisplayName = (me['provider_display_name'] ?? '')
+          .toString()
+          .trim();
+      final fullName = [
+        firstName,
+        lastName,
+      ].where((e) => e.isNotEmpty).join(' ').trim();
       final displayName = fullName.isNotEmpty
           ? fullName
-          : (providerDisplayName.isNotEmpty ? providerDisplayName : (username.isNotEmpty ? username : 'تفاعلي'));
+          : (providerDisplayName.isNotEmpty
+                ? providerDisplayName
+                : (username.isNotEmpty ? username : 'تفاعلي'));
       if (!mounted) return;
-      
+
       final newMode = widget.mode == InteractiveMode.auto
           ? ((hasProviderProfile && isProviderActive)
-              ? InteractiveMode.provider
-              : InteractiveMode.client)
+                ? InteractiveMode.provider
+                : InteractiveMode.client)
           : widget.mode;
 
-      final effectiveMode = (newMode == InteractiveMode.provider && !hasProviderProfile)
+      final effectiveMode =
+          (newMode == InteractiveMode.provider && !hasProviderProfile)
           ? InteractiveMode.client
           : newMode;
 
       final newLength = effectiveMode == InteractiveMode.provider ? 3 : 2;
       final newIndex = widget.initialTabIndex.clamp(0, newLength - 1);
-      final newController = TabController(length: newLength, vsync: this, initialIndex: newIndex);
+      final newController = TabController(
+        length: newLength,
+        vsync: this,
+        initialIndex: newIndex,
+      );
       final oldController = _tabController;
 
       setState(() {
@@ -224,7 +248,6 @@ class _InteractiveScreenState extends State<InteractiveScreen>
         _tabController = newController;
       });
       oldController.dispose();
-      
     } catch (_) {
       if (!mounted) return;
       final effectiveMode = widget.mode == InteractiveMode.provider
@@ -233,7 +256,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
       final newLength = effectiveMode == InteractiveMode.provider ? 3 : 2;
       final newIndex = widget.initialTabIndex.clamp(0, newLength - 1);
-      final newController = TabController(length: newLength, vsync: this, initialIndex: newIndex);
+      final newController = TabController(
+        length: newLength,
+        vsync: this,
+        initialIndex: newIndex,
+      );
       final oldController = _tabController;
 
       setState(() {
@@ -263,9 +290,12 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   Future<List<ProviderProfile>> _loadFollowingSafe() async {
     try {
-      return await _providersApi.getMyFollowingProviders().timeout(const Duration(seconds: 12));
+      return await _providersApi.getMyFollowingProviders().timeout(
+        const Duration(seconds: 12),
+      );
     } on TimeoutException {
-      if (mounted) setState(() => _followingError = 'انتهت مهلة تحميل قائمة المتابعة');
+      if (mounted)
+        setState(() => _followingError = 'انتهت مهلة تحميل قائمة المتابعة');
       return const [];
     } catch (e) {
       if (mounted) {
@@ -282,9 +312,12 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   Future<List<UserSummary>> _loadFollowersSafe() async {
     try {
-      return await _providersApi.getMyProviderFollowers().timeout(const Duration(seconds: 12));
+      return await _providersApi.getMyProviderFollowers().timeout(
+        const Duration(seconds: 12),
+      );
     } on TimeoutException {
-      if (mounted) setState(() => _followersError = 'انتهت مهلة تحميل قائمة المتابعين');
+      if (mounted)
+        setState(() => _followersError = 'انتهت مهلة تحميل قائمة المتابعين');
       return const [];
     } catch (e) {
       if (mounted) {
@@ -302,7 +335,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   Future<List<ProviderPortfolioItem>> _loadFavoritesSafe() async {
     try {
-      return await _providersApi.getMyFavoriteMedia().timeout(const Duration(seconds: 12));
+      return await _providersApi.getMyFavoriteMedia().timeout(
+        const Duration(seconds: 12),
+      );
     } on TimeoutException {
       if (mounted) setState(() => _favoritesError = 'انتهت مهلة تحميل المفضلة');
       return const [];
@@ -324,7 +359,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     final waiters = <Future<dynamic>>[];
     if (_followingFuture != null) waiters.add(_followingFuture!);
     if (_favoritesFuture != null) waiters.add(_favoritesFuture!);
-    if (_effectiveMode == InteractiveMode.provider && _followersFuture != null) {
+    if (_effectiveMode == InteractiveMode.provider &&
+        _followersFuture != null) {
       waiters.add(_followersFuture!);
     }
     await Future.wait(waiters);
@@ -360,7 +396,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo'))),
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: 'Cairo')),
+      ),
     );
   }
 
@@ -377,6 +415,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isCompact = screenWidth < 360;
     final isTablet = screenWidth >= 700;
+    final bodyBg = const Color(0xFFF6F4FB);
+    final tabSurface = const Color(0xFFF2EEFF);
 
     // Elegant tab style
     final tabLabelStyle = TextStyle(
@@ -426,25 +466,26 @@ class _InteractiveScreenState extends State<InteractiveScreen>
           ];
 
     final views = isClient
-      ? [
-          _buildGenericTab(_buildFollowingTab()),
-          _buildGenericTab(_buildFavoritesTab()),
-        ]
-      : [
-          _buildGenericTab(_buildFollowingTab()),
-          _buildGenericTab(_buildFollowersTab()),
-          _buildGenericTab(_buildFavoritesTab()),
-        ];
+        ? [
+            _buildGenericTab(_buildFollowingTab()),
+            _buildGenericTab(_buildFavoritesTab()),
+          ]
+        : [
+            _buildGenericTab(_buildFollowingTab()),
+            _buildGenericTab(_buildFollowersTab()),
+            _buildGenericTab(_buildFavoritesTab()),
+          ];
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        backgroundColor: bodyBg,
         drawer: const CustomDrawer(),
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
               SliverAppBar(
-                expandedHeight: isTablet ? 210 : (isCompact ? 165 : 185),
+                expandedHeight: isTablet ? 260 : (isCompact ? 212 : 236),
                 floating: false,
                 pinned: true,
                 elevation: 0,
@@ -457,9 +498,12 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                   ),
                 ),
                 actions: [
-                   const NotificationsIconButton(iconColor: Colors.white),
-                   IconButton(
-                    icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white),
+                  const NotificationsIconButton(iconColor: Colors.white),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: Colors.white,
+                    ),
                     onPressed: () => ChatNav.openInbox(context),
                   ),
                 ],
@@ -468,23 +512,35 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
                         colors: [
-                          AppColors.deepPurple,
-                          Color(0xFF8E44AD), // A bit lighter purple
+                          Color(0xFF5B2E91),
+                          Color(0xFF7A46B8),
+                          Color(0xFF9A62DA),
                         ],
                       ),
                     ),
                     child: Stack(
                       children: [
-                        // Decorative circles
                         Positioned(
-                          top: -50,
-                          right: -50,
+                          top: -64,
+                          right: -36,
                           child: Container(
-                            width: 200,
-                            height: 200,
+                            width: 220,
+                            height: 220,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.07),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 32,
+                          left: -52,
+                          child: Container(
+                            width: 170,
+                            height: 170,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: Colors.white.withValues(alpha: 0.05),
@@ -492,14 +548,70 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                           ),
                         ),
                         Positioned(
-                          bottom: 20,
-                          left: -30,
+                          top: kToolbarHeight + 14,
+                          right: 16,
+                          left: 16,
                           child: Container(
-                            width: 150,
-                            height: 150,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 12 : 14,
+                              vertical: isCompact ? 10 : 12,
+                            ),
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.05),
+                              color: Colors.white.withValues(alpha: 0.11),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.14),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: isCompact ? 40 : 46,
+                                  height: isCompact ? 40 : 46,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'مساحة التفاعل الشخصي',
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: isCompact ? 12 : 13.2,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      Text(
+                                        'إدارة المتابعة والمفضلة من شاشة واحدة بشكل أسرع',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: isCompact ? 10.2 : 11.2,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.9,
+                                          ),
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -508,11 +620,15 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SizedBox(height: isTablet ? 48 : 42),
+                              SizedBox(
+                                height: isTablet ? 76 : (isCompact ? 70 : 78),
+                              ),
                               Text(
                                 _myDisplayName ?? 'تفاعلي',
                                 style: TextStyle(
-                                  fontSize: isTablet ? 30 : (isCompact ? 22 : 26),
+                                  fontSize: isTablet
+                                      ? 30
+                                      : (isCompact ? 22 : 26),
                                   fontWeight: FontWeight.w900,
                                   fontFamily: 'Cairo',
                                   color: Colors.white,
@@ -530,25 +646,28 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                                     color: Colors.white.withValues(alpha: 0.9),
                                   ),
                                 ),
-                              Container(
-                                margin: const EdgeInsets.only(top: 6),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isCompact ? 10 : 12,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  'متابعة، مفضلة، وتفاعل في مكان واحد',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    fontFamily: 'Cairo',
-                                    fontSize: isCompact ? 11 : 12,
-                                    fontWeight: FontWeight.w600,
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  _headerPill(
+                                    'من أتابع',
+                                    Icons.bookmark_outline_rounded,
+                                    isCompact,
                                   ),
-                                ),
+                                  _headerPill(
+                                    'مفضلتي',
+                                    Icons.favorite_border_rounded,
+                                    isCompact,
+                                  ),
+                                  _headerPill(
+                                    'تفاعل سريع',
+                                    Icons.bolt_rounded,
+                                    isCompact,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -561,9 +680,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                   preferredSize: Size.fromHeight(isCompact ? 56 : 60),
                   child: Container(
                     height: isCompact ? 56 : 60,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                    decoration: BoxDecoration(
+                      color: bodyBg,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
                     ),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -573,21 +694,39 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                         8,
                       ),
                       child: Container(
-                         decoration: BoxDecoration(
-                          color: AppColors.primaryLight.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(25),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.white, tabSurface],
+                          ),
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: AppColors.deepPurple.withValues(alpha: 0.08),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
                         child: TabBar(
                           controller: _tabController,
                           indicator: BoxDecoration(
-                            borderRadius: BorderRadius.circular(25),
-                            color: AppColors.deepPurple,
+                            borderRadius: BorderRadius.circular(22),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF5B2E91), Color(0xFF7D4BC8)],
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.deepPurple.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              )
+                                color: AppColors.deepPurple.withValues(
+                                  alpha: 0.24,
+                                ),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
                             ],
                           ),
                           labelColor: Colors.white,
@@ -607,10 +746,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
               ),
             ];
           },
-          body: TabBarView(
-            controller: _tabController,
-            children: views,
-          ),
+          body: TabBarView(controller: _tabController, children: views),
         ),
         bottomNavigationBar: const CustomBottomNav(currentIndex: 2),
       ),
@@ -620,8 +756,44 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   // Wrapper with background
   Widget _buildGenericTab(Widget child) {
     return Container(
-      color: Colors.white, // Main body background
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF6F4FB), Color(0xFFFBFAFF)],
+        ),
+      ),
       child: child,
+    );
+  }
+
+  Widget _headerPill(String label, IconData icon, bool isCompact) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 10 : 12,
+        vertical: isCompact ? 5 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: isCompact ? 13 : 14, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: isCompact ? 10.5 : 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white.withValues(alpha: 0.96),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -630,15 +802,19 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return FutureBuilder<List<ProviderProfile>>(
       future: _followingFuture,
       builder: (context, snapshot) {
-        if (!_capabilitiesLoaded || snapshot.connectionState == ConnectionState.waiting) {
+        if (!_capabilitiesLoaded ||
+            snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final list = _sortFollowing(snapshot.data ?? const []);
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.bookmark_border,
-            title: _followingError == null ? 'لا تتابع أحداً بعد' : 'تعذر تحميل قائمة المتابعة',
-            subtitle: _followingError ??
+            title: _followingError == null
+                ? 'لا تتابع أحداً بعد'
+                : 'تعذر تحميل قائمة المتابعة',
+            subtitle:
+                _followingError ??
                 'تصفح مقدمي الخدمات وابدأ بمتابعتهم لتظهر تحديثاتهم هنا.',
           );
         }
@@ -671,13 +847,18 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Colors.white,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFFDFCFF)],
+        ),
+        border: Border.all(color: AppColors.deepPurple.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.08),
-            spreadRadius: 2,
-            blurRadius: 15,
-            offset: const Offset(0, 5),
+            color: AppColors.deepPurple.withValues(alpha: 0.06),
+            spreadRadius: 0,
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -710,23 +891,35 @@ class _InteractiveScreenState extends State<InteractiveScreen>
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppColors.primaryLight,
-                      backgroundImage: (p.imageUrl ?? '').trim().isNotEmpty
-                          ? CachedNetworkImageProvider(p.imageUrl!.trim())
-                          : null,
-                      child: (p.imageUrl ?? '').trim().isNotEmpty
-                          ? null
-                          : Icon(
-                              p.isVerifiedBlue
-                                  ? Icons.verified_rounded
-                                  : Icons.person,
-                              color: p.isVerifiedBlue
-                                  ? Colors.blue
-                                  : AppColors.deepPurple,
-                              size: 24,
-                            ),
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.deepPurple.withValues(alpha: 0.9),
+                            const Color(0xFF9E67E9),
+                          ],
+                        ),
+                      ),
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: AppColors.primaryLight,
+                        backgroundImage: (p.imageUrl ?? '').trim().isNotEmpty
+                            ? CachedNetworkImageProvider(p.imageUrl!.trim())
+                            : null,
+                        child: (p.imageUrl ?? '').trim().isNotEmpty
+                            ? null
+                            : Icon(
+                                p.isVerifiedBlue
+                                    ? Icons.verified_rounded
+                                    : Icons.person,
+                                color: p.isVerifiedBlue
+                                    ? Colors.blue
+                                    : AppColors.deepPurple,
+                                size: 24,
+                              ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -741,19 +934,41 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                               fontFamily: 'Cairo',
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.softBlue,
+                              color: Color(0xFF2A1C44),
                             ),
                           ),
                           Text(
                             (p.username ?? '').trim().isNotEmpty
                                 ? '@${p.username}'
                                 : '@${p.id}',
-                             style: TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: Colors.grey[500],
                             ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              if (p.isVerifiedBlue || p.isVerifiedGreen)
+                                _miniInfoChip(
+                                  p.isVerifiedBlue ? 'موثق' : 'موثّق أخضر',
+                                  p.isVerifiedBlue
+                                      ? Icons.verified_rounded
+                                      : Icons.verified_user_rounded,
+                                  p.isVerifiedBlue ? Colors.blue : Colors.green,
+                                ),
+                              _miniInfoChip(
+                                p.ratingAvg > 0
+                                    ? '${p.ratingAvg.toStringAsFixed(1)} تقييم'
+                                    : 'بدون تقييم',
+                                Icons.star_rounded,
+                                const Color(0xFFF59E0B),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -800,15 +1015,26 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 ),
                 if (bio.isNotEmpty) ...[
                   SizedBox(height: isNarrow ? 10 : 12),
-                  Text(
-                    bio,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 13,
-                      height: 1.5,
-                      color: Colors.grey[700],
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      bio,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        height: 1.5,
+                        color: Colors.grey[800],
+                      ),
                     ),
                   ),
                 ],
@@ -825,14 +1051,17 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return FutureBuilder<List<UserSummary>>(
       future: _followersFuture,
       builder: (context, snapshot) {
-        if (!_capabilitiesLoaded || snapshot.connectionState == ConnectionState.waiting) {
+        if (!_capabilitiesLoaded ||
+            snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final list = _sortFollowers(snapshot.data ?? const []);
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.groups_rounded,
-            title: _followersError == null ? 'لا يوجد متابعون حالياً' : 'تعذر تحميل قائمة المتابعين',
+            title: _followersError == null
+                ? 'لا يوجد متابعون حالياً'
+                : 'تعذر تحميل قائمة المتابعين',
             subtitle: _followersError,
           );
         }
@@ -859,23 +1088,25 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   Widget _buildFollowerItem(UserSummary u) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFFDFCFF)],
+        ),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.05),
-            offset: const Offset(0, 4),
-            blurRadius: 10,
-          )
+            color: AppColors.deepPurple.withValues(alpha: 0.05),
+            offset: const Offset(0, 6),
+            blurRadius: 14,
+          ),
         ],
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(color: AppColors.deepPurple.withValues(alpha: 0.08)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         leading: CircleAvatar(
-          radius: 20,
+          radius: 22,
           backgroundColor: AppColors.deepPurple.withValues(alpha: 0.1),
-          child: const Icon(Icons.person, color: AppColors.deepPurple),
+          child: const Icon(Icons.person_rounded, color: AppColors.deepPurple),
         ),
         title: Text(
           u.displayName,
@@ -886,21 +1117,28 @@ class _InteractiveScreenState extends State<InteractiveScreen>
           ),
         ),
         subtitle: Text(
-           '@${u.username ?? u.id}', 
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
+          '@${u.username ?? u.id}',
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
         ),
         trailing: Container(
-           width: 32,
-           height: 32,
-           decoration: BoxDecoration(
-             color: AppColors.primaryLight.withValues(alpha: 0.5),
-             shape: BoxShape.circle,
-           ),
-           child: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.deepPurple),
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.deepPurple.withValues(alpha: 0.08),
+            ),
+          ),
+          child: const Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 14,
+            color: AppColors.deepPurple,
+          ),
         ),
       ),
     );
@@ -911,15 +1149,20 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     return FutureBuilder<List<ProviderPortfolioItem>>(
       future: _favoritesFuture,
       builder: (context, snapshot) {
-        if (!_capabilitiesLoaded || snapshot.connectionState == ConnectionState.waiting) {
+        if (!_capabilitiesLoaded ||
+            snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final list = _sortFavorites(snapshot.data ?? const []);
         if (list.isEmpty) {
           return _emptyState(
             icon: Icons.thumb_up_alt_outlined,
-            title: _favoritesError == null ? 'لا توجد عناصر في مفضلتي بعد' : 'تعذر تحميل المفضلة',
-            subtitle: _favoritesError ?? 'أي صور أو فيديوهات تعمل لها لايك ستظهر هنا.',
+            title: _favoritesError == null
+                ? 'لا توجد عناصر في مفضلتي بعد'
+                : 'تعذر تحميل المفضلة',
+            subtitle:
+                _favoritesError ??
+                'أي صور أو فيديوهات تعمل لها لايك ستظهر هنا.',
           );
         }
         _precacheFavoritePreviews(list);
@@ -959,20 +1202,27 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     );
   }
 
-  Widget _buildFavoriteMediaCard(BuildContext context, ProviderPortfolioItem item) {
+  Widget _buildFavoriteMediaCard(
+    BuildContext context,
+    ProviderPortfolioItem item,
+  ) {
     final isVideo = item.fileType.toLowerCase() == 'video';
     final mediaUrl = item.fileUrl.trim();
-    final rawPreviewUrl = isVideo ? ((item.thumbnailUrl ?? '').trim()) : mediaUrl;
+    final rawPreviewUrl = isVideo
+        ? ((item.thumbnailUrl ?? '').trim())
+        : mediaUrl;
     final previewUrl = _favoritePreviewUrl(rawPreviewUrl, item.id);
     final providerDisplayName = item.providerDisplayName.trim();
     final providerTag = ((item.providerUsername ?? '').trim().isNotEmpty)
         ? '@${item.providerUsername!.trim()}'
         : '@${item.providerId}';
-    final providerTitle = providerDisplayName.isNotEmpty ? providerDisplayName : providerTag;
+    final providerTitle = providerDisplayName.isNotEmpty
+        ? providerDisplayName
+        : providerTag;
     final rawCaption = item.caption.trim();
     final hasCaption = rawCaption.isNotEmpty;
     final caption = hasCaption ? rawCaption : 'بدون وصف';
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -982,7 +1232,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
             color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -1010,16 +1260,21 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 elevation: 0,
                 child: InteractiveViewer(
                   child: ClipRRect(
-                     borderRadius: BorderRadius.circular(12),
-                     child: CachedNetworkImage(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
                       imageUrl: mediaUrl,
                       fit: BoxFit.contain,
                       fadeInDuration: const Duration(milliseconds: 220),
-                      placeholder: (context, url) => _favoriteMediaPlaceholder(),
+                      placeholder: (context, url) =>
+                          _favoriteMediaPlaceholder(),
                       errorWidget: (context, url, error) => Container(
                         color: AppColors.primaryLight,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image, color: Colors.grey, size: 36),
+                        child: const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                          size: 36,
+                        ),
                       ),
                     ),
                   ),
@@ -1044,18 +1299,23 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                         Container(
                           color: AppColors.primaryLight,
                           alignment: Alignment.center,
-                          child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                          ),
                         )
                       else if (isVideo && previewUrl.isEmpty)
                         _favoriteVideoPlaceholder()
                       else
                         CachedNetworkImage(
                           imageUrl: previewUrl,
-                          cacheKey: 'fav-${item.id}-${_favoriteRetryNonceFor(item.id)}-$previewUrl',
+                          cacheKey:
+                              'fav-${item.id}-${_favoriteRetryNonceFor(item.id)}-$previewUrl',
                           fit: BoxFit.cover,
                           fadeInDuration: const Duration(milliseconds: 220),
                           fadeOutDuration: const Duration(milliseconds: 120),
-                          placeholder: (context, url) => _favoriteMediaPlaceholder(),
+                          placeholder: (context, url) =>
+                              _favoriteMediaPlaceholder(),
                           errorWidget: (context, url, error) => Container(
                             color: AppColors.primaryLight,
                             child: isVideo
@@ -1076,7 +1336,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                               color: Colors.black.withValues(alpha: 0.5),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 28,
+                            ),
                           ),
                         ),
                       PositionedDirectional(
@@ -1119,7 +1383,10 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 Expanded(
                   flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.start,
@@ -1160,7 +1427,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                               style: TextStyle(
                                 fontFamily: 'Cairo',
                                 fontSize: isNarrowCard ? 11 : 11.5,
-                                fontWeight: hasCaption ? FontWeight.w700 : FontWeight.w600,
+                                fontWeight: hasCaption
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
                                 height: 1.25,
                                 color: hasCaption ? null : Colors.grey.shade500,
                               ),
@@ -1179,7 +1448,10 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     );
   }
 
-  Widget _favoriteMediaPlaceholder({bool isError = false, VoidCallback? onRetry}) {
+  Widget _favoriteMediaPlaceholder({
+    bool isError = false,
+    VoidCallback? onRetry,
+  }) {
     return AnimatedBuilder(
       animation: _shimmerController,
       builder: (context, _) {
@@ -1212,16 +1484,25 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                     borderRadius: BorderRadius.circular(999),
                     onTap: onRetry,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+                        border: Border.all(
+                          color: Colors.grey.withValues(alpha: 0.25),
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.refresh_rounded, size: 14, color: AppColors.deepPurple),
+                          Icon(
+                            Icons.refresh_rounded,
+                            size: 14,
+                            color: AppColors.deepPurple,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'إعادة المحاولة',
@@ -1268,7 +1549,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 color: Colors.black.withValues(alpha: 0.45),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -1286,11 +1571,16 @@ class _InteractiveScreenState extends State<InteractiveScreen>
                 borderRadius: BorderRadius.circular(999),
                 onTap: onRetry,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.25),
+                    ),
                   ),
                   child: const Text(
                     'إعادة المحاولة',
@@ -1317,59 +1607,126 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   }) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 48, color: AppColors.deepPurple.withValues(alpha: 0.5)),
+        padding: const EdgeInsets.all(20),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.white, Color(0xFFFDFCFF)],
             ),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.softBlue,
-              ),
-              textAlign: TextAlign.center,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: AppColors.deepPurple.withValues(alpha: 0.08),
             ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.deepPurple.withValues(alpha: 0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primaryLight.withValues(alpha: 0.5),
+                      Colors.white,
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 42,
+                  color: AppColors.deepPurple.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 18),
               Text(
-                subtitle,
-                style: TextStyle(
+                title,
+                style: const TextStyle(
                   fontFamily: 'Cairo',
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                  height: 1.5
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.softBlue,
                 ),
                 textAlign: TextAlign.center,
               ),
-            ],
-            const SizedBox(height: 24),
-             SizedBox(
-               width: 150,
-               child: ElevatedButton(
-                onPressed: _reload,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepPurple,
-                  elevation: 0,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Colors.grey[600],
+                    fontSize: 13.5,
+                    height: 1.55,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                child: const Text('تحديث', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(
+                width: 160,
+                child: ElevatedButton.icon(
+                  onPressed: _reload,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text(
+                    'تحديث',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.deepPurple,
+                    elevation: 0,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
               ),
-             ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _miniInfoChip(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

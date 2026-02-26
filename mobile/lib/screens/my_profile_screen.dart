@@ -10,10 +10,9 @@ import 'interactive_screen.dart';
 import 'registration/register_service_provider.dart';
 import 'provider_dashboard/provider_home_screen.dart';
 import 'login_settings_screen.dart';
-import 'notification_settings_screen.dart';
-import 'terms_screen.dart';
 import '../widgets/custom_drawer.dart';
 import '../services/account_api.dart';
+import '../services/marketplace_api.dart';
 import '../services/providers_api.dart';
 import '../services/session_storage.dart';
 import '../services/role_controller.dart';
@@ -22,8 +21,9 @@ import '../constants/colors.dart';
 import '../widgets/profile_account_modes_panel.dart';
 import '../widgets/account_switch_sheet.dart';
 import '../widgets/profile_action_card.dart';
-import '../widgets/profile_quick_links_panel.dart';
 import '../utils/auth_guard.dart';
+import '../models/client_order.dart';
+import 'client_order_details_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -46,6 +46,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   int? _likesCount;
   int? _userId;
   bool _switchingAccount = false;
+  bool _ordersSummaryLoading = false;
+  String? _ordersSummaryError;
+  int _totalOrdersCount = 0;
+  int _completedOrdersCount = 0;
+  ClientOrder? _latestClientOrder;
 
   @override
   void initState() {
@@ -62,19 +67,70 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final digits = _keepDigits(raw.trim());
     if (RegExp(r'^05\d{8}$').hasMatch(digits)) return digits;
     if (RegExp(r'^5\d{8}$').hasMatch(digits)) return '0$digits';
-    if (RegExp(r'^9665\d{8}$').hasMatch(digits)) return '0${digits.substring(3)}';
-    if (RegExp(r'^009665\d{8}$').hasMatch(digits)) return '0${digits.substring(5)}';
+    if (RegExp(r'^9665\d{8}$').hasMatch(digits))
+      return '0${digits.substring(3)}';
+    if (RegExp(r'^009665\d{8}$').hasMatch(digits))
+      return '0${digits.substring(5)}';
     return raw.trim();
   }
 
   Future<void> _refreshRoleAndUserType() async {
     await _syncRoleFromBackend();
     await _checkUserType();
+    await _loadClientOrdersSummary();
   }
 
   Future<void> _refreshProfile() async {
     await _loadIdentityFromStorage();
     await _refreshRoleAndUserType();
+  }
+
+  Future<void> _loadClientOrdersSummary() async {
+    try {
+      final loggedIn = await const SessionStorage().isLoggedIn();
+      if (!loggedIn) {
+        if (!mounted) return;
+        setState(() {
+          _ordersSummaryLoading = false;
+          _ordersSummaryError = 'تسجيل الدخول مطلوب';
+          _totalOrdersCount = 0;
+          _completedOrdersCount = 0;
+          _latestClientOrder = null;
+        });
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _ordersSummaryLoading = true;
+          _ordersSummaryError = null;
+        });
+      }
+
+      final raw = await MarketplaceApi().getMyRequests();
+      final orders =
+          raw
+              .whereType<Map>()
+              .map((e) => ClientOrder.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      if (!mounted) return;
+      setState(() {
+        _totalOrdersCount = orders.length;
+        _completedOrdersCount = orders
+            .where((o) => o.status.trim() == 'مكتمل')
+            .length;
+        _latestClientOrder = orders.isEmpty ? null : orders.first;
+        _ordersSummaryLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _ordersSummaryLoading = false;
+        _ordersSummaryError = 'تعذر تحميل ملخص الطلبات';
+      });
+    }
   }
 
   Future<void> _syncRoleFromBackend() async {
@@ -84,8 +140,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
       final me = await AccountApi().me();
       final hasProviderProfile = me['has_provider_profile'] == true;
-      final roleState = (me['role_state'] ?? '').toString().trim().toLowerCase();
-      final isProviderByRole = me['is_provider'] == true || roleState == 'provider';
+      final roleState = (me['role_state'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final isProviderByRole =
+          me['is_provider'] == true || roleState == 'provider';
       final providerProfileIdRaw = me['provider_profile_id'];
       final providerProfileId = providerProfileIdRaw is int
           ? providerProfileIdRaw
@@ -182,7 +242,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final prefs = await SharedPreferences.getInstance();
     final bool isProviderUser = prefs.getBool('isProvider') ?? false;
     final bool isRegistered = prefs.getBool('isProviderRegistered') ?? false;
-    
+
     if (mounted) {
       setState(() {
         isProvider = isProviderUser && isRegistered;
@@ -216,7 +276,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       context: context,
       builder: (dialogContext) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Directionality(
@@ -230,7 +292,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                       fontFamily: 'Cairo',
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.deepPurple
+                      color: AppColors.deepPurple,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -242,7 +304,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                         BoxShadow(
+                        BoxShadow(
                           color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
@@ -251,7 +313,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                       border: Border.all(color: Colors.grey.shade100),
                     ),
                     child: link == null
-                        ? const Center(child: Text('غير متوفر', style: TextStyle(fontFamily: 'Cairo')))
+                        ? const Center(
+                            child: Text(
+                              'غير متوفر',
+                              style: TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          )
                         : QrImageView(data: link, padding: EdgeInsets.zero),
                   ),
                   const SizedBox(height: 24),
@@ -262,23 +329,39 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                           onPressed: link == null
                               ? null
                               : () async {
-                                  final messenger = ScaffoldMessenger.of(context);
-                                  await Clipboard.setData(ClipboardData(text: link));
-                                  if (!dialogContext.mounted || !context.mounted) return;
+                                  final messenger = ScaffoldMessenger.of(
+                                    context,
+                                  );
+                                  await Clipboard.setData(
+                                    ClipboardData(text: link),
+                                  );
+                                  if (!dialogContext.mounted ||
+                                      !context.mounted)
+                                    return;
                                   Navigator.pop(dialogContext);
                                   messenger.showSnackBar(
-                                    const SnackBar(content: Text('تم نسخ الرابط')),
+                                    const SnackBar(
+                                      content: Text('تم نسخ الرابط'),
+                                    ),
                                   );
                                 },
-                           style: ElevatedButton.styleFrom(
+                          style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.deepPurple,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                           ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                           icon: const Icon(Icons.copy, size: 18),
-                          label: const Text('نسخ', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                          label: const Text(
+                            'نسخ',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -290,13 +373,21 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                                   await Share.share(link);
                                 },
                           style: OutlinedButton.styleFrom(
-                             foregroundColor: AppColors.deepPurple,
-                             side: const BorderSide(color: AppColors.deepPurple),
-                             padding: const EdgeInsets.symmetric(vertical: 12),
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                            foregroundColor: AppColors.deepPurple,
+                            side: const BorderSide(color: AppColors.deepPurple),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           icon: const Icon(Icons.share, size: 18),
-                          label: const Text('مشاركة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                          label: const Text(
+                            'مشاركة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -315,7 +406,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     if (!_isLoading && isProvider) {
       return const ProviderHomeScreen();
     }
-    
+
     if (_isLoading) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -325,7 +416,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         bottomNavigationBar: const CustomBottomNav(currentIndex: 3),
       );
     }
-    
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -350,8 +441,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   ),
                 ),
                 actions: [
-                   IconButton(
-                    icon: const Icon(Icons.qr_code_2_rounded, color: Colors.white),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Colors.white,
+                    ),
                     onPressed: _showClientQrDialog,
                   ),
                 ],
@@ -359,119 +453,144 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                       // Cover Image or Gradient
-                       _coverImage != null
+                      // Cover Image or Gradient
+                      _coverImage != null
                           ? Image.file(_coverImage!, fit: BoxFit.cover)
                           : Container(
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [AppColors.deepPurple, AppColors.primaryDark],
+                                  colors: [
+                                    AppColors.deepPurple,
+                                    AppColors.primaryDark,
+                                  ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                               ),
                             ),
-                        // Dark Overlay
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.1),
-                                Colors.black.withValues(alpha: 0.4),
+                      // Dark Overlay
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.1),
+                              Colors.black.withValues(alpha: 0.4),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // User Info Centered
+                      Align(
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(height: 40),
+                            Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 50,
+                                    backgroundColor: Colors.white,
+                                    backgroundImage: _profileImage != null
+                                        ? FileImage(_profileImage!)
+                                        : null,
+                                    child: _profileImage == null
+                                        ? const Icon(
+                                            Icons.person,
+                                            size: 50,
+                                            color: AppColors.deepPurple,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _pickImage(isCover: false),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.accentOrange,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _fullName ?? 'مستخدم نافذة',
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            if (_username != null)
+                              Text(
+                                '@$_username',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 14,
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      // Edit Cover Button
+                      Positioned(
+                        top: 40,
+                        left: 16,
+                        child: GestureDetector(
+                          onTap: () => _pickImage(isCover: true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.edit, size: 14, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  'غطاء',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
-                        
-                        // User Info Centered
-                        Align(
-                          alignment: Alignment.center,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 40),
-                              Stack(
-                                alignment: Alignment.bottomRight,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white.withValues(alpha: 0.2),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1)
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 50,
-                                      backgroundColor: Colors.white,
-                                      backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
-                                      child: _profileImage == null
-                                          ? const Icon(Icons.person, size: 50, color: AppColors.deepPurple)
-                                          : null,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => _pickImage(isCover: false),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.accentOrange,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                _fullName ?? 'مستخدم نافذة',
-                                style: const TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              if (_username != null)
-                                Text(
-                                  '@$_username',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 14,
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        
-                        // Edit Cover Button
-                         Positioned(
-                          top: 40,
-                          left: 16,
-                          child: GestureDetector(
-                            onTap: () => _pickImage(isCover: true),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.edit, size: 14, color: Colors.white),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'غطاء',
-                                    style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -481,7 +600,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     height: 30,
                     decoration: const BoxDecoration(
                       color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(30),
+                      ),
                     ),
                   ),
                 ),
@@ -499,7 +620,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   // Quick Stats
                   _buildQuickStats(),
                   const SizedBox(height: 24),
-                  
+
                   // Account Type Badge
                   _buildAccountTypeBadge(),
                   const SizedBox(height: 24),
@@ -507,13 +628,14 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   // Main Action Cards
                   _buildActionGrid(),
                   const SizedBox(height: 18),
-                  _buildQuickLinks(),
-                  
+                  _buildOrdersOverviewCard(),
+
                   const SizedBox(height: 24),
 
                   ProfileAccountModesPanel(
                     isProviderRegistered: isProviderRegistered,
-                    isProviderActive: RoleController.instance.notifier.value.isProvider,
+                    isProviderActive:
+                        RoleController.instance.notifier.value.isProvider,
                     isSwitching: _switchingAccount,
                     onSelectMode: _onSelectMode,
                     onRegisterProvider: () async {
@@ -551,7 +673,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(((isDark ? 0.22 : 0.06) * 255).toInt()),
+            color: Colors.black.withAlpha(
+              ((isDark ? 0.22 : 0.06) * 255).toInt(),
+            ),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -560,33 +684,37 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-           Icon(Icons.verified_user_outlined, color: cs.onSurface.withAlpha((0.70 * 255).toInt()), size: 20),
-           const SizedBox(width: 8),
-           Text(
-             'حساب عميل',
-             style: TextStyle(
-               fontFamily: 'Cairo',
-               fontWeight: FontWeight.bold,
-               color: cs.onSurface,
-               fontSize: 14
-             ),
-           ),
-           if (_phone != null) ...[
-             Container(
-               margin: const EdgeInsets.symmetric(horizontal: 12),
-               height: 16,
-               width: 1,
-               color: cs.onSurface.withAlpha((0.18 * 255).toInt()),
-             ),
-             Text(
-               _asLocalSaudiPhone(_phone!),
-               style: TextStyle(
-                 fontFamily: 'Cairo',
-                 color: cs.onSurface.withAlpha((0.70 * 255).toInt()),
-                 fontSize: 14
-               ),
-             ),
-           ]
+          Icon(
+            Icons.verified_user_outlined,
+            color: cs.onSurface.withAlpha((0.70 * 255).toInt()),
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'حساب عميل',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.bold,
+              color: cs.onSurface,
+              fontSize: 14,
+            ),
+          ),
+          if (_phone != null) ...[
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              height: 16,
+              width: 1,
+              color: cs.onSurface.withAlpha((0.18 * 255).toInt()),
+            ),
+            Text(
+              _asLocalSaudiPhone(_phone!),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                color: cs.onSurface.withAlpha((0.70 * 255).toInt()),
+                fontSize: 14,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -605,7 +733,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             context,
             MaterialPageRoute(
               builder: (_) => InteractiveScreen(
-                mode: isProviderAccount ? InteractiveMode.provider : InteractiveMode.client,
+                mode: isProviderAccount
+                    ? InteractiveMode.provider
+                    : InteractiveMode.client,
                 initialTabIndex: 0,
               ),
             ),
@@ -622,7 +752,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             context,
             MaterialPageRoute(
               builder: (_) => InteractiveScreen(
-                mode: isProviderAccount ? InteractiveMode.provider : InteractiveMode.client,
+                mode: isProviderAccount
+                    ? InteractiveMode.provider
+                    : InteractiveMode.client,
                 initialTabIndex: 1,
               ),
             ),
@@ -644,7 +776,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
-  Widget _statItem({required String value, required String label, required IconData icon, VoidCallback? onTap}) {
+  Widget _statItem({
+    required String value,
+    required String label,
+    required IconData icon,
+    VoidCallback? onTap,
+  }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -658,7 +795,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.deepPurple.withValues(alpha: theme.brightness == Brightness.dark ? 0.14 : 0.07),
+                color: AppColors.deepPurple.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.14 : 0.07,
+                ),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: AppColors.deepPurple, size: 20),
@@ -714,33 +853,316 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
   }
 
-  Widget _buildQuickLinks() {
-    return ProfileQuickLinksPanel(
-      title: 'إعدادات سريعة',
-      items: [
-        ProfileQuickLinkItem(
-          title: 'إعدادات التنبيهات',
-          icon: Icons.notifications_outlined,
-          onTap: () async {
-            final navigator = Navigator.of(context);
-            if (!await checkFullClient(context)) return;
-            if (!mounted) return;
-            navigator.push(
-              MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()),
-            );
-          },
+  Widget _buildOrdersOverviewCard() {
+    final latest = _latestClientOrder;
+    final statusColor = _orderStatusColor(latest?.status);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(
+              ((isDark ? 0.16 : 0.06) * 255).toInt(),
+            ),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: AppColors.deepPurple.withValues(alpha: isDark ? 0.22 : 0.08),
         ),
-        ProfileQuickLinkItem(
-          title: 'الشروط والأحكام',
-          icon: Icons.policy_outlined,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TermsScreen()),
-            );
-          },
-        ),
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.deepPurple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.assignment_outlined,
+                  color: AppColors.deepPurple,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'ملخص طلباتك',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.softBlue,
+                  ),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: _ordersSummaryLoading ? null : _loadClientOrdersSummary,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _ordersSummaryLoading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.deepPurple,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.refresh_rounded,
+                          size: 18,
+                          color: AppColors.deepPurple,
+                        ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _orderSummaryStatTile(
+                  title: 'إجمالي عدد الطلبات',
+                  value: _totalOrdersCount.toString(),
+                  icon: Icons.layers_outlined,
+                  color: AppColors.deepPurple,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _orderSummaryStatTile(
+                  title: 'عدد المكتملة',
+                  value: _completedOrdersCount.toString(),
+                  icon: Icons.task_alt_rounded,
+                  color: const Color(0xFF16A34A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.deepPurple.withValues(alpha: 0.08),
+              ),
+            ),
+            child: _ordersSummaryError != null
+                ? Text(
+                    _ordersSummaryError!,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                : latest == null
+                ? const Text(
+                    'لا يوجد طلبات حتى الآن',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.softBlue,
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'آخر طلب',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        latest.title.trim().isEmpty
+                            ? (latest.serviceCode.trim().isEmpty
+                                  ? 'طلب #${latest.id}'
+                                  : latest.serviceCode)
+                            : latest.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.softBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: statusColor.withValues(alpha: 0.22),
+                              ),
+                            ),
+                            child: Text(
+                              latest.status,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            _formatOrderDate(latest.createdAt),
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ClientOrderDetailsScreen(order: latest),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.deepPurple,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          label: const Text(
+                            'عرض تفاصيل آخر طلب',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _orderSummaryStatTile({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[700],
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _orderStatusColor(String? status) {
+    switch ((status ?? '').trim()) {
+      case 'مكتمل':
+        return const Color(0xFF16A34A);
+      case 'تحت التنفيذ':
+      case 'بانتظار اعتماد العميل':
+        return const Color(0xFF2563EB);
+      case 'ملغي':
+        return const Color(0xFFDC2626);
+      case 'جديد':
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+
+  String _formatOrderDate(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year.toString();
+    return '$y/$m/$d';
   }
 }

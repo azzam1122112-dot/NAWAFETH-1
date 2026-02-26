@@ -54,7 +54,7 @@ class _AddServiceScreenState extends State<AddServiceScreen>
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F6FB),
+        backgroundColor: const Color(0xFFF4F2FA),
         drawer: const CustomDrawer(),
         appBar: const PreferredSize(
           preferredSize: Size.fromHeight(60),
@@ -68,20 +68,39 @@ class _AddServiceScreenState extends State<AddServiceScreen>
         body: Stack(
           children: [
             Positioned(
-              top: -120,
-              right: -90,
+              top: -140,
+              right: -100,
               child: Container(
-                width: 220,
-                height: 220,
+                width: 260,
+                height: 260,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: [
-                      AppColors.primaryDark.withValues(alpha: 0.16),
-                      AppColors.primaryLight.withValues(alpha: 0.04),
+                      AppColors.primaryDark.withValues(alpha: 0.18),
+                      AppColors.primaryLight.withValues(alpha: 0.03),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 90,
+              left: -70,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF7B63D2).withValues(alpha: 0.10),
+                      Colors.transparent,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
               ),
@@ -109,7 +128,9 @@ class _AddServiceScreenState extends State<AddServiceScreen>
               top: false,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final metrics = _ScreenMetrics.fromWidth(constraints.maxWidth);
+                  final metrics = _ScreenMetrics.fromWidth(
+                    constraints.maxWidth,
+                  );
                   final options = <_ServiceOptionData>[
                     _ServiceOptionData(
                       title: 'البحث عن مزود خدمة',
@@ -205,6 +226,13 @@ class _AddServiceScreenState extends State<AddServiceScreen>
                           child: _HeroPanel(compact: metrics.compact),
                         ),
                         SizedBox(height: metrics.gap),
+                        _StaggeredEntrance(
+                          controller: _entranceController,
+                          begin: 0.10,
+                          end: 0.42,
+                          child: _SectionLead(compact: metrics.compact),
+                        ),
+                        SizedBox(height: metrics.gap),
                         Wrap(
                           spacing: metrics.gap,
                           runSpacing: metrics.gap,
@@ -262,46 +290,65 @@ class _HeroPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: EdgeInsets.fromLTRB(
+        compact ? 14 : 18,
+        compact ? 14 : 18,
+        compact ? 14 : 18,
         compact ? 12 : 14,
-        compact ? 12 : 14,
-        compact ? 12 : 14,
-        compact ? 10 : 12,
       ),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(
-          colors: [Color(0xFF5B479D), Color(0xFF7A63CA)],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
+          colors: [Color(0xFF4F3D98), Color(0xFF6D58C4), Color(0xFF8C78E8)],
+          stops: [0.0, 0.58, 1.0],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5B479D).withValues(alpha: 0.26),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+            color: const Color(0xFF4F3D98).withValues(alpha: 0.30),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.topLeft,
+            child: Container(
+              width: compact ? 110 : 128,
+              height: compact ? 110 : 128,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.03),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
           Row(
             children: [
               Container(
-                width: compact ? 36 : 40,
-                height: compact ? 36 : 40,
+                width: compact ? 40 : 46,
+                height: compact ? 40 : 46,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.26),
+                    color: Colors.white.withValues(alpha: 0.30),
                   ),
                 ),
                 child: Icon(
                   Icons.add_circle_outline_rounded,
                   color: Colors.white,
-                  size: compact ? 20 : 22,
+                  size: compact ? 22 : 24,
                 ),
               ),
               SizedBox(width: compact ? 10 : 12),
@@ -312,7 +359,7 @@ class _HeroPanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'Cairo',
-                    fontSize: compact ? 14 : 15,
+                    fontSize: compact ? 15 : 17,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     height: 1.25,
@@ -321,17 +368,50 @@ class _HeroPanel extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 6 : 8),
+          SizedBox(height: compact ? 8 : 10),
           Text(
             'اختر نوع الخدمة وابدأ طلبك بخطوات واضحة وسريعة.',
             style: TextStyle(
               fontFamily: 'Cairo',
-              fontSize: compact ? 11 : 12,
-              color: Colors.white.withValues(alpha: 0.9),
-              height: 1.45,
+              fontSize: compact ? 11.5 : 12.5,
+              color: Colors.white.withValues(alpha: 0.92),
+              height: 1.5,
             ),
           ),
-          SizedBox(height: compact ? 8 : 10),
+          SizedBox(height: compact ? 10 : 12),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 12,
+              vertical: compact ? 8 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white.withValues(alpha: 0.95),
+                  size: compact ? 16 : 18,
+                ),
+                SizedBox(width: compact ? 8 : 10),
+                Expanded(
+                  child: Text(
+                    'اختر المسار المناسب لاحتياجك: بحث مباشر، طلب عاجل، أو مقارنة عروض.',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: compact ? 10.5 : 11.5,
+                      color: Colors.white.withValues(alpha: 0.92),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: compact ? 10 : 12),
           Wrap(
             spacing: compact ? 6 : 8,
             runSpacing: compact ? 6 : 8,
@@ -340,6 +420,81 @@ class _HeroPanel extends StatelessWidget {
               _HeroChip(label: 'سرعة في التنفيذ'),
               _HeroChip(label: 'نتائج أدق'),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLead extends StatelessWidget {
+  const _SectionLead({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 14,
+        vertical: compact ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8E2F7)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF251A4F).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 36 : 40,
+            height: compact ? 36 : 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6B57BF), Color(0xFF8B75E7)],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+            ),
+            child: const Icon(
+              Icons.widgets_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          SizedBox(width: compact ? 10 : 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'اختر مسار تنفيذ الخدمة',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: compact ? 12.5 : 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF2E2550),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'كل بطاقة تقودك لرحلة مناسبة حسب السرعة ونمط التعاقد.',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: compact ? 10.5 : 11.5,
+                    color: const Color(0xFF6E6888),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -409,13 +564,13 @@ class _ServiceOptionCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE7E3F4)),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE8E3F6)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF251A4F).withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF251A4F).withValues(alpha: 0.07),
+                blurRadius: 16,
+                offset: const Offset(0, 7),
               ),
             ],
           ),
@@ -431,8 +586,8 @@ class _ServiceOptionCard extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
+                    topLeft: Radius.circular(18),
+                    topRight: Radius.circular(18),
                   ),
                   gradient: LinearGradient(
                     colors: [primary, secondary],
@@ -443,16 +598,20 @@ class _ServiceOptionCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: compact ? 32 : 34,
-                      height: compact ? 32 : 34,
+                      width: compact ? 34 : 38,
+                      height: compact ? 34 : 38,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white.withValues(alpha: 0.18),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.28),
+                          color: Colors.white.withValues(alpha: 0.25),
                         ),
                       ),
-                      child: Icon(icon, color: Colors.white, size: compact ? 17 : 18),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: compact ? 18 : 19,
+                      ),
                     ),
                     SizedBox(width: compact ? 7 : 8),
                     Expanded(
@@ -462,7 +621,7 @@ class _ServiceOptionCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'Cairo',
-                          fontSize: compact ? 13 : 14,
+                          fontSize: compact ? 13.5 : 14.5,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
                         ),
@@ -474,17 +633,17 @@ class _ServiceOptionCard extends StatelessWidget {
                         vertical: compact ? 3 : 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.22),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.28),
+                          color: Colors.white.withValues(alpha: 0.24),
                         ),
                       ),
                       child: Text(
                         badge,
                         style: TextStyle(
                           fontFamily: 'Cairo',
-                          fontSize: compact ? 9 : 10,
+                          fontSize: compact ? 9.5 : 10.5,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
@@ -505,40 +664,44 @@ class _ServiceOptionCard extends StatelessWidget {
                   children: [
                     Text(
                       subtitle,
-                      maxLines: 2,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: 'Cairo',
-                        fontSize: compact ? 11 : 12,
-                        color: Color(0xFF5B5670),
-                        height: 1.4,
+                        fontSize: compact ? 11.5 : 12.5,
+                        color: const Color(0xFF5B5670),
+                        height: 1.48,
                       ),
                     ),
                     SizedBox(height: compact ? 8 : 9),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    Row(
                       children: [
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: compact ? 8 : 9,
-                            vertical: compact ? 4 : 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F0FD),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            detail,
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: compact ? 10 : 11,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF5A489B),
+                        Expanded(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 8 : 9,
+                              vertical: compact ? 6 : 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4F1FE),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0xFFEAE5FC),
+                              ),
+                            ),
+                            child: Text(
+                              detail,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: compact ? 10 : 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF5A489B),
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         TextButton.icon(
                           onPressed: onTap,
                           style: TextButton.styleFrom(
@@ -617,7 +780,7 @@ class _ScreenMetrics {
       compact: compact,
       twoColumns: twoColumns,
       horizontalPadding: twoColumns ? 20 : (compact ? 10 : 12),
-      gap: twoColumns ? 12 : 10,
+      gap: twoColumns ? 14 : 12,
     );
   }
 
