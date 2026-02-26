@@ -125,11 +125,19 @@ def _parse_datetime_local(value: str | None):
 
 
 def _csv_response(filename: str, headers: list[str], rows: list[list]):
+    def _csv_safe_cell(value):
+        if value is None:
+            return ""
+        text = str(value)
+        if text and text[0] in {"=", "+", "-", "@"}:
+            return f"'{text}"
+        return text
+
     stream = io.StringIO()
     writer = csv.writer(stream)
     writer.writerow(headers)
     for r in rows:
-        writer.writerow(r)
+        writer.writerow([_csv_safe_cell(v) for v in r])
     resp = HttpResponse(stream.getvalue(), content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
@@ -207,7 +215,7 @@ def _active_admin_profiles_count() -> int:
     ).count()
 
 
-def dashboard_access_required(dashboard_code: str, write: bool = False):
+def require_dashboard_access(dashboard_key: str, write: bool = False):
     def _first_allowed_dashboard(user) -> str | None:
         candidates = [
             ("analytics", "dashboard:home"),
@@ -228,16 +236,27 @@ def dashboard_access_required(dashboard_code: str, write: bool = False):
     def decorator(func):
         @wraps(func)
         def wrapped(request: HttpRequest, *args, **kwargs):
-            if not _dashboard_allowed(request.user, dashboard_code, write=write):
+            if not _dashboard_allowed(request.user, dashboard_key, write=write):
                 messages.error(request, "لا تملك صلاحية الوصول لهذه اللوحة.")
                 fallback = _first_allowed_dashboard(request.user)
                 current = getattr(getattr(request, "resolver_match", None), "view_name", "")
                 if fallback and fallback != current:
                     return redirect(fallback)
                 return HttpResponse("غير مصرح", status=403)
+            if write:
+                logger.info(
+                    "dashboard_write_access_granted user_id=%s dashboard=%s method=%s path=%s",
+                    getattr(getattr(request, "user", None), "id", None),
+                    dashboard_key,
+                    getattr(request, "method", ""),
+                    getattr(request, "path", ""),
+                )
             return func(request, *args, **kwargs)
         return wrapped
     return decorator
+
+
+dashboard_access_required = require_dashboard_access
 
 
 def _status_value(name: str, fallback: str) -> str:
@@ -622,23 +641,56 @@ def _compute_actions(user, obj) -> dict:
 def dashboard_home(request):
     qs = ServiceRequest.objects.all()
 
+    today = timezone.localdate()
+    default_start_date = today - timedelta(days=29)
+    date_from_raw = (request.GET.get("date_from") or "").strip()
+    date_to_raw = (request.GET.get("date_to") or "").strip()
+    date_from_dt = _parse_date_yyyy_mm_dd(date_from_raw) if date_from_raw else None
+    date_to_dt = _parse_date_yyyy_mm_dd(date_to_raw) if date_to_raw else None
+
+    if date_from_raw and date_from_dt is None:
+        messages.warning(request, "تم تجاهل تاريخ البداية لعدم صحة الصيغة")
+    if date_to_raw and date_to_dt is None:
+        messages.warning(request, "تم تجاهل تاريخ النهاية لعدم صحة الصيغة")
+
+    if date_from_dt is None:
+        date_from_dt = timezone.make_aware(
+            datetime.combine(default_start_date, datetime.min.time()),
+            timezone.get_current_timezone(),
+        )
+        date_from_raw = default_start_date.isoformat()
+    if date_to_dt is None:
+        date_to_dt = timezone.make_aware(
+            datetime.combine(today, datetime.min.time()),
+            timezone.get_current_timezone(),
+        )
+        date_to_raw = today.isoformat()
+
+    if date_from_dt > date_to_dt:
+        date_from_dt, date_to_dt = date_to_dt, date_from_dt
+        date_from_raw = date_from_dt.date().isoformat()
+        date_to_raw = date_to_dt.date().isoformat()
+
+    date_to_exclusive = date_to_dt + timedelta(days=1)
+    scoped_requests_qs = qs.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
+
     # KPIs عامة للطلبات
-    total = qs.count()
-    by_status = qs.values("status").annotate(c=Count("id")).order_by("-c")
-    by_type = qs.values("request_type").annotate(c=Count("id")).order_by("-c")
+    total = scoped_requests_qs.count()
+    by_status = scoped_requests_qs.values("status").annotate(c=Count("id")).order_by("-c")
+    by_type = scoped_requests_qs.values("request_type").annotate(c=Count("id")).order_by("-c")
     open_statuses = [
         _status_value("NEW", "new"),
         _status_value("SENT", "sent"),
         _status_value("ACCEPTED", "accepted"),
         _status_value("IN_PROGRESS", "in_progress"),
     ]
-    open_requests = qs.filter(status__in=open_statuses).count()
-    completed_requests = qs.filter(status=_status_value("COMPLETED", "completed")).count()
-    cancelled_requests = qs.filter(status=_status_value("CANCELLED", "cancelled")).count()
+    open_requests = scoped_requests_qs.filter(status__in=open_statuses).count()
+    completed_requests = scoped_requests_qs.filter(status=_status_value("COMPLETED", "completed")).count()
+    cancelled_requests = scoped_requests_qs.filter(status=_status_value("CANCELLED", "cancelled")).count()
 
     # آخر 10 طلبات
     latest = (
-        qs.select_related("client", "provider")
+        scoped_requests_qs.select_related("client", "provider")
         .order_by("-id")[:12]
     )
 
@@ -714,8 +766,9 @@ def dashboard_home(request):
 
     # KPIs الطلبات الموحدة (الطبقة التشغيلية الموحدة)
     unified_qs = UnifiedRequest.objects.select_related("requester", "assigned_user").all()
-    unified_total = unified_qs.count()
-    unified_open = unified_qs.exclude(
+    unified_scoped_qs = unified_qs.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
+    unified_total = unified_scoped_qs.count()
+    unified_open = unified_scoped_qs.exclude(
         status__in=[
             UnifiedRequestStatus.CLOSED,
             UnifiedRequestStatus.COMPLETED,
@@ -724,9 +777,9 @@ def dashboard_home(request):
             UnifiedRequestStatus.CANCELLED,
         ]
     ).count()
-    unified_pending_payment = unified_qs.filter(status=UnifiedRequestStatus.PENDING_PAYMENT).count()
-    unified_active = unified_qs.filter(status=UnifiedRequestStatus.ACTIVE).count()
-    unified_recent = list(unified_qs.order_by("-id")[:8])
+    unified_pending_payment = unified_scoped_qs.filter(status=UnifiedRequestStatus.PENDING_PAYMENT).count()
+    unified_active = unified_scoped_qs.filter(status=UnifiedRequestStatus.ACTIVE).count()
+    unified_recent = list(unified_scoped_qs.order_by("-id")[:8])
     for ur in unified_recent:
         ur.dashboard_detail_url = _unified_request_dashboard_link(ur)
 
@@ -738,14 +791,14 @@ def dashboard_home(request):
         r.type_label = type_labels.get(getattr(r, "request_type", ""), getattr(r, "request_type", "") or "—")
 
     # Trend charts (last 14 days)
-    days = 14
-    start_date = timezone.now().date() - timedelta(days=days - 1)
+    days = max((date_to_dt.date() - date_from_dt.date()).days + 1, 1)
+    start_date = date_from_dt.date()
     labels = [(start_date + timedelta(days=i)).isoformat() for i in range(days)]
 
     req_by_day = {
         str(row["day"]): row["c"]
         for row in (
-            ServiceRequest.objects.filter(created_at__date__gte=start_date)
+            ServiceRequest.objects.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
             .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(c=Count("id"))
@@ -755,7 +808,7 @@ def dashboard_home(request):
     inv_by_day = {
         str(row["day"]): row["c"]
         for row in (
-            Invoice.objects.filter(created_at__date__gte=start_date)
+            Invoice.objects.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
             .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(c=Count("id"))
@@ -765,7 +818,7 @@ def dashboard_home(request):
     sup_by_day = {
         str(row["day"]): row["c"]
         for row in (
-            SupportTicket.objects.filter(created_at__date__gte=start_date)
+            SupportTicket.objects.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
             .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(c=Count("id"))
@@ -775,7 +828,7 @@ def dashboard_home(request):
     unified_by_day = {
         str(row["day"]): row["c"]
         for row in (
-            UnifiedRequest.objects.filter(created_at__date__gte=start_date)
+            UnifiedRequest.objects.filter(created_at__gte=date_from_dt, created_at__lt=date_to_exclusive)
             .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(c=Count("id"))
@@ -787,6 +840,14 @@ def dashboard_home(request):
     invoice_series = [inv_by_day.get(d, 0) for d in labels]
     support_series = [sup_by_day.get(d, 0) for d in labels]
     unified_request_series = [unified_by_day.get(d, 0) for d in labels]
+
+    primary_ops_url = reverse("dashboard:home")
+    if _dashboard_allowed(request.user, "content", write=False):
+        primary_ops_url = reverse("dashboard:requests_list")
+    elif _dashboard_allowed(request.user, "support", write=False):
+        primary_ops_url = reverse("dashboard:support_tickets_list")
+    elif _dashboard_allowed(request.user, "billing", write=False):
+        primary_ops_url = reverse("dashboard:billing_invoices_list")
 
     ctx = {
         "total_requests": total,
@@ -819,6 +880,10 @@ def dashboard_home(request):
         "invoice_series_json": json.dumps(invoice_series),
         "support_series_json": json.dumps(support_series),
         "unified_request_series_json": json.dumps(unified_request_series),
+        "date_from_val": date_from_raw,
+        "date_to_val": date_to_raw,
+        "analytics_scope_days": days,
+        "primary_ops_url": primary_ops_url,
         "can_content": _dashboard_allowed(request.user, "content", write=False),
         "can_billing": _dashboard_allowed(request.user, "billing", write=False),
         "can_support": _dashboard_allowed(request.user, "support", write=False),

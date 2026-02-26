@@ -20,12 +20,19 @@ from .auth import (
 
 
 logger = logging.getLogger(__name__)
+_dashboard_otp_bypass_warning_logged = False
 
 
 def _dashboard_accept_any_otp_code() -> bool:
     # Requested temporary behavior: allow any 4-digit code for dashboard OTP.
     # This intentionally bypasses OTP persistence/validation for dashboard login.
-    return True
+    # TODO: Switch this to an explicit environment/settings flag before production hardening.
+    global _dashboard_otp_bypass_warning_logged
+    enabled = True
+    if enabled and not getattr(settings, "DEBUG", False) and not _dashboard_otp_bypass_warning_logged:
+        logger.warning("Dashboard OTP bypass (accept any 4-digit code) is active while DEBUG=False")
+        _dashboard_otp_bypass_warning_logged = True
+    return enabled
 
 
 def _keep_digits(value: str) -> str:

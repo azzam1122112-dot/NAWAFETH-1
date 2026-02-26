@@ -8,6 +8,7 @@ from apps.accounts.models import User
 from apps.backoffice.models import AccessLevel, Dashboard, UserAccessProfile
 from apps.audit.models import AuditAction, AuditLog
 from apps.billing.models import Invoice
+from apps.content.models import SiteLinks
 from apps.dashboard.views import _compute_actions, _dashboard_allowed
 from apps.dashboard.templatetags.dashboard_access import can_access
 from apps.dashboard.auth import SESSION_OTP_VERIFIED_KEY
@@ -1242,34 +1243,35 @@ def test_requests_list_export_xlsx_returns_xlsx_file():
 
 @pytest.mark.django_db
 def test_requests_list_export_pdf_returns_pdf_file():
-	staff_user = User.objects.create_user(phone="0500000993", password="Pass12345!", is_staff=True)
-	content_dashboard = Dashboard.objects.create(code="content", name_ar="إدارة المحتوى", sort_order=20)
-	UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.ADMIN).allowed_dashboards.set([content_dashboard])
+    pytest.importorskip("reportlab")
+    staff_user = User.objects.create_user(phone="0500000993", password="Pass12345!", is_staff=True)
+    content_dashboard = Dashboard.objects.create(code="content", name_ar="إدارة المحتوى", sort_order=20)
+    UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.ADMIN).allowed_dashboards.set([content_dashboard])
 
-	cat = Category.objects.create(name="تصميم", is_active=True)
-	sub = SubCategory.objects.create(category=cat, name="شعارات", is_active=True)
-	client_user = User.objects.create_user(phone="0500000994")
-	ServiceRequest.objects.create(
-		client=client_user,
-		subcategory=sub,
-		title="طلب",
-		description="وصف",
-		request_type="competitive",
-		status=RequestStatus.SENT,
-		city="الرياض",
-	)
+    cat = Category.objects.create(name="تصميم", is_active=True)
+    sub = SubCategory.objects.create(category=cat, name="شعارات", is_active=True)
+    client_user = User.objects.create_user(phone="0500000994")
+    ServiceRequest.objects.create(
+        client=client_user,
+        subcategory=sub,
+        title="طلب",
+        description="وصف",
+        request_type="competitive",
+        status=RequestStatus.SENT,
+        city="الرياض",
+    )
 
-	c = Client()
-	assert c.login(phone=staff_user.phone, password="Pass12345!")
-	s = c.session
-	s[SESSION_OTP_VERIFIED_KEY] = True
-	s.save()
+    c = Client()
+    assert c.login(phone=staff_user.phone, password="Pass12345!")
+    s = c.session
+    s[SESSION_OTP_VERIFIED_KEY] = True
+    s.save()
 
-	url = reverse("dashboard:requests_list") + "?export=pdf"
-	res = c.get(url)
-	assert res.status_code == 200
-	assert res["Content-Type"] == "application/pdf"
-	assert res.content[:4] == b"%PDF"
+    url = reverse("dashboard:requests_list") + "?export=pdf"
+    res = c.get(url)
+    assert res.status_code == 200
+    assert res["Content-Type"] == "application/pdf"
+    assert res.content[:4] == b"%PDF"
 
 
 @pytest.mark.django_db
@@ -1405,3 +1407,161 @@ def test_guard_prevents_revoking_last_active_admin():
 	assert res2.status_code == 302
 	sole_admin_ap.refresh_from_db()
 	assert sole_admin_ap.revoked_at is not None
+
+
+@pytest.mark.django_db
+def test_qa_readonly_cannot_execute_content_post_action():
+    qa_user = User.objects.create_user(phone="0500000220", password="Pass12345!", is_staff=True)
+    content_dashboard = Dashboard.objects.create(code="content", name_ar="إدارة المحتوى", sort_order=20)
+    ap = UserAccessProfile.objects.create(user=qa_user, level=AccessLevel.QA)
+    ap.allowed_dashboards.set([content_dashboard])
+
+    c = Client()
+    assert c.login(phone=qa_user.phone, password="Pass12345!")
+    s = c.session
+    s[SESSION_OTP_VERIFIED_KEY] = True
+    s.save()
+
+    url = reverse("dashboard:content_links_update_action")
+    res = c.post(url, data={"x_url": "https://example.com"})
+    assert res.status_code in {302, 403}
+    assert SiteLinks.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_power_user_has_global_write_access_and_can_post_content_links():
+    power_user = User.objects.create_user(phone="0500000221", password="Pass12345!", is_staff=True)
+    UserAccessProfile.objects.create(user=power_user, level=AccessLevel.POWER)
+
+    assert _dashboard_allowed(power_user, "content", write=True) is True
+    assert _dashboard_allowed(power_user, "support", write=True) is True
+    assert _dashboard_allowed(power_user, "access", write=True) is True
+
+    c = Client()
+    assert c.login(phone=power_user.phone, password="Pass12345!")
+    s = c.session
+    s[SESSION_OTP_VERIFIED_KEY] = True
+    s.save()
+
+    url = reverse("dashboard:content_links_update_action")
+    res = c.post(url, data={"x_url": "https://example.com"})
+    assert res.status_code == 302
+    assert SiteLinks.objects.count() == 1
+    assert SiteLinks.objects.first().x_url == "https://example.com"
+
+
+@pytest.mark.django_db
+def test_requests_list_export_csv_sanitizes_csv_injection_cells():
+    content_dashboard = Dashboard.objects.create(code="content", name_ar="إدارة المحتوى", sort_order=20)
+    staff_user = User.objects.create_user(phone="0500000222", password="Pass12345!", is_staff=True)
+    UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.ADMIN)
+    cat = Category.objects.create(name="تصميم", is_active=True)
+    sub = SubCategory.objects.create(category=cat, name="هوية", is_active=True)
+    client_user = User.objects.create_user(phone="0500000223")
+
+    ServiceRequest.objects.create(
+        client=client_user,
+        subcategory=sub,
+        title="=HYPERLINK(\"http://evil\")",
+        description="+cmd",
+        request_type="competitive",
+        status=RequestStatus.NEW,
+        city="@riyadh",
+    )
+
+    c = Client()
+    assert c.login(phone=staff_user.phone, password="Pass12345!")
+    s = c.session
+    s[SESSION_OTP_VERIFIED_KEY] = True
+    s.save()
+
+    res = c.get(reverse("dashboard:requests_list"), {"export": "csv"})
+    assert res.status_code == 200
+    assert "text/csv" in (res["Content-Type"] or "")
+    body = res.content.decode("utf-8")
+    assert "'=HYPERLINK" in body
+    assert "'@riyadh" in body
+
+
+@pytest.mark.django_db
+def test_dashboard_home_date_range_filters_request_kpis():
+    analytics_dashboard = Dashboard.objects.create(code="analytics", name_ar="الرئيسية", sort_order=1)
+    admin_user = User.objects.create_user(phone="0500000224", password="Pass12345!", is_staff=True)
+    ap = UserAccessProfile.objects.create(user=admin_user, level=AccessLevel.ADMIN)
+    ap.allowed_dashboards.set([analytics_dashboard])
+
+    cat = Category.objects.create(name="تصميم", is_active=True)
+    sub = SubCategory.objects.create(category=cat, name="شعارات", is_active=True)
+    client_user = User.objects.create_user(phone="0500000225")
+    old_req = ServiceRequest.objects.create(
+        client=client_user,
+        subcategory=sub,
+        title="قديم",
+        description="قديم",
+        request_type="competitive",
+        status=RequestStatus.NEW,
+        city="الرياض",
+    )
+    new_req = ServiceRequest.objects.create(
+        client=client_user,
+        subcategory=sub,
+        title="جديد",
+        description="جديد",
+        request_type="competitive",
+        status=RequestStatus.NEW,
+        city="الرياض",
+    )
+    ServiceRequest.objects.filter(id=old_req.id).update(created_at=timezone.now() - timedelta(days=90))
+    ServiceRequest.objects.filter(id=new_req.id).update(created_at=timezone.now())
+
+    c = Client()
+    assert c.login(phone=admin_user.phone, password="Pass12345!")
+    s = c.session
+    s[SESSION_OTP_VERIFIED_KEY] = True
+    s.save()
+
+    res = c.get(
+        reverse("dashboard:home"),
+        {
+            "date_from": (timezone.localdate() - timedelta(days=7)).isoformat(),
+            "date_to": timezone.localdate().isoformat(),
+        },
+    )
+    assert res.status_code == 200
+    assert res.context["total_requests"] == 1
+    assert res.context["date_from_val"]
+    assert res.context["date_to_val"]
+
+
+@pytest.mark.django_db
+def test_dashboard_home_requires_otp_verified_session_for_authenticated_staff():
+    analytics_dashboard = Dashboard.objects.create(code="analytics", name_ar="الرئيسية", sort_order=1)
+    staff_user = User.objects.create_user(phone="0500000226", password="Pass12345!", is_staff=True)
+    ap = UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.USER)
+    ap.allowed_dashboards.set([analytics_dashboard])
+
+    c = Client()
+    assert c.login(phone=staff_user.phone, password="Pass12345!")
+    res = c.get(reverse("dashboard:home"))
+    assert res.status_code == 302
+    assert reverse("dashboard:otp") in res.url
+
+
+@pytest.mark.django_db
+def test_dashboard_otp_dev_accepts_any_4_digits_and_sets_session_flag():
+    analytics_dashboard = Dashboard.objects.create(code="analytics", name_ar="الرئيسية", sort_order=1)
+    staff_user = User.objects.create_user(phone="0500000227", password="Pass12345!", is_staff=True)
+    ap = UserAccessProfile.objects.create(user=staff_user, level=AccessLevel.USER)
+    ap.allowed_dashboards.set([analytics_dashboard])
+
+    c = Client()
+    login_res = c.post(reverse("dashboard:login"), data={"phone": staff_user.phone})
+    assert login_res.status_code == 302
+    assert reverse("dashboard:otp") in login_res.url
+
+    otp_res = c.post(reverse("dashboard:otp"), data={"code": "1234"})
+    assert otp_res.status_code == 302
+    assert otp_res.url == reverse("dashboard:home")
+
+    s = c.session
+    assert s.get(SESSION_OTP_VERIFIED_KEY) is True
