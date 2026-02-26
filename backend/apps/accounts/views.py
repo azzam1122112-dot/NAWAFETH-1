@@ -427,8 +427,10 @@ def otp_verify(request):
         return Response(payload, status=status.HTTP_200_OK)
 
     # FORCE BYPASS if configured (Resolves user frustration with Development/Testing)
-    # Check settings directly, default to False.
-    dev_accept_any = getattr(settings, "OTP_DEV_ACCEPT_ANY_CODE", False)
+    # Check settings directly, default to True (temporary/testing mode).
+    # Temporary/testing-friendly behavior (user requested):
+    # accept any 4-digit code unless explicitly disabled in settings.
+    dev_accept_any = getattr(settings, "OTP_DEV_ACCEPT_ANY_CODE", True)
     
     # Also considering DEBUG just to be consistent, but prioritized dev_accept_any
     # User request: Accept ANY random numbers without verification (bypassing strict check)

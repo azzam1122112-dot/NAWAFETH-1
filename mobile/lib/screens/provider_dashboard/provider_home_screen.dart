@@ -146,7 +146,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
 
       String? link;
       if (providerId != null) {
-        link = '${ApiConfig.baseUrl}${ApiConfig.apiPrefix}/providers/$providerId/';
+        link = '${ApiConfig.baseUrl}/provider/$providerId';
       }
 
       // --- Provider Rating (real, non-dummy) ---

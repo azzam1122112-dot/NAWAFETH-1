@@ -24,11 +24,7 @@ class PromoApi {
 
   Future<List<Map<String, dynamic>>> getMyRequests() async {
     final res = await _dio.get('${ApiConfig.apiPrefix}/promo/requests/my/');
-    final data = res.data;
-    if (data is List) {
-      return data.map((e) => _asMap(e)).toList();
-    }
-    return const [];
+    return _extractList(res.data).map((e) => _asMap(e)).toList();
   }
 
   Future<List<Map<String, dynamic>>> getBackofficeRequests({
@@ -44,11 +40,7 @@ class PromoApi {
         if ((q ?? '').trim().isNotEmpty) 'q': q,
       },
     );
-    final data = res.data;
-    if (data is List) {
-      return data.map((e) => _asMap(e)).toList();
-    }
-    return const [];
+    return _extractList(res.data).map((e) => _asMap(e)).toList();
   }
 
   Future<Map<String, dynamic>> getRequestDetail(int requestId) async {
@@ -125,10 +117,10 @@ class PromoApi {
         queryParameters: {'limit': limit},
       );
 
-      final data = res.data;
-      if (data is List) {
+      final list = _extractList(res.data);
+      if (list.isNotEmpty) {
         lastHomeBannersRequestFailed = false;
-        return data
+        return list
             .whereType<dynamic>()
             .map((e) => ProviderPortfolioItem.fromJson(_asMap(e)))
             .toList();
@@ -164,10 +156,10 @@ class PromoApi {
         '${ApiConfig.apiPrefix}/promo/active/',
         queryParameters: qp,
       );
-      final data = res.data;
-      if (data is List) {
+      final list = _extractList(res.data);
+      if (list.isNotEmpty) {
         lastActivePromosRequestFailed = false;
-        return data.map((e) => _asMap(e)).toList();
+        return list.map((e) => _asMap(e)).toList();
       }
       lastActivePromosRequestFailed = false;
       return const [];
@@ -187,5 +179,19 @@ class PromoApi {
       return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return <String, dynamic>{};
+  }
+
+  List<dynamic> _extractList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) {
+      final map = _asMap(data);
+      final results = map['results'];
+      if (results is List) return results;
+      final items = map['items'];
+      if (items is List) return items;
+      final payload = map['data'];
+      if (payload is List) return payload;
+    }
+    return const [];
   }
 }

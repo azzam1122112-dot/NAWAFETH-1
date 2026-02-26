@@ -13,20 +13,12 @@ class ExtrasApi {
 
   Future<List<Map<String, dynamic>>> getCatalog() async {
     final res = await _dio.get('${ApiConfig.apiPrefix}/extras/catalog/');
-    final data = res.data;
-    if (data is List) {
-      return data.map((e) => _asMap(e)).toList();
-    }
-    return const [];
+    return _extractList(res.data).map((e) => _asMap(e)).toList();
   }
 
   Future<List<Map<String, dynamic>>> getMyExtras() async {
     final res = await _dio.get('${ApiConfig.apiPrefix}/extras/my/');
-    final data = res.data;
-    if (data is List) {
-      return data.map((e) => _asMap(e)).toList();
-    }
-    return const [];
+    return _extractList(res.data).map((e) => _asMap(e)).toList();
   }
 
   Future<Map<String, dynamic>> buy(String sku) async {
@@ -40,5 +32,19 @@ class ExtrasApi {
       return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return <String, dynamic>{};
+  }
+
+  List<dynamic> _extractList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) {
+      final map = _asMap(data);
+      final results = map['results'];
+      if (results is List) return results;
+      final items = map['items'];
+      if (items is List) return items;
+      final payload = map['data'];
+      if (payload is List) return payload;
+    }
+    return const [];
   }
 }

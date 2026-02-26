@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../widgets/bottom_nav.dart';
+import '../core/permissions/permissions_service.dart';
 import '../services/providers_api.dart';
 import '../services/marketplace_api.dart';
 import '../models/category.dart';
@@ -23,6 +25,10 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
   bool _submitting = false;
   bool showSuccessCard = false;
   String _dispatchMode = 'all'; // all | nearest
+  bool _loadingNearestProvidersPreview = false;
+  String? _nearestProvidersPreviewMessage;
+  List<Map<String, dynamic>> _nearestProvidersPreview = const [];
+  int _nearestPreviewRequestId = 0;
 
   List<Category> _categories = [];
 
@@ -127,6 +133,111 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
     setState(() {
       _categories = cats;
     });
+  }
+
+  Future<void> _refreshNearestProvidersPreview() async {
+    if (_dispatchMode != 'nearest') {
+      if (!mounted) return;
+      setState(() {
+        _loadingNearestProvidersPreview = false;
+        _nearestProvidersPreviewMessage = null;
+        _nearestProvidersPreview = const [];
+      });
+      return;
+    }
+
+    if (_selectedSubCategory == null) {
+      if (!mounted) return;
+      setState(() {
+        _nearestProvidersPreview = const [];
+        _nearestProvidersPreviewMessage = 'اختر التصنيف الفرعي لعرض المزودين الأقرب.';
+      });
+      return;
+    }
+
+    final city = (_selectedCity ?? '').trim();
+    if (city.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _nearestProvidersPreview = const [];
+        _nearestProvidersPreviewMessage = 'اختر المدينة لعرض المزودين الأقرب.';
+      });
+      return;
+    }
+
+    final requestId = ++_nearestPreviewRequestId;
+    if (mounted) {
+      setState(() {
+        _loadingNearestProvidersPreview = true;
+        _nearestProvidersPreviewMessage = null;
+      });
+    }
+
+    try {
+      final permission = await PermissionsService.ensureLocationWhenInUse();
+      if (!permission.isGranted) {
+        if (!mounted || requestId != _nearestPreviewRequestId) return;
+        setState(() {
+          _loadingNearestProvidersPreview = false;
+          _nearestProvidersPreview = const [];
+          _nearestProvidersPreviewMessage =
+              'مطلوب تفعيل الموقع لعرض الأقرب (${permission.messageAr})';
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      final providers = await ProvidersApi().getProvidersForMap(
+        subcategoryId: _selectedSubCategory!.id,
+        city: city,
+        acceptsUrgentOnly: true,
+      );
+
+      final ranked = <Map<String, dynamic>>[];
+      for (final p in providers) {
+        final lat = p['lat'];
+        final lng = p['lng'];
+        if (lat is! num || lng is! num) continue;
+        final meters = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          lat.toDouble(),
+          lng.toDouble(),
+        );
+        ranked.add({
+          ...p,
+          'distance_meters': meters,
+          'distance_km': meters / 1000.0,
+        });
+      }
+
+      ranked.sort((a, b) {
+        final da = (a['distance_meters'] as num?)?.toDouble() ?? double.infinity;
+        final db = (b['distance_meters'] as num?)?.toDouble() ?? double.infinity;
+        return da.compareTo(db);
+      });
+
+      if (!mounted || requestId != _nearestPreviewRequestId) return;
+      setState(() {
+        _loadingNearestProvidersPreview = false;
+        _nearestProvidersPreview = ranked.take(6).toList();
+        _nearestProvidersPreviewMessage = _nearestProvidersPreview.isEmpty
+            ? 'لا يوجد مزودون قريبون متاحون حاليًا لهذا التصنيف في المدينة المختارة.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _nearestPreviewRequestId) return;
+      setState(() {
+        _loadingNearestProvidersPreview = false;
+        _nearestProvidersPreview = const [];
+        _nearestProvidersPreviewMessage = 'تعذر تحميل قائمة المزودين الأقرب حاليًا.';
+      });
+    }
   }
 
   @override
@@ -451,6 +562,10 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
               _buildSectionHeader("طريقة الإرسال", Icons.send_rounded, isDark),
               const SizedBox(height: 12),
               _buildDispatchModeCard(isDark),
+              if (_dispatchMode == 'nearest') ...[
+                const SizedBox(height: 12),
+                _buildNearestProvidersPreviewCard(isDark),
+              ],
               const SizedBox(height: 24),
 
               // City Selection (placed below dispatch options)
@@ -539,7 +654,10 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
           RadioListTile<String>(
             value: 'all',
             groupValue: _dispatchMode,
-            onChanged: (v) => setState(() => _dispatchMode = v ?? 'all'),
+            onChanged: (v) {
+              setState(() => _dispatchMode = v ?? 'all');
+              _refreshNearestProvidersPreview();
+            },
             title: const Text(
               'إرسال لجميع مزودي الخدمة العاجلة',
               style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
@@ -552,12 +670,198 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
           RadioListTile<String>(
             value: 'nearest',
             groupValue: _dispatchMode,
-            onChanged: (v) => setState(() => _dispatchMode = v ?? 'nearest'),
+            onChanged: (v) {
+              setState(() => _dispatchMode = v ?? 'nearest');
+              _refreshNearestProvidersPreview();
+            },
             title: const Text(
               'إرسال للأقرب (حسب نظام المطابقة)',
               style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearestProvidersPreviewCard(bool isDark) {
+    final bg = isDark ? const Color(0xFF1F2430) : const Color(0xFFFFF7F2);
+    final border = isDark ? Colors.white12 : const Color(0xFFFFD9C8);
+    final titleColor = isDark ? Colors.white : const Color(0xFF3A2A22);
+
+    String formatDistance(dynamic rawKm) {
+      final km = rawKm is num ? rawKm.toDouble() : 0.0;
+      if (km < 1) {
+        final meters = (km * 1000).round();
+        return '$meters م';
+      }
+      return '${km.toStringAsFixed(km < 10 ? 1 : 0)} كم';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.12 : 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8E53).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.near_me_rounded,
+                  size: 18,
+                  color: Color(0xFFFF8E53),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'المزودون الأقرب إليك',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: titleColor,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'تحديث',
+                onPressed: _loadingNearestProvidersPreview
+                    ? null
+                    : _refreshNearestProvidersPreview,
+                icon: _loadingNearestProvidersPreview
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'معاينة تقديرية حسب موقعك الحالي والمدينة المختارة',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 11.5,
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if ((_nearestProvidersPreviewMessage ?? '').isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white10 : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
+              ),
+              child: Text(
+                _nearestProvidersPreviewMessage!,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          if (_nearestProvidersPreview.isNotEmpty)
+            ..._nearestProvidersPreview.map((provider) {
+              final name = (provider['display_name'] ?? 'مزود خدمة').toString();
+              final city = (provider['city'] ?? '').toString().trim();
+              final distance = formatDistance(provider['distance_km']);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B6B).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.person_pin_circle_outlined,
+                        color: Color(0xFFFF6B6B),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          if (city.isNotEmpty)
+                            Text(
+                              city,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 11.5,
+                                color: isDark ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7E57C2).withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        distance,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7E57C2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -643,6 +947,7 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
         setState(() {
           _selectedCity = value;
         });
+        _refreshNearestProvidersPreview();
       },
     );
   }
@@ -769,7 +1074,10 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
             ),
           )
           .toList(),
-      onChanged: (val) => setState(() => _selectedSubCategory = val),
+      onChanged: (val) {
+        setState(() => _selectedSubCategory = val);
+        _refreshNearestProvidersPreview();
+      },
     );
   }
 }

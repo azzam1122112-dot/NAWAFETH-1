@@ -170,7 +170,7 @@ class MarketplaceApi {
         queryParameters: queryParameters.isEmpty ? null : queryParameters,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      return response.data;
+      return _extractList(response.data);
     } catch (e) {
       return [];
     }
@@ -196,7 +196,7 @@ class MarketplaceApi {
         queryParameters: queryParameters.isEmpty ? null : queryParameters,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      return response.data;
+      return _extractList(response.data);
     } catch (_) {
       return [];
     }
@@ -211,7 +211,7 @@ class MarketplaceApi {
         '${ApiConfig.apiPrefix}/marketplace/provider/urgent/available/',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      return response.data;
+      return _extractList(response.data);
     } catch (_) {
       return [];
     }
@@ -226,7 +226,7 @@ class MarketplaceApi {
         '${ApiConfig.apiPrefix}/marketplace/provider/competitive/available/',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      return response.data;
+      return _extractList(response.data);
     } catch (_) {
       return [];
     }
@@ -635,5 +635,18 @@ class MarketplaceApi {
       return data.trim();
     }
     return 'تعذر تنفيذ العملية حالياً.';
+  }
+
+  List<dynamic> _extractList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) {
+      final results = data['results'];
+      if (results is List) return results;
+      final items = data['items'];
+      if (items is List) return items;
+      final payload = data['data'];
+      if (payload is List) return payload;
+    }
+    return const [];
   }
 }

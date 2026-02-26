@@ -14,6 +14,7 @@ import 'steps/contact_info_step.dart';
 import '../../services/providers_api.dart';
 import '../../services/account_api.dart';
 import '../../services/role_controller.dart';
+import '../../services/role_sync.dart';
 import '../../services/session_storage.dart';
 import '../../utils/auth_guard.dart';
 import '../../core/api/api_error.dart';
@@ -331,6 +332,7 @@ class _RegisterServiceProviderPageState
       // Ensure the primary phone is saved on the user account.
       // Provider registration endpoint does not include phone in its payload.
       await AccountApi().updateMe({'phone': phone});
+      AccountApi.invalidateMeCache();
 
       await ProvidersApi().registerProvider(
         providerType: _providerTypeToBackend(_accountTypeAr),
@@ -342,6 +344,10 @@ class _RegisterServiceProviderPageState
             ? _selectedSubcategoryIds
             : null,
       );
+      AccountApi.invalidateMeCache();
+      try {
+        await RoleSync.sync();
+      } catch (_) {}
       final whatsapp = _whatsappCtrl.text.trim();
       if (whatsapp.isNotEmpty) {
         await ProvidersApi().updateMyProviderProfile({'whatsapp': whatsapp});

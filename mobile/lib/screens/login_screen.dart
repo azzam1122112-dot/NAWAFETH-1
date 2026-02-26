@@ -157,11 +157,13 @@ class _LoginScreenState extends State<LoginScreen> {
     // نحفظ الرقم ونحوّل لصفحة OTP دائماً بعد التحقق من الصيغة.
     // إرسال OTP من السيرفر يحاول، لكن فشله لا يمنع الانتقال.
     String? devCode;
+    var otpSent = false;
     try {
       final api = AuthApi();
       await const SessionStorage().savePhone(phoneLocal);
       try {
         devCode = await api.sendOtp(phone: phoneLocal);
+        otpSent = true;
       } catch (_) {
         // ignore
       }
@@ -177,7 +179,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال رمز التحقق')),
+        SnackBar(
+          content: Text(
+            otpSent
+                ? 'تم إرسال رمز التحقق'
+                : 'تعذر إرسال الرمز الآن، يمكنك المتابعة وإعادة الإرسال من شاشة التحقق.',
+          ),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
