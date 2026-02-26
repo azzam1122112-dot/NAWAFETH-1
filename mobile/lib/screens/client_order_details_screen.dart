@@ -72,12 +72,7 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     bool success = false,
   }) {
     if (!mounted) return;
-    PlatformFeedback.show(
-      context,
-      message,
-      error: error,
-      success: success,
-    );
+    PlatformFeedback.show(context, message, error: error, success: success);
   }
 
   @override
@@ -162,13 +157,19 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     if (_isSubmittingReview) return;
 
     if (_order.status != 'مكتمل') {
-      _showWebAwareMessage('لا يمكن إرسال التقييم إلا بعد اكتمال الطلب', error: true);
+      _showWebAwareMessage(
+        'لا يمكن إرسال التقييم إلا بعد اكتمال الطلب',
+        error: true,
+      );
       return;
     }
 
     final requestId = _requestIdValue();
     if (requestId == null) {
-      _showWebAwareMessage('لا يمكن إرسال التقييم: رقم الطلب غير صالح', error: true);
+      _showWebAwareMessage(
+        'لا يمكن إرسال التقييم: رقم الطلب غير صالح',
+        error: true,
+      );
       return;
     }
 
@@ -180,7 +181,10 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       _ratingOnTime,
     ];
     if (!values.every(_isValidCriterion)) {
-      _showWebAwareMessage('فضلاً اختر تقييمًا لكل خيار (من 1 إلى 5)', error: true);
+      _showWebAwareMessage(
+        'فضلاً اختر تقييمًا لكل خيار (من 1 إلى 5)',
+        error: true,
+      );
       return;
     }
 
@@ -425,7 +429,10 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
         );
         if (!ok) {
           if (!mounted) return;
-          _showWebAwareMessage('تعذر إرسال قرار الاعتماد/الرفض حالياً', error: true);
+          _showWebAwareMessage(
+            'تعذر إرسال قرار الاعتماد/الرفض حالياً',
+            error: true,
+          );
           return;
         }
         didAnyAction = true;
@@ -441,7 +448,10 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
               (_approveProviderInputs || _rejectProviderInputs))) {
         if ((_order.providerName ?? '').trim().isEmpty) {
           if (!mounted) return;
-          _showWebAwareMessage('لا يمكن إرسال تذكير قبل تعيين مقدم خدمة للطلب', error: true);
+          _showWebAwareMessage(
+            'لا يمكن إرسال تذكير قبل تعيين مقدم خدمة للطلب',
+            error: true,
+          );
           return;
         }
         final ok = await api.sendRequestReminder(
@@ -589,137 +599,904 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final width = MediaQuery.sizeOf(context).width;
-    final isCompact = width < 370;
-    final desktopLike = width >= 1100;
-    final pagePadding = isCompact ? 12.0 : 16.0;
-    final cardPadding = isCompact ? 12.0 : 14.0;
-    final cardRadius = isCompact ? 12.0 : 14.0;
-    final desktopContentWidth = width > 1320 ? 1240.0 : 1120.0;
-    final horizontalInset = desktopLike
-        ? ((width - desktopContentWidth) / 2).clamp(16.0, 220.0)
-        : pagePadding;
-    final statusColor = _statusColor(_order.status);
-    final canEditOrderFields =
-        _order.status == 'جديد' || _order.status == 'أُرسل';
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final borderColor = isDark ? Colors.white10 : Colors.grey.shade200;
+    try {
+      final bool isDark = Theme.of(context).brightness == Brightness.dark;
+      final width = MediaQuery.sizeOf(context).width;
+      final isCompact = width < 370;
+      final desktopLike = width >= 1100;
+      final pagePadding = isCompact ? 12.0 : 16.0;
+      final cardPadding = isCompact ? 12.0 : 14.0;
+      final cardRadius = isCompact ? 12.0 : 14.0;
+      final desktopContentWidth = width > 1320 ? 1240.0 : 1120.0;
+      final horizontalInset = desktopLike
+          ? ((width - desktopContentWidth) / 2).clamp(16.0, 220.0)
+          : pagePadding;
+      final statusColor = _statusColor(_order.status);
+      final canEditOrderFields =
+          _order.status == 'جديد' || _order.status == 'أُرسل';
+      final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+      final borderColor = isDark ? Colors.white10 : Colors.grey.shade200;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
-        appBar: AppBar(
-          backgroundColor: _mainColor,
-          title: const Text(
-            'تفاصيل الطلب',
-            style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
+          appBar: AppBar(
+            backgroundColor: _mainColor,
+            title: const Text(
+              'تفاصيل الطلب',
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+            ),
+            iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              IconButton(
+                onPressed: _openChat,
+                tooltip: 'فتح محادثة',
+                icon: const Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.white,
+                ),
+              ),
+              IconButton(
+                onPressed: _refreshFromBackend,
+                tooltip: 'تحديث',
+                icon: const Icon(Icons.refresh, color: Colors.white),
+              ),
+            ],
           ),
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            IconButton(
-              onPressed: _openChat,
-              tooltip: 'فتح محادثة',
-              icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-            ),
-            IconButton(
-              onPressed: _refreshFromBackend,
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh, color: Colors.white),
-            ),
-          ],
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _refreshFromBackend,
-                   child: ListView(
-                     physics: const AlwaysScrollableScrollPhysics(),
-                     padding: EdgeInsets.fromLTRB(
-                       horizontalInset,
-                       pagePadding,
-                       horizontalInset,
-                       pagePadding,
-                     ),
-                     children: [
-                      // Header card
-                      Container(
-                        padding: EdgeInsets.all(cardPadding),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(cardRadius),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _order.id,
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: statusColor.withValues(
-                                        alpha: 0.35,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshFromBackend,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalInset,
+                        pagePadding,
+                        horizontalInset,
+                        pagePadding,
+                      ),
+                      children: [
+                        // Header card
+                        Container(
+                          padding: EdgeInsets.all(cardPadding),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(cardRadius),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _order.id,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
                                       ),
                                     ),
                                   ),
-                                  child: Text(
-                                    _order.status,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 7,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: statusColor.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _order.status,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: statusColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${_order.title} ${_order.serviceCode}',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 13,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black54,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _formatDate(_order.createdAt),
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        if ((_order.latestStatusNote ?? '')
+                            .trim()
+                            .isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.campaign_outlined,
+                                      color: _mainColor,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        'آخر تحديث من مقدم الخدمة',
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _order.latestStatusNote!.trim(),
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 13,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                if (_order.latestStatusAt != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _formatDate(_order.latestStatusAt!),
                                     style: TextStyle(
                                       fontFamily: 'Cairo',
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: statusColor,
+                                      fontSize: 11,
+                                      color: isDark
+                                          ? Colors.white54
+                                          : Colors.black54,
                                     ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        // Offers Section
+                        if (_isLoadingOffers)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+
+                        if (!_isLoadingOffers &&
+                            (_order.status == 'جديد' ||
+                                _order.status == 'أُرسل') &&
+                            _offers.isNotEmpty) ...[
+                          Text(
+                            'العروض المستلمة (${_offers.length})',
+                            style: const TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ..._offers.map((offer) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: EdgeInsets.all(isCompact ? 10 : 12),
+                              decoration: BoxDecoration(
+                                color: cardColor,
+                                border: Border.all(
+                                  color: Colors.green.withValues(alpha: 0.5),
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          offer.providerName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'Cairo',
+                                            fontSize: isCompact ? 12 : 13,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${offer.price} ريال',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                          fontSize: isCompact ? 12 : 13,
+                                          fontFamily: 'Cairo',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'المدة: ${offer.durationDays} يوم',
+                                    style: TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: isCompact ? 11 : 12,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                  if (offer.note.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'ملاحظات: ${offer.note}',
+                                      style: TextStyle(
+                                        fontSize: isCompact ? 11 : 12,
+                                        color: Colors.grey,
+                                        fontFamily: 'Cairo',
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: () => _acceptOffer(offer),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'قبول العرض',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: 'Cairo',
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 14),
+                        ],
+
+                        // Completed order: actual delivery + actual amount + rating entry
+                        if (_order.status == 'مكتمل')
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _infoLabel('موعد التسليم الفعلي'),
+                                _infoRow(
+                                  label: 'موعد التسليم الفعلي',
+                                  value: _order.deliveredAt == null
+                                      ? '-'
+                                      : _formatDateOnly(_order.deliveredAt!),
+                                ),
+                                const SizedBox(height: 10),
+                                _infoLabel('قيمة الخدمة الفعلية (SR)'),
+                                _infoRow(
+                                  label: 'قيمة الخدمة الفعلية (SR)',
+                                  value: _formatMoney(
+                                    _order.actualServiceAmountSR,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: _didSubmitReview
+                                        ? Colors.green.withValues(alpha: 0.10)
+                                        : _mainColor.withValues(alpha: 0.07),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: _didSubmitReview
+                                          ? Colors.green.withValues(alpha: 0.35)
+                                          : _mainColor.withValues(alpha: 0.25),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _didSubmitReview
+                                        ? 'تم تقييم الطلب مسبقاً.'
+                                        : 'تنبيه: يرجى مراجعة الطلب وتقييم الخدمة.',
+                                    style: TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: _didSubmitReview
+                                          ? Colors.green.shade700
+                                          : _mainColor,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _didSubmitReview
+                                        ? null
+                                        : () => setState(
+                                            () => _showRatingForm =
+                                                !_showRatingForm,
+                                          ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      side: BorderSide(
+                                        color: _didSubmitReview
+                                            ? Colors.green.shade600
+                                            : _mainColor,
+                                      ),
+                                    ),
+                                    icon: Icon(
+                                      _didSubmitReview
+                                          ? Icons.verified_rounded
+                                          : Icons.rate_review_outlined,
+                                      color: _didSubmitReview
+                                          ? Colors.green.shade700
+                                          : _mainColor,
+                                    ),
+                                    label: Text(
+                                      _didSubmitReview
+                                          ? 'تم التقييم مسبقاً'
+                                          : 'تقييم الخدمة',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.bold,
+                                        color: _didSubmitReview
+                                            ? Colors.green.shade700
+                                            : _mainColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (_showRatingForm && !_didSubmitReview) ...[
+                                  const SizedBox(height: 12),
+                                  _ratingRow(
+                                    label: 'سرعة الاستجابة',
+                                    value: _ratingResponseSpeed,
+                                    compact: isCompact,
+                                    onChanged: (v) => setState(
+                                      () => _ratingResponseSpeed = v,
+                                    ),
+                                  ),
+                                  _ratingRow(
+                                    label: 'التكلفة مقابل الخدمة',
+                                    value: _ratingCostValue,
+                                    compact: isCompact,
+                                    onChanged: (v) =>
+                                        setState(() => _ratingCostValue = v),
+                                  ),
+                                  _ratingRow(
+                                    label: 'جودة الخدمة',
+                                    value: _ratingQuality,
+                                    compact: isCompact,
+                                    onChanged: (v) =>
+                                        setState(() => _ratingQuality = v),
+                                  ),
+                                  _ratingRow(
+                                    label: 'المصداقية',
+                                    value: _ratingCredibility,
+                                    compact: isCompact,
+                                    onChanged: (v) =>
+                                        setState(() => _ratingCredibility = v),
+                                  ),
+                                  _ratingRow(
+                                    label: 'وقت الإنجاز',
+                                    value: _ratingOnTime,
+                                    compact: isCompact,
+                                    onChanged: (v) =>
+                                        setState(() => _ratingOnTime = v),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'تعليق على الخدمة المقدمة (300 حرف)',
+                                    style: TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _ratingCommentController,
+                                    maxLength: 300,
+                                    buildCounter:
+                                        (
+                                          context, {
+                                          required currentLength,
+                                          required isFocused,
+                                          maxLength,
+                                        }) => null,
+                                    minLines: isCompact ? 2 : 3,
+                                    maxLines: isCompact ? 4 : 5,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    style: const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: _isSubmittingReview
+                                          ? null
+                                          : _submitReview,
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        backgroundColor: _mainColor,
+                                      ),
+                                      child: _isSubmittingReview
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Text(
+                                              'إرسال التقييم',
+                                              style: TextStyle(
+                                                fontFamily: 'Cairo',
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                        if (_order.status == 'مكتمل')
+                          const SizedBox(height: 12),
+
+                        // Under execution / waiting approval extra fields
+                        if (_order.status == 'تحت التنفيذ' ||
+                            _order.status == 'بانتظار اعتماد العميل')
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _infoLabel('موعد التسليم المتوقع'),
+                                _infoRow(
+                                  label: 'موعد التسليم المتوقع',
+                                  value: _order.expectedDeliveryAt == null
+                                      ? '-'
+                                      : _formatDateOnly(
+                                          _order.expectedDeliveryAt!,
+                                        ),
+                                ),
+                                const SizedBox(height: 10),
+                                _infoLabel('قيمة الخدمة المقدرة (SR)'),
+                                _infoRow(
+                                  label: 'قيمة الخدمة المقدرة (SR)',
+                                  value: _formatMoney(_order.serviceAmountSR),
+                                ),
+                                const SizedBox(height: 10),
+                                _infoLabel('المبلغ المستلم (SR)'),
+                                _infoRow(
+                                  label: 'المبلغ المستلم (SR)',
+                                  value: _formatMoney(_order.receivedAmountSR),
+                                ),
+                                const SizedBox(height: 10),
+                                _infoLabel('المبلغ المتبقي (SR)'),
+                                _infoRow(
+                                  label: 'المبلغ المتبقي (SR)',
+                                  value: _formatMoney(_order.remainingAmountSR),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'البيانات المدخلة من مقدم الخدمة',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 12,
+                                  children: [
+                                    Checkbox(
+                                      value: _approveProviderInputs,
+                                      onChanged:
+                                          (_order.status !=
+                                                  'بانتظار اعتماد العميل' ||
+                                              _order.providerInputsApproved !=
+                                                  null)
+                                          ? null
+                                          : (v) {
+                                              setState(() {
+                                                _approveProviderInputs =
+                                                    v ?? false;
+                                                if (_approveProviderInputs) {
+                                                  _rejectProviderInputs = false;
+                                                }
+                                              });
+                                            },
+                                    ),
+                                    const Text(
+                                      'اعتماد',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Checkbox(
+                                      value: _rejectProviderInputs,
+                                      onChanged:
+                                          (_order.status !=
+                                                  'بانتظار اعتماد العميل' ||
+                                              _order.providerInputsApproved !=
+                                                  null)
+                                          ? null
+                                          : (v) {
+                                              setState(() {
+                                                _rejectProviderInputs =
+                                                    v ?? false;
+                                                if (_rejectProviderInputs) {
+                                                  _approveProviderInputs =
+                                                      false;
+                                                }
+                                              });
+                                            },
+                                    ),
+                                    const Text(
+                                      'رفض',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _order.providerInputsApproved == null
+                                      ? 'بانتظار قرار العميل على مدخلات المزود'
+                                      : (_order.providerInputsApproved!
+                                            ? 'تم اعتماد مدخلات المزود'
+                                            : 'تم رفض مدخلات المزود'),
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: _order.providerInputsApproved == null
+                                        ? (isDark
+                                              ? Colors.white54
+                                              : Colors.black54)
+                                        : (_order.providerInputsApproved!
+                                              ? Colors.green
+                                              : Colors.red),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${_order.title} ${_order.serviceCode}',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 13,
-                                color: isDark ? Colors.white70 : Colors.black54,
-                              ),
+                          ),
+
+                        if (_order.status == 'تحت التنفيذ' ||
+                            _order.status == 'بانتظار اعتماد العميل')
+                          const SizedBox(height: 12),
+                        if (_order.status == 'جديد' ||
+                            _order.status == 'بانتظار اعتماد العميل')
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _formatDate(_order.createdAt),
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 12,
-                                color: isDark ? Colors.white54 : Colors.black54,
-                              ),
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              children: [
+                                Checkbox(
+                                  value: _cancelOrder,
+                                  onChanged: (v) =>
+                                      setState(() => _cancelOrder = v ?? false),
+                                ),
+                                const Text(
+                                  'إلغاء الطلب',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
+                        if (_order.status == 'جديد' ||
+                            _order.status == 'بانتظار اعتماد العميل')
+                          const SizedBox(height: 12),
+
+                        // Canceled extra fields
+                        if (_order.status == 'ملغي')
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _infoLabel('تاريخ الإلغاء'),
+                                _infoRow(
+                                  label: 'تاريخ الإلغاء',
+                                  value: _order.canceledAt == null
+                                      ? '-'
+                                      : _formatDateOnly(_order.canceledAt!),
+                                ),
+                                const SizedBox(height: 10),
+                                _infoLabel('سبب الإلغاء'),
+                                _infoRow(
+                                  label: 'سبب الإلغاء',
+                                  value: _order.cancelReason ?? '-',
+                                ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  children: [
+                                    Checkbox(
+                                      value: _reopenCanceledOrder,
+                                      onChanged: (v) => setState(
+                                        () => _reopenCanceledOrder = v ?? false,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'إعادة فتح الطلب (كطلب جديد)',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_order.status == 'ملغي') const SizedBox(height: 12),
+
+                        // Title section
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionHeader(
+                                title: 'عنوان الطلب',
+                                canEdit: canEditOrderFields,
+                                isEditing: _editTitle,
+                                onToggle: () =>
+                                    setState(() => _editTitle = !_editTitle),
+                              ),
+                              TextField(
+                                controller: _titleController,
+                                enabled: _editTitle && canEditOrderFields,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                                style: const TextStyle(fontFamily: 'Cairo'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      if ((_order.latestStatusNote ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 12),
+
+                        // Details section
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionHeader(
+                                title: 'تفاصيل الطلب',
+                                canEdit: canEditOrderFields,
+                                isEditing: _editDetails,
+                                onToggle: () => setState(
+                                  () => _editDetails = !_editDetails,
+                                ),
+                              ),
+                              TextField(
+                                controller: _detailsController,
+                                enabled: _editDetails && canEditOrderFields,
+                                minLines: isCompact ? 3 : 4,
+                                maxLines: isCompact ? 5 : 7,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                                style: const TextStyle(fontFamily: 'Cairo'),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                canEditOrderFields
+                                    ? 'تنبيه: سيتم إشعار مقدم الخدمة بأي تعديل في بيانات الطلب.'
+                                    : 'لا يمكن تعديل بيانات الطلب في هذه المرحلة.',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Attachments section
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'المرفقات',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_order.attachments.isEmpty)
+                                Text(
+                                  'لا يوجد مرفقات',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black54,
+                                  ),
+                                )
+                              else
+                                ..._order.attachments.map(
+                                  (a) => Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.attach_file,
+                                          size: 18,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            a.name,
+                                            style: TextStyle(
+                                              fontFamily: 'Cairo',
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          a.type,
+                                          style: TextStyle(
+                                            fontFamily: 'Cairo',
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Reminder section (bell + dashed area look-alike)
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
@@ -733,846 +1510,142 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                               Row(
                                 children: [
                                   const Icon(
-                                    Icons.campaign_outlined,
+                                    Icons.notifications_none,
                                     color: _mainColor,
-                                    size: 18,
                                   ),
                                   const SizedBox(width: 8),
                                   const Expanded(
                                     child: Text(
-                                      'آخر تحديث من مقدم الخدمة',
+                                      'ارسال تنبيه وتذكير للمختص',
                                       style: TextStyle(
                                         fontFamily: 'Cairo',
-                                        fontSize: 13,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _order.latestStatusNote!.trim(),
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 13,
-                                  color: isDark ? Colors.white70 : Colors.black87,
-                                ),
-                              ),
-                              if (_order.latestStatusAt != null) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  _formatDate(_order.latestStatusAt!),
-                                  style: TextStyle(
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _reminderController,
+                                minLines: isCompact ? 4 : 6,
+                                maxLines: isCompact ? 7 : 10,
+                                decoration: InputDecoration(
+                                  hintText: 'اكتب رسالتك هنا...',
+                                  hintStyle: const TextStyle(
                                     fontFamily: 'Cairo',
-                                    fontSize: 11,
-                                    color: isDark ? Colors.white54 : Colors.black54,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                              ],
+                                style: const TextStyle(fontFamily: 'Cairo'),
+                              ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
                       ],
+                    ),
+                  ),
+                ),
 
-                      // Offers Section
-                      if (_isLoadingOffers)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        ),
-
-                      if (!_isLoadingOffers &&
-                          (_order.status == 'جديد' ||
-                              _order.status == 'أُرسل') &&
-                          _offers.isNotEmpty) ...[
-                        Text(
-                          'العروض المستلمة (${_offers.length})',
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ..._offers.map((offer) {
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: EdgeInsets.all(isCompact ? 10 : 12),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              border: Border.all(
-                                color: Colors.green.withValues(alpha: 0.5),
+                // Bottom buttons
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: desktopLike ? 760 : double.infinity,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                side: BorderSide(color: Colors.grey.shade400),
                               ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        offer.providerName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'Cairo',
-                                          fontSize: isCompact ? 12 : 13,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${offer.price} ريال',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                        fontSize: isCompact ? 12 : 13,
-                                        fontFamily: 'Cairo',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'المدة: ${offer.durationDays} يوم',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: isCompact ? 11 : 12,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
-                                ),
-                                if (offer.note.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'ملاحظات: ${offer.note}',
-                                    style: TextStyle(
-                                      fontSize: isCompact ? 11 : 12,
-                                      color: Colors.grey,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: () => _acceptOffer(offer),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      'قبول العرض',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontFamily: 'Cairo',
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: 14),
-                      ],
-
-                      // Completed order: actual delivery + actual amount + rating entry
-                      if (_order.status == 'مكتمل')
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _infoLabel('موعد التسليم الفعلي'),
-                              _infoRow(
-                                label: 'موعد التسليم الفعلي',
-                                value: _order.deliveredAt == null
-                                    ? '-'
-                                    : _formatDateOnly(_order.deliveredAt!),
-                              ),
-                              const SizedBox(height: 10),
-                              _infoLabel('قيمة الخدمة الفعلية (SR)'),
-                              _infoRow(
-                                label: 'قيمة الخدمة الفعلية (SR)',
-                                value: _formatMoney(
-                                  _order.actualServiceAmountSR,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: _didSubmitReview
-                                      ? Colors.green.withValues(alpha: 0.10)
-                                      : _mainColor.withValues(alpha: 0.07),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: _didSubmitReview
-                                        ? Colors.green.withValues(alpha: 0.35)
-                                        : _mainColor.withValues(alpha: 0.25),
-                                  ),
-                                ),
-                                child: Text(
-                                  _didSubmitReview
-                                      ? 'تم تقييم الطلب مسبقاً.'
-                                      : 'تنبيه: يرجى مراجعة الطلب وتقييم الخدمة.',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: _didSubmitReview
-                                        ? Colors.green.shade700
-                                        : _mainColor,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: _didSubmitReview
-                                      ? null
-                                      : () => setState(
-                                            () =>
-                                                _showRatingForm = !_showRatingForm,
-                                          ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    side: BorderSide(
-                                      color: _didSubmitReview
-                                          ? Colors.green.shade600
-                                          : _mainColor,
-                                    ),
-                                  ),
-                                  icon: Icon(
-                                    _didSubmitReview
-                                        ? Icons.verified_rounded
-                                        : Icons.rate_review_outlined,
-                                    color: _didSubmitReview
-                                        ? Colors.green.shade700
-                                        : _mainColor,
-                                  ),
-                                  label: Text(
-                                    _didSubmitReview
-                                        ? 'تم التقييم مسبقاً'
-                                        : 'تقييم الخدمة',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                      color: _didSubmitReview
-                                          ? Colors.green.shade700
-                                          : _mainColor,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (_showRatingForm && !_didSubmitReview) ...[
-                                const SizedBox(height: 12),
-                                _ratingRow(
-                                  label: 'سرعة الاستجابة',
-                                  value: _ratingResponseSpeed,
-                                  compact: isCompact,
-                                  onChanged: (v) =>
-                                      setState(() => _ratingResponseSpeed = v),
-                                ),
-                                _ratingRow(
-                                  label: 'التكلفة مقابل الخدمة',
-                                  value: _ratingCostValue,
-                                  compact: isCompact,
-                                  onChanged: (v) =>
-                                      setState(() => _ratingCostValue = v),
-                                ),
-                                _ratingRow(
-                                  label: 'جودة الخدمة',
-                                  value: _ratingQuality,
-                                  compact: isCompact,
-                                  onChanged: (v) =>
-                                      setState(() => _ratingQuality = v),
-                                ),
-                                _ratingRow(
-                                  label: 'المصداقية',
-                                  value: _ratingCredibility,
-                                  compact: isCompact,
-                                  onChanged: (v) =>
-                                      setState(() => _ratingCredibility = v),
-                                ),
-                                _ratingRow(
-                                  label: 'وقت الإنجاز',
-                                  value: _ratingOnTime,
-                                  compact: isCompact,
-                                  onChanged: (v) =>
-                                      setState(() => _ratingOnTime = v),
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'تعليق على الخدمة المقدمة (300 حرف)',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _ratingCommentController,
-                                  maxLength: 300,
-                                  buildCounter:
-                                      (
-                                        context, {
-                                        required currentLength,
-                                        required isFocused,
-                                        maxLength,
-                                      }) => null,
-                                  minLines: isCompact ? 2 : 3,
-                                  maxLines: isCompact ? 4 : 5,
-                                  decoration: const InputDecoration(
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  style: const TextStyle(fontFamily: 'Cairo'),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _isSubmittingReview
-                                        ? null
-                                        : _submitReview,
-                                    style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      backgroundColor: _mainColor,
-                                    ),
-                                    child: _isSubmittingReview
-                                        ? const SizedBox(
-                                            width: 22,
-                                            height: 22,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Text(
-                                            'إرسال التقييم',
-                                            style: TextStyle(
-                                              fontFamily: 'Cairo',
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-
-                      if (_order.status == 'مكتمل') const SizedBox(height: 12),
-
-                      // Under execution / waiting approval extra fields
-                      if (_order.status == 'تحت التنفيذ' ||
-                          _order.status == 'بانتظار اعتماد العميل')
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _infoLabel('موعد التسليم المتوقع'),
-                              _infoRow(
-                                label: 'موعد التسليم المتوقع',
-                                value: _order.expectedDeliveryAt == null
-                                    ? '-'
-                                    : _formatDateOnly(
-                                        _order.expectedDeliveryAt!,
-                                      ),
-                              ),
-                              const SizedBox(height: 10),
-                              _infoLabel('قيمة الخدمة المقدرة (SR)'),
-                              _infoRow(
-                                label: 'قيمة الخدمة المقدرة (SR)',
-                                value: _formatMoney(_order.serviceAmountSR),
-                              ),
-                              const SizedBox(height: 10),
-                              _infoLabel('المبلغ المستلم (SR)'),
-                              _infoRow(
-                                label: 'المبلغ المستلم (SR)',
-                                value: _formatMoney(_order.receivedAmountSR),
-                              ),
-                              const SizedBox(height: 10),
-                              _infoLabel('المبلغ المتبقي (SR)'),
-                              _infoRow(
-                                label: 'المبلغ المتبقي (SR)',
-                                value: _formatMoney(_order.remainingAmountSR),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'البيانات المدخلة من مقدم الخدمة',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black54,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 12,
-                                children: [
-                                  Checkbox(
-                                    value: _approveProviderInputs,
-                                    onChanged: (_order.status !=
-                                                'بانتظار اعتماد العميل' ||
-                                            _order.providerInputsApproved !=
-                                                null)
-                                        ? null
-                                        : (v) {
-                                      setState(() {
-                                        _approveProviderInputs = v ?? false;
-                                        if (_approveProviderInputs) {
-                                          _rejectProviderInputs = false;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  const Text(
-                                    'اعتماد',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Checkbox(
-                                    value: _rejectProviderInputs,
-                                    onChanged: (_order.status !=
-                                                'بانتظار اعتماد العميل' ||
-                                            _order.providerInputsApproved !=
-                                                null)
-                                        ? null
-                                        : (v) {
-                                      setState(() {
-                                        _rejectProviderInputs = v ?? false;
-                                        if (_rejectProviderInputs) {
-                                          _approveProviderInputs = false;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  const Text(
-                                    'رفض',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _order.providerInputsApproved == null
-                                    ? 'بانتظار قرار العميل على مدخلات المزود'
-                                    : (_order.providerInputsApproved!
-                                          ? 'تم اعتماد مدخلات المزود'
-                                          : 'تم رفض مدخلات المزود'),
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: _order.providerInputsApproved == null
-                                      ? (isDark
-                                            ? Colors.white54
-                                            : Colors.black54)
-                                      : (_order.providerInputsApproved!
-                                            ? Colors.green
-                                            : Colors.red),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      if (_order.status == 'تحت التنفيذ' ||
-                          _order.status == 'بانتظار اعتماد العميل')
-                        const SizedBox(height: 12),
-                      if (_order.status == 'جديد' ||
-                          _order.status == 'بانتظار اعتماد العميل')
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            children: [
-                              Checkbox(
-                                value: _cancelOrder,
-                                onChanged: (v) => setState(
-                                  () => _cancelOrder = v ?? false,
-                                ),
-                              ),
-                              const Text(
-                                'إلغاء الطلب',
+                              child: const Text(
+                                'إلغاء',
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.red,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      if (_order.status == 'جديد' ||
-                          _order.status == 'بانتظار اعتماد العميل')
-                        const SizedBox(height: 12),
-
-                      // Canceled extra fields
-                      if (_order.status == 'ملغي')
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: cardColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _infoLabel('تاريخ الإلغاء'),
-                              _infoRow(
-                                label: 'تاريخ الإلغاء',
-                                value: _order.canceledAt == null
-                                    ? '-'
-                                    : _formatDateOnly(_order.canceledAt!),
-                              ),
-                              const SizedBox(height: 10),
-                              _infoLabel('سبب الإلغاء'),
-                              _infoRow(
-                                label: 'سبب الإلغاء',
-                                value: _order.cancelReason ?? '-',
-                              ),
-                              const SizedBox(height: 12),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 8,
-                                children: [
-                                  Checkbox(
-                                    value: _reopenCanceledOrder,
-                                    onChanged: (v) => setState(
-                                      () => _reopenCanceledOrder = v ?? false,
-                                    ),
-                                  ),
-                                  const Text(
-                                    'إعادة فتح الطلب (كطلب جديد)',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (_order.status == 'ملغي') const SizedBox(height: 12),
-
-                      // Title section
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _sectionHeader(
-                              title: 'عنوان الطلب',
-                              canEdit: canEditOrderFields,
-                              isEditing: _editTitle,
-                              onToggle: () =>
-                                  setState(() => _editTitle = !_editTitle),
-                            ),
-                            TextField(
-                              controller: _titleController,
-                              enabled: _editTitle && canEditOrderFields,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                              ),
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Details section
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _sectionHeader(
-                              title: 'تفاصيل الطلب',
-                              canEdit: canEditOrderFields,
-                              isEditing: _editDetails,
-                              onToggle: () =>
-                                  setState(() => _editDetails = !_editDetails),
-                            ),
-                            TextField(
-                              controller: _detailsController,
-                              enabled: _editDetails && canEditOrderFields,
-                              minLines: isCompact ? 3 : 4,
-                              maxLines: isCompact ? 5 : 7,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                              ),
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              canEditOrderFields
-                                  ? 'تنبيه: سيتم إشعار مقدم الخدمة بأي تعديل في بيانات الطلب.'
-                                  : 'لا يمكن تعديل بيانات الطلب في هذه المرحلة.',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 12,
-                                color: isDark ? Colors.white54 : Colors.black54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Attachments section
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'المرفقات',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _save,
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
                                 ),
-                              ],
-                            ),
-                            if (_order.attachments.isEmpty)
-                              Text(
-                                'لا يوجد مرفقات',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black54,
-                                ),
-                              )
-                            else
-                              ..._order.attachments.map(
-                                (a) => Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.attach_file,
-                                        size: 18,
-                                        color: Colors.grey,
+                                backgroundColor: _mainColor,
+                              ),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          a.name,
-                                          style: TextStyle(
-                                            fontFamily: 'Cairo',
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black87,
-                                          ),
-                                        ),
+                                    )
+                                  : const Text(
+                                      'حفظ',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
-                                      Text(
-                                        a.type,
-                                        style: TextStyle(
-                                          fontFamily: 'Cairo',
-                                          fontSize: 12,
-                                          color: isDark
-                                              ? Colors.white54
-                                              : Colors.black54,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Reminder section (bell + dashed area look-alike)
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.notifications_none,
-                                  color: _mainColor,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'ارسال تنبيه وتذكير للمختص',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _reminderController,
-                              minLines: isCompact ? 4 : 6,
-                              maxLines: isCompact ? 7 : 10,
-                              decoration: InputDecoration(
-                                hintText: 'اكتب رسالتك هنا...',
-                                hintStyle: const TextStyle(fontFamily: 'Cairo'),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Bottom buttons
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: desktopLike ? 760 : double.infinity,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: Colors.grey.shade400),
-                            ),
-                            child: const Text(
-                              'إلغاء',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.bold,
-                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isSaving ? null : _save,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              backgroundColor: _mainColor,
-                            ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'حفظ',
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } catch (e, st) {
+      debugPrint('ClientOrderDetails build error: $e');
+      debugPrint('$st');
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          appBar: AppBar(
+            backgroundColor: _mainColor,
+            title: const Text(
+              'تفاصيل الطلب',
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+            ),
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          body: const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'تعذر عرض تفاصيل الطلب حالياً. حاول التحديث أو العودة ثم الدخول مرة أخرى.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
   }
 }

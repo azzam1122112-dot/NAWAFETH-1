@@ -217,6 +217,19 @@ class _ProviderOrderDetailsScreenState
           _executionUpdateController.text = latest;
         }
       });
+    } catch (e, st) {
+      debugPrint('ProviderOrderDetails _loadRequestDetail error: $e');
+      debugPrint('$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحميل تفاصيل الطلب بالكامل، تم عرض البيانات المتاحة.',
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoadingDetail = false);
@@ -526,9 +539,7 @@ class _ProviderOrderDetailsScreenState
           } else {
             final startOk = await api.startAssignedRequest(
               requestId: widget.requestId,
-              note: noteText.isEmpty
-                  ? 'بدء التنفيذ'
-                  : noteText,
+              note: noteText.isEmpty ? 'بدء التنفيذ' : noteText,
               expectedDeliveryAt: _expectedDeliveryAt,
               estimatedServiceAmount: _parseMoney(_estimatedAmountController),
               receivedAmount: _parseMoney(_receivedAmountController),
@@ -561,9 +572,7 @@ class _ProviderOrderDetailsScreenState
         } else {
           ok = await api.startAssignedRequest(
             requestId: widget.requestId,
-            note: noteText.isEmpty
-                ? 'بدء التنفيذ'
-                : noteText,
+            note: noteText.isEmpty ? 'بدء التنفيذ' : noteText,
             expectedDeliveryAt: _expectedDeliveryAt,
             estimatedServiceAmount: _parseMoney(_estimatedAmountController),
             receivedAmount: _parseMoney(_receivedAmountController),
@@ -579,9 +588,7 @@ class _ProviderOrderDetailsScreenState
         } else {
           ok = await api.completeAssignedRequest(
             requestId: widget.requestId,
-            note: noteText.isEmpty
-                ? 'تم الإنجاز'
-                : noteText,
+            note: noteText.isEmpty ? 'تم الإنجاز' : noteText,
             deliveredAt: _deliveredAt,
             actualServiceAmount: _parseMoney(_actualAmountController),
           );
@@ -944,6 +951,21 @@ class _ProviderOrderDetailsScreenState
 
   Widget _statusSelector() {
     final options = _availableStatuses();
+    if (options.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _mainColor.withValues(alpha: 0.18)),
+        ),
+        child: const Text(
+          'لا توجد حالات متاحة لهذا الطلب حالياً',
+          style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
+        ),
+      );
+    }
     final current = options.contains(_status) ? _status : options.first;
     if (current != _status) {
       _status = current;
@@ -1370,10 +1392,7 @@ class _ProviderOrderDetailsScreenState
       children: [
         _headerCard(),
         const SizedBox(height: 12),
-        _readonlyField(
-          title: 'عنوان الطلب',
-          value: _titleController.text,
-        ),
+        _readonlyField(title: 'عنوان الطلب', value: _titleController.text),
         const SizedBox(height: 12),
         _readonlyField(
           title: 'تفاصيل الطلب',
@@ -1474,7 +1493,24 @@ class _ProviderOrderDetailsScreenState
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (!_isProviderAccount) {
-      return const Scaffold(body: SizedBox.shrink());
+      return const Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'تعذر التحقق من صلاحية حساب المزود لعرض تفاصيل الطلب.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     final specialActionTitle = _isUrgentRequest
@@ -1580,7 +1616,9 @@ class _ProviderOrderDetailsScreenState
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
-                        side: BorderSide(color: _mainColor.withValues(alpha: 0.55)),
+                        side: BorderSide(
+                          color: _mainColor.withValues(alpha: 0.55),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
