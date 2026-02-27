@@ -209,6 +209,20 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   ProviderProfile? _fullProfile;
   final SupportApi _supportApi = SupportApi();
 
+  int? _providerIdValue() {
+    final raw = (widget.providerId ?? '').trim();
+    if (raw.isEmpty) return null;
+    final parsedInt = int.tryParse(raw);
+    if (parsedInt != null) {
+      return parsedInt > 0 ? parsedInt : null;
+    }
+    final parsedDouble = double.tryParse(raw);
+    if (parsedDouble == null) return null;
+    final rounded = parsedDouble.round();
+    if ((parsedDouble - rounded).abs() > 0.000001) return null;
+    return rounded > 0 ? rounded : null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -223,7 +237,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _syncCanManageGallery() async {
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null) return;
     try {
       final me = await AccountApi().me();
@@ -249,7 +263,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _syncClientSocialState() async {
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null) return;
     try {
       final api = ProvidersApi();
@@ -274,7 +288,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     if (!await checkAuth(context)) return;
     if (!mounted) return;
 
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null || _isLikeBusy) return;
 
     setState(() => _isLikeBusy = true);
@@ -313,7 +327,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   Future<void> _toggleFollowProvider() async {
     if (!await checkAuth(context)) return;
     if (!mounted) return;
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null || _isFollowBusy) return;
 
     setState(() => _isFollowBusy = true);
@@ -400,7 +414,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _loadProviderSpotlights() async {
-    final id = int.tryParse(widget.providerId ?? '');
+    final id = _providerIdValue();
     if (id == null) return;
 
     if (mounted) {
@@ -424,7 +438,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _loadProviderPortfolio() async {
-    final id = int.tryParse(widget.providerId ?? '');
+    final id = _providerIdValue();
     if (id == null) return;
 
     if (mounted) {
@@ -449,7 +463,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
   Future<void> _loadProviderData() async {
     try {
-      final id = int.tryParse((widget.providerId ?? '').trim());
+      final id = _providerIdValue();
       if (id == null) return;
 
       final api = ProvidersApi();
@@ -794,7 +808,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _showFollowersList() async {
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null) return;
 
     await showModalBottomSheet(
@@ -904,7 +918,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _showFollowingList() async {
-    final providerId = int.tryParse((widget.providerId ?? '').trim());
+    final providerId = _providerIdValue();
     if (providerId == null) return;
 
     await showModalBottomSheet(
@@ -1707,7 +1721,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       case 3:
         final int? providerId =
             _fullProfile?.id ??
-            int.tryParse((widget.providerId ?? '').toString());
+            _providerIdValue();
         return ReviewsTab(
           providerId: providerId,
           embedded: true,
@@ -2340,7 +2354,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _loadProviderSubcategories() async {
-    final id = int.tryParse((widget.providerId ?? '').trim());
+    final id = _providerIdValue();
     if (id == null) {
       if (!mounted) return;
       setState(() {

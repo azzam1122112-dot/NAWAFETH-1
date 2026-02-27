@@ -600,27 +600,21 @@ class _ClientOrdersScreenState extends State<ClientOrdersScreen> {
 
     final requestId = extractRequestId(order.id);
     if (kIsWeb && widget.embedded && requestId != null && requestId > 0) {
-      var usedNamedRoute = false;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      bool? changed;
       try {
-        final changed = await Navigator.pushNamed<bool>(
-          context,
+        changed = await navigator.pushNamed<bool>(
           '/client_dashboard/orders/$requestId',
         );
-        usedNamedRoute = true;
-        if (!mounted || changed != true) return;
-        await _fetchOrders();
       } catch (e) {
         debugPrint('ClientOrders web detail route fallback: $e');
+        if (!mounted) return;
+        changed = await navigator.push<bool>(
+          MaterialPageRoute(
+            builder: (_) => ClientOrderDetailsWebEntryScreen(requestId: requestId),
+          ),
+        );
       }
-      if (usedNamedRoute) return;
-      if (!mounted) return;
-
-      final changed = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ClientOrderDetailsWebEntryScreen(requestId: requestId),
-        ),
-      );
       if (!mounted || changed != true) return;
       await _fetchOrders();
       return;

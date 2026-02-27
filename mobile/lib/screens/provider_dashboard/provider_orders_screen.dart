@@ -806,28 +806,21 @@ class _ProviderOrdersScreenState extends State<ProviderOrdersScreen>
   }) async {
     final requestId = _extractRequestId(req);
     if (kIsWeb && widget.embedded && requestId != null && requestId > 0) {
-      var usedNamedRoute = false;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      bool? changed;
       try {
-        final changed = await Navigator.pushNamed<bool>(
-          context,
+        changed = await navigator.pushNamed<bool>(
           '/provider_dashboard/orders/$requestId',
         );
-        usedNamedRoute = true;
-        if (changed == true && mounted) {
-          await _refreshAll();
-        }
       } catch (e) {
         debugPrint('ProviderOrders web detail route fallback: $e');
+        if (!mounted) return;
+        changed = await navigator.push<bool>(
+          MaterialPageRoute(
+            builder: (_) => ProviderOrderDetailsWebEntryScreen(requestId: requestId),
+          ),
+        );
       }
-      if (usedNamedRoute) return;
-      if (!mounted) return;
-
-      final changed = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProviderOrderDetailsWebEntryScreen(requestId: requestId),
-        ),
-      );
       if (changed == true && mounted) {
         await _refreshAll();
       }
