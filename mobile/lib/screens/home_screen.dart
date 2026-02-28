@@ -24,6 +24,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   // -- Data --
   List<CategoryModel> _categories = [];
   List<ProviderPublicModel> _providers = [];
@@ -122,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     const purple = Colors.deepPurple;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF5F5FA),
       drawer: const CustomDrawer(),
       bottomNavigationBar: const CustomBottomNav(currentIndex: 0),
@@ -217,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       // Menu
                       GestureDetector(
-                        onTap: () => Scaffold.of(context).openDrawer(),
+                        onTap: () => _scaffoldKey.currentState?.openDrawer(),
                         child: Container(
                           padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
@@ -468,7 +471,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final coverUrl = ApiClient.buildMediaUrl(p.coverImage);
 
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProviderProfileScreen())),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProviderProfileScreen(
+        providerId: p.id.toString(),
+        providerName: p.displayName,
+        providerImage: ApiClient.buildMediaUrl(p.profileImage),
+        providerRating: p.ratingAvg,
+        providerVerified: p.isVerified,
+        providerPhone: p.phone,
+        providerLat: p.lat,
+        providerLng: p.lng,
+      ))),
       child: Container(
         width: 150,
         margin: const EdgeInsets.only(left: 10),

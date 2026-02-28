@@ -1,12 +1,48 @@
-# أوامر المحاكي (مرتبة وجاهزة للنسخ)
+# أوامر المحاكي (محدثة وواضحة)
 
-## 1) عرض/تشغيل/إيقاف المحاكي (Android)
+> **آخر تحديث:** 2026-02-28  
+> **المسار الأساسي:** `C:\Users\manso\nawafeth`
+
+## 1) تشغيل المحاكي على الإنتاج + الربط مع الباكند (Render)
+
+```powershell
+# 1) تشغيل محاكي نظيف (يمكن استبدال الاسم حسب المتاح لديك)
+$SDK="$env:LOCALAPPDATA\Android\Sdk"
+Start-Process -FilePath "$SDK\emulator\emulator.exe" -ArgumentList "-avd","Medium_Phone_Clean"
+
+# 2) التأكد أن المحاكي ظاهر
+flutter devices
+
+# 3) تشغيل التطبيق على الإنتاج (Render backend)
+cd C:\Users\manso\nawafeth\mobile
+flutter pub get
+flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
+```
+
+## 2) تحديث التطبيق إلى آخر نسخة على المحاكي
+
+```powershell
+# 1) جلب آخر نسخة من المشروع
+cd C:\Users\manso\nawafeth
+git pull origin main
+
+# 2) تحديث الاعتمادات وإعادة بناء التطبيق
+cd C:\Users\manso\nawafeth\mobile
+flutter clean
+flutter pub get
+
+# 3) إعادة تثبيت النسخة الأحدث على نفس المحاكي
+adb -s emulator-5554 uninstall com.example.nawafeth
+flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
+```
+
+## 3) أوامر مساعدة سريعة للمحاكي
 
 ```powershell
 # عرض المحاكيات
 flutter emulators
 
-# تشغيل محاكي (استبدل id)
+# تشغيل محاكي محدد
 flutter emulators --launch <emulator_id>
 
 # عرض الأجهزة المتصلة
@@ -16,72 +52,20 @@ flutter devices
 adb -s emulator-5554 emu kill
 ```
 
-## 2) تشغيل الباكند محليًا (SQLite)
-
-```powershell
-cd C:\Users\manso\nawafeth\backend
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements\dev.txt
-Copy-Item env.example .env -Force
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
-```
-
-## 3) تشغيل الباكند محليًا (PostgreSQL محلي)
-
-```powershell
-cd C:\Users\manso\nawafeth\backend
-.\.venv\Scripts\Activate.ps1
-$env:DATABASE_URL="postgres://postgres:postgres@127.0.0.1:5432/nawafeth"
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
-```
-
-## 4) تشغيل Flutter على المحاكي (API محلي)
-
-```powershell
-cd C:\Users\manso\nawafeth\mobile
-flutter pub get
-flutter run -d emulator-5554 --dart-define=API_TARGET=local
-```
-
-## 5) تشغيل Flutter على المحاكي (API Render)
-
-```powershell
-cd C:\Users\manso\nawafeth\mobile
-flutter run -d emulator-5554 --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
-```
-
-## 6) تشغيل Flutter بعنوان API صريح
-
-```powershell
-cd C:\Users\manso\nawafeth\mobile
-flutter run -d emulator-5554 --dart-define=API_BASE_URL=https://nawafeth-backend.onrender.com
-```
-
-## 7) تحديث Android Emulator و SDK Tools (Windows)
+## 4) تحديث Android Emulator و SDK Tools (Windows)
 
 ```powershell
 $SDK="$env:LOCALAPPDATA\Android\Sdk"
+$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
 & "$SDK\cmdline-tools\latest\bin\sdkmanager.bat" --update
 & "$SDK\cmdline-tools\latest\bin\sdkmanager.bat" "emulator" "platform-tools"
-& "$SDK\cmdline-tools\latest\bin\sdkmanager.bat" --list | Select-String "system-images;android-"
 ```
 
-## 8) تثبيت أحدث System Image (مثال)
+## 5) تشغيل الباكند المحلي (اختياري عند API_TARGET=local)
 
 ```powershell
-$SDK="$env:LOCALAPPDATA\Android\Sdk"
-& "$SDK\cmdline-tools\latest\bin\sdkmanager.bat" "system-images;android-35;google_apis_playstore;x86_64"
-```
-
-## 9) نشر آخر نسخة إلى Render (Backend + Render DB)
-
-```powershell
-cd C:\Users\manso\nawafeth
-git add .
-git commit -m "deploy"
-git push origin main
+cd C:\Users\manso\nawafeth\backend
+C:\Users\manso\nawafeth\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
 ```
 
 ---
