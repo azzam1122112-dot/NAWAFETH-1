@@ -88,6 +88,44 @@ class AuthApiService {
   }
 
   // ────────────────────────────────────────
+  // 👤 فحص توفر اسم المستخدم
+  // ────────────────────────────────────────
+
+  static Future<UsernameAvailabilityResult> checkUsernameAvailability(
+    String username,
+  ) async {
+    final normalized = username.trim();
+    if (normalized.isEmpty) {
+      return UsernameAvailabilityResult(
+        available: false,
+        message: 'اسم المستخدم مطلوب',
+      );
+    }
+
+    final encoded = Uri.encodeQueryComponent(normalized);
+    final resp = await ApiClient.get(
+      '/api/accounts/username-availability/?username=$encoded',
+    );
+
+    final data = resp.dataAsMap;
+    if (resp.isSuccess && data != null) {
+      return UsernameAvailabilityResult(
+        available: data['available'] == true,
+        message:
+            (data['detail'] as String?) ??
+            ((data['available'] == true)
+                ? 'اسم المستخدم متاح'
+                : 'اسم المستخدم محجوز'),
+      );
+    }
+
+    return UsernameAvailabilityResult(
+      available: false,
+      message: (data?['detail'] as String?) ?? _extractError(resp),
+    );
+  }
+
+  // ────────────────────────────────────────
   // 📝 إكمال التسجيل
   // ────────────────────────────────────────
 
@@ -178,6 +216,16 @@ class OtpSendResult {
   final String? error;
 
   OtpSendResult({required this.success, this.devCode, this.error});
+}
+
+class UsernameAvailabilityResult {
+  final bool available;
+  final String message;
+
+  UsernameAvailabilityResult({
+    required this.available,
+    required this.message,
+  });
 }
 
 class OtpVerifyResult {

@@ -1,6 +1,7 @@
 import re
 
 from rest_framework import serializers
+from .models import User
 
 class OTPSendSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=20)
@@ -77,6 +78,18 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         value = (value or "").strip()
         if not value:
             raise serializers.ValidationError("اسم المستخدم مطلوب")
+        if len(value) < 3:
+            raise serializers.ValidationError("اسم المستخدم يجب أن يكون 3 أحرف على الأقل")
+        if not re.match(r"^[A-Za-z0-9_.]+$", value):
+            raise serializers.ValidationError("اسم المستخدم يقبل الحروف الإنجليزية والأرقام و (_) و (.) فقط")
+
+        request = self.context.get("request")
+        qs = User.objects.filter(username__iexact=value)
+        if request is not None and getattr(request, "user", None) and request.user.is_authenticated:
+            qs = qs.exclude(pk=request.user.pk)
+        if qs.exists():
+            raise serializers.ValidationError("اسم المستخدم محجوز، اختر اسماً آخر")
+
         return value
 
     def validate_first_name(self, value: str) -> str:

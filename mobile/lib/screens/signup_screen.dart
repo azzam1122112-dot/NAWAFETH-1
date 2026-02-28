@@ -1,13 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
 import '../constants/colors.dart';
-import '../widgets/custom_drawer.dart';
-import '../widgets/app_bar.dart';
+import '../constants/saudi_cities.dart';
 import '../services/auth_api_service.dart';
 import 'terms_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
-  /// الشاشة الوجهة بعد إتمام التسجيل (اختياري)
   final Widget? redirectTo;
 
   const SignUpScreen({super.key, this.redirectTo});
@@ -21,13 +22,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _lastNameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _cityController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
+  Timer? _usernameDebounce;
+
+  String? _selectedCity;
   bool _agreeToTerms = false;
   bool _isLoading = false;
+  bool _isCheckingUsername = false;
+  bool? _isUsernameAvailable;
+  String? _usernameHint;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
   String? _generalError;
   Map<String, String>? _fieldErrors;
 
@@ -43,30 +51,91 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _lastNameController.text.trim().isNotEmpty &&
       _usernameController.text.trim().isNotEmpty &&
       _emailController.text.trim().isNotEmpty &&
-      _cityController.text.trim().isNotEmpty &&
+      (_selectedCity?.isNotEmpty ?? false) &&
       _passwordController.text == _confirmPasswordController.text &&
       _isPasswordValid &&
       _hasLowercase &&
       _hasUppercase &&
       _hasNumber &&
       _hasSpecial &&
+      (_isUsernameAvailable == true) &&
+      !_isCheckingUsername &&
       _agreeToTerms;
 
   @override
   void dispose() {
+    _usernameDebounce?.cancel();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
-    _cityController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  /// ✅ إكمال التسجيل عبر الـ API
+  void _clearServerErrors() {
+    if (_generalError == null && _fieldErrors == null) return;
+    setState(() {
+      _generalError = null;
+      _fieldErrors = null;
+    });
+  }
+
+  bool _isValidUsernameChars(String value) {
+    return RegExp(r'^[A-Za-z0-9_.]+$').hasMatch(value);
+  }
+
+  void _onUsernameChanged(String value) {
+    _clearServerErrors();
+
+    final username = value.trim();
+    _usernameDebounce?.cancel();
+
+    setState(() {
+      _isUsernameAvailable = null;
+      _isCheckingUsername = false;
+      _usernameHint = null;
+    });
+
+    if (username.isEmpty) return;
+    if (username.length < 3) {
+      setState(() {
+        _isUsernameAvailable = false;
+        _usernameHint = 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل';
+      });
+      return;
+    }
+    if (!_isValidUsernameChars(username)) {
+      setState(() {
+        _isUsernameAvailable = false;
+        _usernameHint = 'المسموح: حروف إنجليزية، أرقام، (_) و (.)';
+      });
+      return;
+    }
+
+    _usernameDebounce = Timer(const Duration(milliseconds: 500), () {
+      _checkUsernameAvailability(username);
+    });
+  }
+
+  Future<void> _checkUsernameAvailability(String username) async {
+    setState(() => _isCheckingUsername = true);
+
+    final result = await AuthApiService.checkUsernameAvailability(username);
+    if (!mounted) return;
+
+    if (_usernameController.text.trim() != username) return;
+
+    setState(() {
+      _isCheckingUsername = false;
+      _isUsernameAvailable = result.available;
+      _usernameHint = result.message;
+    });
+  }
+
   Future<void> _onRegisterPressed() async {
-    if (!_isAllValid) return;
+    if (!_isAllValid || _selectedCity == null) return;
 
     setState(() {
       _isLoading = true;
@@ -79,7 +148,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       lastName: _lastNameController.text.trim(),
       username: _usernameController.text.trim(),
       email: _emailController.text.trim(),
-      city: _cityController.text.trim(),
+      city: _selectedCity!.trim(),
       password: _passwordController.text,
       passwordConfirm: _confirmPasswordController.text,
       acceptTerms: _agreeToTerms,
@@ -89,16 +158,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      // عرض رسالة نجاح
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("✅ تم إكمال التسجيل بنجاح",
-              style: TextStyle(fontFamily: 'Cairo')),
+          content: Text(
+            'تم إكمال التسجيل بنجاح',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
           backgroundColor: Colors.green,
         ),
       );
 
-      // التوجيه
       if (widget.redirectTo != null) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -108,12 +177,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       } else {
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
-    } else {
-      setState(() {
-        _generalError = result.error;
-        _fieldErrors = result.fieldErrors;
-      });
+      return;
     }
+
+    setState(() {
+      _generalError = result.error;
+      _fieldErrors = result.fieldErrors;
+    });
   }
 
   void _openTermsScreen() {
@@ -123,413 +193,558 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 430;
-
-    return Scaffold(
-      drawer: const CustomDrawer(),
-      appBar: const CustomAppBar(title: "إكمال البيانات"),
-      backgroundColor: const Color(0xFFF2F3F5),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 480),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.deepPurple.withValues(alpha: 0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                      colors: [Color(0xFFF0EAFE), Color(0xFFFFFFFF)],
-                    ),
-                    border: Border.all(
-                      color: AppColors.deepPurple.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  child: const Column(
-                    children: [
-                      Text(
-                        "أكمل بياناتك لتفعيل حسابك",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Cairo',
-                          color: AppColors.deepPurple,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        "هذه البيانات مطلوبة لمرة واحدة فقط",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                if (_generalError != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Text(
-                      _generalError!,
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 13,
-                        color: Colors.red.shade700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-
-                if (isWide)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildField(
-                          "الاسم الأول",
-                          _firstNameController,
-                          FontAwesomeIcons.user,
-                          errorText: _fieldErrors?['first_name'],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildField(
-                          "الاسم الأخير",
-                          _lastNameController,
-                          FontAwesomeIcons.user,
-                          errorText: _fieldErrors?['last_name'],
-                        ),
-                      ),
-                    ],
-                  )
-                else ...[
-                  _buildField(
-                    "الاسم الأول",
-                    _firstNameController,
-                    FontAwesomeIcons.user,
-                    errorText: _fieldErrors?['first_name'],
-                  ),
-                  const SizedBox(height: 14),
-                  _buildField(
-                    "الاسم الأخير",
-                    _lastNameController,
-                    FontAwesomeIcons.user,
-                    errorText: _fieldErrors?['last_name'],
-                  ),
-                ],
-                const SizedBox(height: 14),
-
-                _buildField(
-                  "اسم المستخدم",
-                  _usernameController,
-                  FontAwesomeIcons.at,
-                  errorText: _fieldErrors?['username'],
-                ),
-                const SizedBox(height: 14),
-
-                _buildField(
-                  "البريد الإلكتروني",
-                  _emailController,
-                  FontAwesomeIcons.envelope,
-                  keyboardType: TextInputType.emailAddress,
-                  errorText: _fieldErrors?['email'],
-                ),
-                const SizedBox(height: 14),
-
-                _buildField(
-                  "المدينة",
-                  _cityController,
-                  FontAwesomeIcons.city,
-                  errorText: _fieldErrors?['city'],
-                ),
-                const SizedBox(height: 14),
-
-                _buildField(
-                  "كلمة المرور",
-                  _passwordController,
-                  FontAwesomeIcons.lock,
-                  obscure: _obscurePassword,
-                  onChanged: (_) => setState(() {}),
-                  errorText: _fieldErrors?['password'],
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                    icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _buildPasswordValidation(),
-                const SizedBox(height: 14),
-
-                _buildField(
-                  "تأكيد كلمة المرور",
-                  _confirmPasswordController,
-                  FontAwesomeIcons.lockOpen,
-                  obscure: _obscureConfirmPassword,
-                  errorText: _fieldErrors?['password_confirm'],
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(
-                        () => _obscureConfirmPassword = !_obscureConfirmPassword,
-                      );
-                    },
-                    icon: Icon(
-                      _obscureConfirmPassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Row(
-                    children: [
-                      Checkbox(
-                        value: _agreeToTerms,
-                        onChanged: (val) {
-                          setState(() => _agreeToTerms = val ?? false);
-                        },
-                        activeColor: AppColors.deepPurple,
-                      ),
-                      Expanded(
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 2,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            const Text(
-                              "أوافق على",
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 13,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: _openTermsScreen,
-                              child: const Text(
-                                "الشروط والأحكام",
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: TextDecoration.underline,
-                                  color: AppColors.deepPurple,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_fieldErrors?['accept_terms'] != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _fieldErrors!['accept_terms']!,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 12,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-
-                if (!_agreeToTerms)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      "يجب الموافقة على الشروط والأحكام للمتابعة",
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ),
-
-                ElevatedButton(
-                  onPressed:
-                      (_isAllValid && !_isLoading) ? _onRegisterPressed : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.deepPurple,
-                    disabledBackgroundColor: AppColors.deepPurple.withValues(
-                      alpha: 0.45,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          "إكمال التسجيل",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    String? errorText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      errorText: errorText,
+      suffixIcon: suffixIcon,
+      isDense: true,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
+      labelStyle: const TextStyle(
+        fontFamily: 'Cairo',
+        fontSize: 13,
+        color: Colors.black54,
+      ),
+      errorStyle: const TextStyle(
+        fontFamily: 'Cairo',
+        fontSize: 11.5,
+      ),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: FaIcon(
+          icon,
+          size: 16,
+          color: AppColors.deepPurple,
         ),
+      ),
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD9DCE3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.deepPurple, width: 1.35),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.35),
       ),
     );
   }
 
-  Widget _buildField(
-    String label,
-    TextEditingController controller,
-    IconData icon, {
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
     bool obscure = false,
     TextInputType? keyboardType,
+    Widget? suffixIcon,
     void Function(String)? onChanged,
     String? errorText,
-    Widget? suffixIcon,
   }) {
     return TextField(
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,
-      onChanged: onChanged ?? (_) => setState(() {
-        _generalError = null;
-        _fieldErrors = null;
-      }),
-      style: const TextStyle(fontFamily: 'Cairo'),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Cairo'),
-        suffixIcon: suffixIcon,
-        prefixIcon: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: FaIcon(icon, size: 20, color: AppColors.deepPurple),
-        ),
-        filled: true,
-        fillColor: const Color(0xFFF9FAFB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFDADCE0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.deepPurple, width: 1.6),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.red),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 18,
-          horizontal: 14,
-        ),
-        errorText: errorText,
-        errorStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+      style: const TextStyle(
+        fontFamily: 'Cairo',
+        fontSize: 14,
       ),
+      onChanged: onChanged ??
+          (_) {
+            _clearServerErrors();
+            setState(() {});
+          },
+      decoration: _inputDecoration(
+        label: label,
+        icon: icon,
+        errorText: errorText,
+        suffixIcon: suffixIcon,
+      ),
+    );
+  }
+
+  Widget _buildUsernameStatusHint() {
+    final backendError = _fieldErrors?['username'];
+    if (backendError != null && backendError.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, right: 4),
+        child: Text(
+          backendError,
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 11.5,
+            color: Colors.red,
+          ),
+        ),
+      );
+    }
+
+    if (_isCheckingUsername) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 6, right: 4),
+        child: Text(
+          'جاري التحقق من توفر اسم المستخدم...',
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 11.5,
+            color: Colors.black54,
+          ),
+        ),
+      );
+    }
+
+    if (_usernameHint != null && _usernameHint!.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, right: 4),
+        child: Text(
+          _usernameHint!,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 11.5,
+            color: _isUsernameAvailable == true ? Colors.green : Colors.red,
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget? _buildUsernameSuffix() {
+    if (_isCheckingUsername) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_isUsernameAvailable == true) {
+      return const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20);
+    }
+    if (_isUsernameAvailable == false) {
+      return const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 20);
+    }
+    return null;
+  }
+
+  Widget _buildCityDropdown() {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedCity,
+      isExpanded: true,
+      menuMaxHeight: 320,
+      style: const TextStyle(
+        fontFamily: 'Cairo',
+        fontSize: 14,
+        color: Colors.black87,
+      ),
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      decoration: _inputDecoration(
+        label: 'المدينة',
+        icon: FontAwesomeIcons.city,
+        errorText: _fieldErrors?['city'],
+      ),
+      items: SaudiCities.all
+          .map(
+            (city) => DropdownMenuItem<String>(
+              value: city,
+              child: Text(
+                city,
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: _isLoading
+          ? null
+          : (value) {
+              _clearServerErrors();
+              setState(() => _selectedCity = value);
+            },
     );
   }
 
   Widget _buildPasswordValidation() {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F8FC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE9EAF0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Wrap(
+        runSpacing: 6,
+        spacing: 10,
         children: [
-          _buildValidationRow("8 أحرف أو أكثر", _isPasswordValid),
-          _buildValidationRow("حرف صغير", _hasLowercase),
-          _buildValidationRow("حرف كبير", _hasUppercase),
-          _buildValidationRow("رقم", _hasNumber),
-          _buildValidationRow("رمز خاص", _hasSpecial),
+          _buildValidationPill('8 أحرف+', _isPasswordValid),
+          _buildValidationPill('حرف صغير', _hasLowercase),
+          _buildValidationPill('حرف كبير', _hasUppercase),
+          _buildValidationPill('رقم', _hasNumber),
+          _buildValidationPill('رمز خاص', _hasSpecial),
         ],
       ),
     );
   }
 
-  Widget _buildValidationRow(String text, bool valid) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+  Widget _buildValidationPill(String text, bool valid) {
+    final color = valid ? Colors.green : Colors.grey.shade500;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          valid ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 11.5,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTermsSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
       child: Row(
         children: [
-          Icon(
-            valid ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-            color: valid ? Colors.green : Colors.grey,
-            size: 18,
+          Checkbox(
+            value: _agreeToTerms,
+            visualDensity: VisualDensity.compact,
+            activeColor: AppColors.deepPurple,
+            onChanged: _isLoading
+                ? null
+                : (value) {
+                    _clearServerErrors();
+                    setState(() => _agreeToTerms = value ?? false);
+                  },
           ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 13,
-              fontFamily: 'Cairo',
-              color: valid ? Colors.green : Colors.grey,
+          Expanded(
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 1,
+              children: [
+                const Text(
+                  'أوافق على',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12.5,
+                    color: Colors.black87,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _openTermsScreen,
+                  child: const Text(
+                    'الشروط والأحكام',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.deepPurple,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F8),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_forward_rounded,
+            color: AppColors.deepPurple,
+          ),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        title: const Text(
+          'إكمال التسجيل',
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.deepPurple,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 470),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.045),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'أكمل بياناتك لتفعيل حسابك',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: AppColors.deepPurple,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'هذه البيانات مطلوبة مرة واحدة فقط',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12.5,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    if (_generalError != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(
+                          _generalError!,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            color: Colors.red.shade700,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth >= 390) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  label: 'الاسم الأول',
+                                  controller: _firstNameController,
+                                  icon: FontAwesomeIcons.user,
+                                  errorText: _fieldErrors?['first_name'],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildTextField(
+                                  label: 'الاسم الأخير',
+                                  controller: _lastNameController,
+                                  icon: FontAwesomeIcons.user,
+                                  errorText: _fieldErrors?['last_name'],
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        return Column(
+                          children: [
+                            _buildTextField(
+                              label: 'الاسم الأول',
+                              controller: _firstNameController,
+                              icon: FontAwesomeIcons.user,
+                              errorText: _fieldErrors?['first_name'],
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              label: 'الاسم الأخير',
+                              controller: _lastNameController,
+                              icon: FontAwesomeIcons.user,
+                              errorText: _fieldErrors?['last_name'],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
+                    _buildTextField(
+                      label: 'اسم المستخدم',
+                      controller: _usernameController,
+                      icon: FontAwesomeIcons.at,
+                      suffixIcon: _buildUsernameSuffix(),
+                      onChanged: _onUsernameChanged,
+                    ),
+                    _buildUsernameStatusHint(),
+                    const SizedBox(height: 10),
+
+                    _buildTextField(
+                      label: 'البريد الإلكتروني',
+                      controller: _emailController,
+                      icon: FontAwesomeIcons.envelope,
+                      keyboardType: TextInputType.emailAddress,
+                      errorText: _fieldErrors?['email'],
+                    ),
+                    const SizedBox(height: 10),
+
+                    _buildCityDropdown(),
+                    const SizedBox(height: 10),
+
+                    _buildTextField(
+                      label: 'كلمة المرور',
+                      controller: _passwordController,
+                      icon: FontAwesomeIcons.lock,
+                      obscure: _obscurePassword,
+                      errorText: _fieldErrors?['password'],
+                      onChanged: (_) {
+                        _clearServerErrors();
+                        setState(() {});
+                      },
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    _buildPasswordValidation(),
+                    const SizedBox(height: 10),
+
+                    _buildTextField(
+                      label: 'تأكيد كلمة المرور',
+                      controller: _confirmPasswordController,
+                      icon: FontAwesomeIcons.lockOpen,
+                      obscure: _obscureConfirmPassword,
+                      errorText: _fieldErrors?['password_confirm'],
+                      onChanged: (_) {
+                        _clearServerErrors();
+                        setState(() {});
+                      },
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          setState(
+                            () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildTermsSection(),
+                    if (_fieldErrors?['accept_terms'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, right: 4),
+                        child: Text(
+                          _fieldErrors!['accept_terms']!,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 11.5,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    ElevatedButton(
+                      onPressed:
+                          (_isAllValid && !_isLoading) ? _onRegisterPressed : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.deepPurple,
+                        disabledBackgroundColor: AppColors.deepPurple.withValues(
+                          alpha: 0.42,
+                        ),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'إكمال التسجيل',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

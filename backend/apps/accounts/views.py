@@ -2,6 +2,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.timezone import timedelta
 import logging
+import re
 import secrets
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -71,6 +72,10 @@ def _phone_candidates(phone: str) -> list[str]:
         )
 
     return [c for c in candidates if c]
+
+
+def _is_valid_username(username: str) -> bool:
+    return bool(re.match(r"^[A-Za-z0-9_.]+$", username))
 
 
 def _me_payload(user: User) -> dict:
@@ -176,6 +181,19 @@ def _issue_tokens_for_phone(phone: str):
     phone_username = normalized_phone.lstrip("@")
     user = User.objects.filter(phone__in=_phone_candidates(normalized_phone)).order_by("id").first()
     created = False
+
+    # Backward-compatibility: old account deletion flow used soft-delete
+    # (is_active=False). Allow fresh registration with the same phone by
+    # removing that legacy inactive user record first.
+    if user is not None and not user.is_active:
+        if user.is_staff or user.is_superuser:
+            return None, created
+        try:
+            user.delete()
+            user = None
+        except Exception:
+            return None, created
+
     if user is None:
         user = User.objects.create(
             phone=normalized_phone,
@@ -202,9 +220,6 @@ def _issue_tokens_for_phone(phone: str):
 
     if update_fields:
         user.save(update_fields=update_fields)
-
-    if not user.is_active:
-        return None, created
 
     refresh = RefreshToken.for_user(user)
     payload = {
@@ -519,7 +534,7 @@ otp_verify.throttle_scope = "otp"
 @permission_classes([IsAuthenticated])
 def complete_registration(request):
     """Upgrade PHONE_ONLY user to CLIENT (level 3) after collecting required data."""
-    s = CompleteRegistrationSerializer(data=request.data)
+    s = CompleteRegistrationSerializer(data=request.data, context={"request": request})
     s.is_valid(raise_exception=True)
 
     user: User = request.user
@@ -557,6 +572,50 @@ def complete_registration(request):
     return Response({"ok": True, "role_state": user.role_state}, status=status.HTTP_200_OK)
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def username_availability(request):
+    """Check whether a username is available for registration."""
+    username = (request.query_params.get("username") or "").strip()
+    if not username:
+        return Response(
+            {"ok": True, "available": False, "detail": "اسم المستخدم مطلوب"},
+            status=status.HTTP_200_OK,
+        )
+
+    if len(username) < 3:
+        return Response(
+            {
+                "ok": True,
+                "available": False,
+                "detail": "اسم المستخدم يجب أن يكون 3 أحرف على الأقل",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    if not _is_valid_username(username):
+        return Response(
+            {
+                "ok": True,
+                "available": False,
+                "detail": "اسم المستخدم يقبل الحروف الإنجليزية والأرقام و (_) و (.) فقط",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    exists = User.objects.filter(username__iexact=username).exists()
+    if exists:
+        return Response(
+            {"ok": True, "available": False, "detail": "اسم المستخدم محجوز"},
+            status=status.HTTP_200_OK,
+        )
+
+    return Response(
+        {"ok": True, "available": True, "detail": "اسم المستخدم متاح"},
+        status=status.HTTP_200_OK,
+    )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
@@ -574,10 +633,9 @@ def logout_view(request):
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_account_view(request):
-    """Soft-delete the user account (deactivate)."""
+    """Permanently delete the authenticated user account."""
     user: User = request.user
-    user.is_active = False
-    user.save(update_fields=["is_active"])
+    user.delete()
     return Response({"ok": True, "detail": "تم حذف الحساب بنجاح"}, status=status.HTTP_200_OK)
 
 

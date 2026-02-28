@@ -8,6 +8,7 @@ from .views import (
     me_view,
     otp_send,
     otp_verify,
+    username_availability,
     wallet_view,
 )
 
@@ -16,6 +17,7 @@ app_name = "accounts"
 urlpatterns = [
     path("otp/send/", otp_send, name="otp_send"),
     path("otp/verify/", otp_verify, name="otp_verify"),
+    path("username-availability/", username_availability, name="username_availability"),
     path("complete/", complete_registration, name="complete"),
     path("wallet/", wallet_view, name="wallet"),
     path("token/", ThrottledTokenObtainPairView.as_view(), name="token"),
