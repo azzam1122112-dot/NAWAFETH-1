@@ -15,7 +15,7 @@ services:
       - key: DJANGO_SECRET_KEY
         generateValue: true
       # Add your Render service hostname + custom domains when you have them.
-      # Example: nawafeth-backend.onrender.com,nawafeth.app,admin.nawafeth.app
+      # Example: nawafeth-2290.onrender.com,nawafeth.app,admin.nawafeth.app
       - key: DJANGO_ALLOWED_HOSTS
         value: "127.0.0.1,localhost,.onrender.com"
       - key: DATABASE_URL

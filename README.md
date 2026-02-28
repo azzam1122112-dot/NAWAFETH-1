@@ -22,7 +22,7 @@ Redis/Channels:
 Flutter app API base URL is now controlled by `--dart-define`:
 - local API: `flutter run --dart-define=API_TARGET=local`
 - Render API: `flutter run --dart-define=API_TARGET=render`
-- explicit URL: `flutter run --dart-define=API_BASE_URL=https://nawafeth-backend.onrender.com`
+- explicit URL: `flutter run --dart-define=API_BASE_URL=https://nawafeth-2290.onrender.com`
 
 ### Render deployment
 A Render Blueprint is provided in `render.yaml`.
@@ -33,7 +33,7 @@ A Render Blueprint is provided in `render.yaml`.
 - `REDIS_URL` (Render Redis) — required for Channels/WebSockets in production
 
 **Recommended**
-- `DJANGO_ALLOWED_HOSTS` (comma-separated) e.g. `nawafeth-backend.onrender.com,nawafeth.app,admin.nawafeth.app`
+- `DJANGO_ALLOWED_HOSTS` (comma-separated) e.g. `nawafeth-2290.onrender.com,nawafeth.app,admin.nawafeth.app`
 - `CORS_ALLOW_ALL=0`
 - `CORS_ALLOWED_ORIGINS=https://nawafeth.app,https://admin.nawafeth.app`
 - `DJANGO_CSRF_TRUSTED_ORIGINS=https://nawafeth.app,https://admin.nawafeth.app,https://*.onrender.com`

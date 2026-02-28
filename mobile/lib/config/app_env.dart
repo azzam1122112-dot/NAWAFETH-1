@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 /// - API_TARGET=local|render|auto
 /// - API_BASE_URL=https://example.com
 /// - API_LOCAL_BASE_URL=http://192.168.1.10:8000
-/// - API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
+/// - API_RENDER_BASE_URL=https://nawafeth-2290.onrender.com
 class AppEnv {
   static const String _apiTargetDefine = String.fromEnvironment(
     'API_TARGET',
@@ -22,7 +22,7 @@ class AppEnv {
   );
   static const String _apiRenderBaseUrlDefine = String.fromEnvironment(
     'API_RENDER_BASE_URL',
-    defaultValue: 'https://nawafeth-backend.onrender.com',
+    defaultValue: 'https://nawafeth-2290.onrender.com',
   );
 
   static String get apiBaseUrl {
@@ -68,7 +68,7 @@ class AppEnv {
 
   static String get _renderBaseUrl {
     return _normalize(_apiRenderBaseUrlDefine) ??
-        'https://nawafeth-backend.onrender.com';
+        'https://nawafeth-2290.onrender.com';
   }
 
   static String? _normalize(String? value) {

@@ -16,7 +16,7 @@ flutter devices
 # 3) تشغيل التطبيق على الإنتاج (Render backend)
 cd C:\Users\manso\nawafeth\mobile
 flutter pub get
-flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
+flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-2290.onrender.com
 ```
 
 ## 2) تحديث التطبيق إلى آخر نسخة على المحاكي
@@ -33,7 +33,7 @@ flutter pub get
 
 # 3) إعادة تثبيت النسخة الأحدث على نفس المحاكي
 adb -s emulator-5554 uninstall com.example.nawafeth
-flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-backend.onrender.com
+flutter run -d emulator-5554 --target lib/main.dart --dart-define=API_TARGET=render --dart-define=API_RENDER_BASE_URL=https://nawafeth-2290.onrender.com
 ```
 
 ## 3) أوامر مساعدة سريعة للمحاكي
