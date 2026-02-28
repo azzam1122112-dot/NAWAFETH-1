@@ -1,0 +1,142 @@
+:root {
+  --nw-primary: #663d90;
+  --nw-primary-strong: #4f2f70;
+  --nw-surface: #ffffff;
+  --nw-bg: #f5f5fa;
+  --nw-muted: #667085;
+  --nw-border: #e4e7ec;
+  --nw-success: #127c2e;
+  --nw-danger: #b42318;
+  --nw-radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Cairo", sans-serif;
+  background: var(--nw-bg);
+  color: #101828;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nw-container {
+  width: min(1120px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.nw-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--nw-border);
+}
+
+.nw-topbar-content {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nw-brand {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--nw-primary);
+}
+
+.nw-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.nw-nav a {
+  color: #344054;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.nw-nav a:hover {
+  color: var(--nw-primary);
+}
+
+.nw-page {
+  padding-block: 20px 40px;
+}
+
+.nw-primary-btn,
+.nw-secondary-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.nw-primary-btn {
+  background: var(--nw-primary);
+  color: #fff;
+}
+
+.nw-primary-btn:hover {
+  background: var(--nw-primary-strong);
+}
+
+.nw-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nw-secondary-btn {
+  background: #f4f2ff;
+  border: 1px solid #d8d1f0;
+  color: var(--nw-primary);
+}
+
+.nw-link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--nw-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nw-form-error,
+.nw-form-info {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.nw-form-error {
+  color: var(--nw-danger);
+}
+
+.nw-form-info {
+  color: var(--nw-success);
+}
+
+@media (max-width: 768px) {
+  .nw-topbar-content {
+    padding-block: 10px;
+  }
+}
+

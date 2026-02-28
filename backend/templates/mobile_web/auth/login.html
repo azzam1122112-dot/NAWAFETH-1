@@ -1,0 +1,38 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}تسجيل الدخول | نوافذ{% endblock %}
+{% block page_id %}auth-login{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-auth-shell">
+    <div class="nw-auth-card">
+      <h1>تسجيل الدخول</h1>
+      <p class="nw-auth-subtitle">أدخل رقم الجوال وسيصلك رمز تحقق عبر OTP.</p>
+
+      <form id="login-form" class="nw-auth-form" novalidate>
+        <label for="phone-input">رقم الجوال</label>
+        <input id="phone-input" name="phone" type="tel" inputmode="numeric" placeholder="05XXXXXXXX" maxlength="14" required>
+        <p id="login-error" class="nw-form-error" hidden></p>
+        <button id="send-otp-btn" type="submit" class="nw-primary-btn">إرسال رمز التحقق</button>
+      </form>
+
+      <div class="nw-separator"><span>أو</span></div>
+
+      <button id="guest-btn" type="button" class="nw-secondary-btn">
+        المتابعة كزائر بدون تسجيل
+      </button>
+
+      <p id="login-info" class="nw-form-info" hidden></p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/auth/login.js' %}"></script>
+{% endblock %}
+

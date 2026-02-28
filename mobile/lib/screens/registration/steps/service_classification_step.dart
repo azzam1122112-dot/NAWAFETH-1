@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../services/home_service.dart';
+import '../../../models/category_model.dart';
 
 class ServiceClassificationStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -24,42 +26,21 @@ class _ServiceClassificationStepState extends State<ServiceClassificationStep> {
   bool urgentRequests = false;
   bool showSuccessMessage = false;
 
-  final List<String> mainCategories = [
-    "اتصالات وشبكات",
-    "التسويق",
-    "التطوير البرمجي",
-    "الاستشارات القانونية",
-    "الصيانة والمنازل",
-  ];
+  // API-loaded categories
+  List<CategoryModel> _apiCategories = [];
+  bool _isCategoriesLoading = true;
+  String? _categoriesError;
 
-  final Map<String, List<String>> subCategoryMap = {
-    "اتصالات وشبكات": [
-      "تركيب شبكات",
-      "صيانة الراوتر",
-      "ألياف ضوئية",
-      "ربط بين الفروع",
-      "مراقبة الشبكات",
-    ],
-    "التسويق": [
-      "إدارة الحملات الإعلانية",
-      "إدارة منصات التواصل",
-      "كتابة المحتوى",
-      "تصميم مواد تسويقية",
-    ],
-    "التطوير البرمجي": [
-      "مواقع ويب",
-      "تطبيقات جوال",
-      "أنظمة مخصصة",
-      "واجهات برمجة (APIs)",
-    ],
-    "الاستشارات القانونية": [
-      "استشارات تجارية",
-      "استشارات عمالية",
-      "مراجعة العقود",
-      "صياغة لوائح",
-    ],
-    "الصيانة والمنازل": ["سباكة", "كهرباء", "نجارة", "أعمال تبريد وتكييف"],
-  };
+  List<String> get mainCategories =>
+      _apiCategories.map((c) => c.name).toList();
+
+  Map<String, List<String>> get subCategoryMap {
+    final map = <String, List<String>>{};
+    for (final cat in _apiCategories) {
+      map[cat.name] = cat.subcategories.map((s) => s.name).toList();
+    }
+    return map;
+  }
 
   final TextEditingController mainSuggestionController =
       TextEditingController();
@@ -68,10 +49,30 @@ class _ServiceClassificationStepState extends State<ServiceClassificationStep> {
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     // تأجيل الاستدعاء الأول حتى بعد اكتمال البناء
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _validateForm();
     });
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await HomeService.fetchCategories();
+      if (mounted) {
+        setState(() {
+          _apiCategories = categories;
+          _isCategoriesLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCategoriesLoading = false;
+          _categoriesError = 'فشل تحميل التصنيفات';
+        });
+      }
+    }
   }
 
   void _validateForm() {
@@ -652,6 +653,42 @@ class _ServiceClassificationStepState extends State<ServiceClassificationStep> {
             ),
           ),
           const SizedBox(height: 16),
+          if (_isCategoriesLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_categoriesError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Text(
+                      _categoriesError!,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        color: Colors.red,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isCategoriesLoading = true;
+                          _categoriesError = null;
+                        });
+                        _loadCategories();
+                      },
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),

@@ -330,12 +330,33 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      widget.images[currentIndex],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: 220,
-                    ),
+                    child: widget.images[currentIndex].startsWith('http')
+                        ? Image.network(
+                            widget.images[currentIndex],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 220,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 220,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.image, size: 40, color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        : Image.asset(
+                            widget.images[currentIndex],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: 220,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 220,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.image, size: 40, color: Colors.grey),
+                              ),
+                            ),
+                          ),
                   ),
                   Positioned(
                     left: 10,
@@ -383,11 +404,27 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            widget.images[index],
-                            width: 70,
-                            fit: BoxFit.cover,
-                          ),
+                          child: widget.images[index].startsWith('http')
+                              ? Image.network(
+                                  widget.images[index],
+                                  width: 70,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 70,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.image, size: 20, color: Colors.grey),
+                                  ),
+                                )
+                              : Image.asset(
+                                  widget.images[index],
+                                  width: 70,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 70,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.image, size: 20, color: Colors.grey),
+                                  ),
+                                ),
                         ),
                       ),
                     );

@@ -11,6 +11,7 @@ import 'package:nawafeth/services/api_client.dart';
 import 'package:nawafeth/services/account_mode_service.dart';
 import 'package:nawafeth/services/profile_service.dart';
 import 'package:nawafeth/services/subscriptions_service.dart';
+import 'package:nawafeth/services/marketplace_service.dart';
 import 'package:nawafeth/models/user_profile.dart';
 import 'package:nawafeth/models/provider_profile_model.dart';
 
@@ -52,6 +53,9 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
   UserProfile? _userProfile;
   ProviderProfileModel? _providerProfile;
   String? _subscriptionPlanName;
+  int _urgentOrdersCount = 0;
+  int _newOrdersCount = 0;
+  int _clientsCount = 0;
 
   // ────── بيانات محسوبة ──────
   String get _currentPlanName => _subscriptionPlanName ?? "الباقة المجانية";
@@ -108,9 +112,31 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
     // جلب بيانات الاشتراك الحالي
     _loadSubscriptionPlan();
 
+    // جلب عدد الطلبات العاجلة والجديدة
+    _loadOrderCounts();
+
     setState(() {
       _isLoading = false;
     });
+  }
+
+  /// جلب أعداد الطلبات العاجلة والجديدة
+  Future<void> _loadOrderCounts() async {
+    try {
+      final results = await Future.wait([
+        MarketplaceService.getAvailableUrgentRequests(),
+        MarketplaceService.getProviderRequests(statusGroup: 'pending'),
+        MarketplaceService.getProviderRequests(statusGroup: 'completed'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _urgentOrdersCount = results[0].length;
+        _newOrdersCount = results[1].length;
+        _clientsCount = results[2].length;
+      });
+    } catch (_) {
+      // non-critical, keep defaults
+    }
   }
 
   /// ✅ جلب اسم الباقة الحالية من الـ API
@@ -743,8 +769,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                   color: Colors.red.shade600,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  "2 عاجلة",
+                child: Text(
+                  "$_urgentOrdersCount عاجلة",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -761,8 +787,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.amber),
                 ),
-                child: const Text(
-                  "5 جديدة",
+                child: Text(
+                  "$_newOrdersCount جديدة",
                   style: TextStyle(
                     color: Colors.black87,
                     fontSize: 11,
@@ -1166,7 +1192,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                               _statItem(
                                 icon: Icons.person_outline,
                                 label: "عملاء",
-                                value: "0", // TODO: يحتاج endpoint إحصائيات العملاء الفعلية
+                                value: '$_clientsCount',
                               ),
                               const SizedBox(width: 6),
                               _statItem(

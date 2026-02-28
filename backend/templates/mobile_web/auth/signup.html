@@ -1,0 +1,64 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}إكمال التسجيل | نوافذ{% endblock %}
+{% block page_id %}auth-signup{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-auth-shell">
+    <div class="nw-auth-card nw-auth-card-wide">
+      <h1>إكمال بيانات التسجيل</h1>
+      <p class="nw-auth-subtitle">هذه المرحلة مطلوبة لتحويل الحساب من `phone_only` إلى `client`.</p>
+
+      <form id="signup-form" class="nw-auth-form nw-signup-grid" novalidate>
+        <label>الاسم الأول
+          <input id="first-name" name="first_name" type="text" required>
+        </label>
+
+        <label>الاسم الأخير
+          <input id="last-name" name="last_name" type="text" required>
+        </label>
+
+        <label>اسم المستخدم
+          <input id="username" name="username" type="text" required>
+          <small id="username-hint"></small>
+        </label>
+
+        <label>البريد الإلكتروني
+          <input id="email" name="email" type="email" required>
+        </label>
+
+        <label>المدينة
+          <select id="city" name="city" required>
+            <option value="">اختر المدينة</option>
+          </select>
+        </label>
+
+        <label>كلمة المرور
+          <input id="password" name="password" type="password" minlength="8" required>
+        </label>
+
+        <label>تأكيد كلمة المرور
+          <input id="password-confirm" name="password_confirm" type="password" minlength="8" required>
+        </label>
+
+        <label class="nw-checkbox">
+          <input id="terms" name="terms" type="checkbox" required>
+          <span>أوافق على الشروط والأحكام</span>
+        </label>
+      </form>
+
+      <p id="signup-error" class="nw-form-error" hidden></p>
+      <button id="signup-btn" class="nw-primary-btn" type="button">إكمال التسجيل</button>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/auth/signup.js' %}"></script>
+{% endblock %}
+

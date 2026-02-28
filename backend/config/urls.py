@@ -28,6 +28,7 @@ admin.site.index_title = _("مرحبًا بك في لوحة التحكم")
 
 urlpatterns = [
     path("", HealthLiveView.as_view(), name="root"),
+    path("web/", include(("apps.mobile_web.urls", "mobile_web"), namespace="mobile_web")),
     path("health/", HealthCheckView.as_view(), name="health"),
     path("health/live/", HealthLiveView.as_view(), name="health_live"),
     path("health/ready/", HealthReadyView.as_view(), name="health_ready"),

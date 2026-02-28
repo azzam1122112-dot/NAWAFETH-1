@@ -37,26 +37,50 @@ class ServiceProviderLocation {
     this.verified = false,
   });
 
-  // ✅ إنشاء من JSON
+  // ✅ إنشاء من JSON (يدعم استجابة الباكند)
   factory ServiceProviderLocation.fromJson(Map<String, dynamic> json) {
     return ServiceProviderLocation(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      id: (json['id'] ?? json['pk'] ?? '').toString(),
+      name: json['display_name'] ?? json['name'] ?? '',
       category: json['category'] ?? '',
-      subCategory: json['subCategory'] ?? '',
-      latitude: (json['latitude'] ?? 0.0).toDouble(),
-      longitude: (json['longitude'] ?? 0.0).toDouble(),
-      rating: (json['rating'] ?? 0.0).toDouble(),
-      operationsCount: json['operationsCount'] ?? 0,
-      isAvailable: json['isAvailable'] ?? true,
-      isUrgentEnabled: json['isUrgentEnabled'] ?? true,
-      profileImage: json['profileImage'],
-      distanceFromUser: json['distanceFromUser']?.toDouble(),
-      phoneNumber: json['phoneNumber'] ?? '',
+      subCategory: json['subCategory'] ?? json['sub_category'] ?? '',
+      latitude: _toDouble(json['lat'] ?? json['latitude']),
+      longitude: _toDouble(json['lng'] ?? json['longitude']),
+      rating: _toDouble(json['rating_avg'] ?? json['rating']),
+      operationsCount:
+          _toInt(json['completed_requests'] ?? json['operationsCount']),
+      isAvailable: json['isAvailable'] ?? json['is_available'] ?? true,
+      isUrgentEnabled:
+          json['isUrgentEnabled'] ?? json['accepts_urgent'] ?? true,
+      profileImage: json['profile_image'] ?? json['profileImage'],
+      distanceFromUser: json['distanceFromUser'] != null
+          ? _toDouble(json['distanceFromUser'])
+          : null,
+      phoneNumber: json['phone'] ?? json['phoneNumber'] ?? '',
       urgentServices: List<String>.from(json['urgentServices'] ?? []),
-      responseTime: json['responseTime'] ?? 15,
-      verified: json['verified'] ?? false,
+      responseTime: _toInt(json['responseTime'] ?? json['response_time']),
+      verified: json['is_verified_blue'] ??
+          json['is_verified_green'] ??
+          json['verified'] ??
+          false,
     );
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0.0;
+    return 0.0;
+  }
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
   }
 
   // ✅ تحويل إلى JSON

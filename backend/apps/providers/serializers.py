@@ -113,24 +113,32 @@ class ProviderPublicSerializer(serializers.ModelSerializer):
     completed_requests = serializers.IntegerField(read_only=True, required=False)
     following_count = serializers.SerializerMethodField()
     phone = serializers.CharField(source="user.phone", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
 
     class Meta:
         model = ProviderProfile
         fields = (
             "id",
             "display_name",
+            "username",
             "profile_image",
             "cover_image",
             "bio",
+            "about_details",
             "years_experience",
             "phone",
             "whatsapp",
+            "website",
+            "social_links",
+            "languages",
             "city",
             "lat",
             "lng",
+            "coverage_radius_km",
             "accepts_urgent",
             "is_verified_blue",
             "is_verified_green",
+            "qualifications",
             "rating_avg",
             "rating_count",
             "created_at",

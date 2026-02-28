@@ -1,0 +1,152 @@
+.nw-auth-shell {
+  min-height: calc(100vh - 140px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.nw-auth-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border: 1px solid #e7e7f0;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 16px 30px rgba(16, 24, 40, 0.08);
+  display: grid;
+  gap: 14px;
+}
+
+.nw-auth-card-wide {
+  width: min(760px, 100%);
+}
+
+.nw-auth-card h1 {
+  margin: 0;
+  color: var(--nw-primary);
+  font-size: 1.45rem;
+}
+
+.nw-auth-subtitle {
+  margin: 0;
+  color: #475467;
+  font-size: 0.93rem;
+}
+
+.nw-auth-phone {
+  margin: -8px 0 0;
+  font-weight: 700;
+  color: #101828;
+  direction: ltr;
+  text-align: center;
+}
+
+.nw-auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.nw-auth-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  color: #344054;
+  font-size: 0.9rem;
+}
+
+.nw-auth-form input,
+.nw-auth-form select {
+  width: 100%;
+  border-radius: 11px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+
+.nw-auth-form input:focus,
+.nw-auth-form select:focus {
+  outline: 2px solid rgba(102, 61, 144, 0.22);
+  border-color: var(--nw-primary);
+}
+
+.nw-separator {
+  position: relative;
+  text-align: center;
+  color: #98a2b3;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.nw-separator::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top: 1px solid #eaecf0;
+}
+
+.nw-separator span {
+  position: relative;
+  display: inline-block;
+  background: #fff;
+  padding-inline: 8px;
+}
+
+.nw-otp-grid {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  direction: ltr;
+}
+
+.otp-digit {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid #d0d5dd;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--nw-primary);
+}
+
+.nw-otp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #667085;
+  font-size: 0.9rem;
+}
+
+.nw-signup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.nw-signup-grid .nw-checkbox {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.nw-signup-grid .nw-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
+#username-hint {
+  min-height: 16px;
+  font-size: 0.8rem;
+  color: #667085;
+}
+
+@media (max-width: 760px) {
+  .nw-signup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

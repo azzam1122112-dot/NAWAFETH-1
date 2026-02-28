@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/service_provider_location.dart';
+import '../services/api_client.dart';
 import '../constants/colors.dart';
 import 'chat_detail_screen.dart';
 import 'provider_profile_screen.dart';
@@ -292,7 +293,7 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
 
   Future<void> _initializeMap() async {
     await _getCurrentLocation();
-    _loadMockProviders();
+    await _loadProviders();
     _filterProviders();
   }
 
@@ -347,98 +348,48 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
     _mapController!.move(center, zoom);
   }
 
-  // ✅ تحميل بيانات تجريبية (ستستبدل بـ API لاحقاً)
-  void _loadMockProviders() {
-    // موقع الرياض كمركز (24.7136° N, 46.6753° E)
-    final riyadhLat = _currentPosition?.latitude ?? 24.7136;
-    final riyadhLng = _currentPosition?.longitude ?? 46.6753;
+  // ✅ تحميل المزودين من الـ API
+  Future<void> _loadProviders() async {
+    final queryParams = <String, String>{
+      'has_location': '1',
+    };
+    // يمكن إضافة فلتر المدينة إذا كانت متوفرة
+    if (_currentPosition != null) {
+      queryParams['lat'] = _currentPosition!.latitude.toString();
+      queryParams['lng'] = _currentPosition!.longitude.toString();
+    }
 
-    _providers = [
-      ServiceProviderLocation(
-        id: '1',
-        name: 'خالد الحربي',
-        category: 'صيانة المركبات',
-        subCategory: 'ميكانيكا',
-        latitude: riyadhLat + 0.01,
-        longitude: riyadhLng + 0.01,
-        rating: 4.8,
-        operationsCount: 120,
-        phoneNumber: '0501234567',
-        urgentServices: ['ميكانيكا', 'كهرباء'],
-        responseTime: 10,
-        verified: true,
-        profileImage: 'assets/images/1.png',
-      ),
-      ServiceProviderLocation(
-        id: '2',
-        name: 'عبدالله الفني',
-        category: 'خدمات المنازل',
-        subCategory: 'سباكة',
-        latitude: riyadhLat - 0.015,
-        longitude: riyadhLng + 0.02,
-        rating: 4.9,
-        operationsCount: 190,
-        phoneNumber: '0509876543',
-        urgentServices: ['سباكة', 'كهرباء'],
-        responseTime: 15,
-        verified: true,
-      ),
-      ServiceProviderLocation(
-        id: '3',
-        name: 'أحمد المحامي',
-        category: 'استشارات قانونية',
-        subCategory: 'عامة',
-        latitude: riyadhLat + 0.02,
-        longitude: riyadhLng - 0.01,
-        rating: 4.7,
-        operationsCount: 85,
-        phoneNumber: '0555551234',
-        urgentServices: ['عامة', 'صياغة عقود'],
-        responseTime: 5,
-        verified: false,
-      ),
-      ServiceProviderLocation(
-        id: '4',
-        name: 'محمد الكهربائي',
-        category: 'صيانة المركبات',
-        subCategory: 'كهرباء',
-        latitude: riyadhLat - 0.008,
-        longitude: riyadhLng - 0.015,
-        rating: 4.6,
-        operationsCount: 95,
-        phoneNumber: '0544443333',
-        urgentServices: ['كهرباء'],
-        responseTime: 12,
-        verified: true,
-      ),
-      ServiceProviderLocation(
-        id: '5',
-        name: 'فهد النجار',
-        category: 'خدمات المنازل',
-        subCategory: 'نقل أثاث',
-        latitude: riyadhLat + 0.025,
-        longitude: riyadhLng + 0.018,
-        rating: 4.5,
-        operationsCount: 78,
-        phoneNumber: '0533332222',
-        urgentServices: ['نقل أثاث'],
-        responseTime: 20,
-        verified: true,
-      ),
-    ];
+    final uri = Uri(
+      path: '/api/providers/list/',
+      queryParameters: queryParams,
+    );
+
+    final res = await ApiClient.get(uri.toString());
+    if (!res.isSuccess) return;
+
+    final rawList = (res.data is List)
+        ? res.data as List
+        : (res.data is Map && (res.data as Map).containsKey('results'))
+            ? (res.data as Map)['results'] as List
+            : [];
+
+    _providers = rawList
+        .map((e) =>
+            ServiceProviderLocation.fromJson(e as Map<String, dynamic>))
+        .where((p) => p.latitude != 0.0 && p.longitude != 0.0)
+        .toList();
 
     // حساب المسافة لكل مزود
     if (_currentPosition != null) {
-      for (var provider in _providers) {
+      for (var i = 0; i < _providers.length; i++) {
+        final provider = _providers[i];
         final distance = Geolocator.distanceBetween(
           _currentPosition!.latitude,
           _currentPosition!.longitude,
           provider.latitude,
           provider.longitude,
         ) / 1000; // تحويل إلى كيلومتر
-
-        _providers[_providers.indexOf(provider)] =
-            provider.copyWith(distanceFromUser: distance);
+        _providers[i] = provider.copyWith(distanceFromUser: distance);
       }
     }
   }
@@ -446,17 +397,8 @@ class _ProvidersMapScreenState extends State<ProvidersMapScreen> {
   // ✅ تصفية المزودين حسب التصنيف
   void _filterProviders() {
     setState(() {
-      _filteredProviders = _providers.where((provider) {
-        // تطابق التصنيف الرئيسي
-        if (provider.category != widget.category) return false;
-        
-        // إذا كان هناك تصنيف فرعي، نتحقق منه
-        if (widget.subCategory != null && widget.subCategory!.isNotEmpty) {
-          return provider.subCategory == widget.subCategory;
-        }
-        
-        return true;
-      }).toList();
+      // لا تصنيف محلي — المزودون جاهزون من الـ API
+      _filteredProviders = List.from(_providers);
 
       // ترتيب حسب المسافة
       _filteredProviders.sort((a, b) {

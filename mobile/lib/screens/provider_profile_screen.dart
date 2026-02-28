@@ -11,6 +11,9 @@ import '../widgets/auto_scrolling_reels_row.dart';
 import '../widgets/platform_report_dialog.dart';
 import '../widgets/video_reels.dart';
 import '../widgets/video_full_screen.dart';
+import '../services/interactive_service.dart';
+import '../services/api_client.dart';
+import '../models/provider_public_model.dart';
 import 'chat_detail_screen.dart';
 import 'provider_dashboard/reviews_tab.dart';
 import 'service_detail_screen.dart';
@@ -48,49 +51,60 @@ class ProviderProfileScreen extends StatefulWidget {
   State<ProviderProfileScreen> createState() => _ProviderProfileScreenState();
 }
 
-enum _ServiceGeoScope {
-  city,
-  region,
-  country,
-  withinRadius,
-}
-
 class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   final Color mainColor = Colors.deepPurple;
-
-  static const int _dummyServiceRangeKm = 5;
-
-  // نطاق الخدمة الجغرافي (بيانات وهمية): يعرض خيارًا واحدًا فقط
-  // بناءً على طلبك سنعرض "ضمن نطاق محدد" مع دائرة 5 كم.
-  static const _ServiceGeoScope _dummyGeoScopeSelection = _ServiceGeoScope.withinRadius;
 
   int _selectedTabIndex = 0;
 
   bool _isBookmarked = false;
   final bool _isOnline = true;
+  bool _isLoading = true;
 
-  // لمحات مقدم الخدمة (وهمية طبقًا للمخطط)
-  final List<String> _highlightsVideos = [
-    'assets/videos/1.mp4',
-    'assets/videos/2.mp4',
-    'assets/videos/3.mp4',
-  ];
+  // ── بيانات من API ──
+  ProviderPublicModel? _providerDetail;
+  Map<String, dynamic>? _statsData;
+  List<Map<String, dynamic>> _apiServices = [];
+  List<Map<String, dynamic>> _apiPortfolio = [];
+  List<Map<String, dynamic>> _apiSpotlights = [];
 
-  // صور/معاينات للّمحـات (مثل الصفحة الرئيسية)
-  final List<String> _highlightsLogos = [
-    'assets/images/32.jpeg',
-    'assets/images/841015.jpeg',
-    'assets/images/879797.jpeg',
-  ];
+  // لمحات مقدم الخدمة
+  List<String> get _highlightsVideos {
+    return _apiSpotlights
+        .where((s) => (s['file_type'] ?? '') == 'video')
+        .map((s) => s['file_url'] as String? ?? '')
+        .where((url) => url.isNotEmpty)
+        .toList();
+  }
 
-  // عدادات أعلى الصفحة (وهمية طبقًا للمخطط)
-  int _completedRequests = 79;
-  int _followersCount = 33;
-  int _followingCount = 12;
-  int _likesCount = 21;
+  List<String> get _highlightsLogos {
+    return _apiSpotlights
+        .map((s) => s['thumbnail_url'] as String? ?? s['file_url'] as String? ?? '')
+        .where((url) => url.isNotEmpty)
+        .toList();
+  }
 
-  // عدد المقيمين (وهمي) طبقًا للمخطط
-  int _reviewersCount = 440;
+  // عدادات أعلى الصفحة
+  int get _completedRequests =>
+      _statsData?['completed_requests'] as int? ??
+      _providerDetail?.completedRequests ??
+      0;
+  int get _followersCount =>
+      _statsData?['followers_count'] as int? ??
+      _providerDetail?.followersCount ??
+      0;
+  int get _followingCount =>
+      _statsData?['following_count'] as int? ??
+      _providerDetail?.followingCount ??
+      0;
+  int get _likesCount =>
+      _statsData?['likes_count'] as int? ??
+      _providerDetail?.likesCount ??
+      0;
+
+  int get _reviewersCount =>
+      _statsData?['rating_count'] as int? ??
+      _providerDetail?.ratingCount ??
+      0;
 
   final List<Map<String, dynamic>> tabs = const [
     {"title": "الملف الشخصي", "icon": Icons.person_outline},
@@ -99,118 +113,96 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     {"title": "المراجعات", "icon": Icons.reviews},
   ];
 
-  // بيانات وهمية للخدمات
-  final List<Map<String, dynamic>> services = const [
-    {
-      "title": "استشارة قانونية",
-      "image": "assets/images/879797.jpeg",
-      "likes": 21,
-      "files": 5,
-      "comments": 4,
-    },
-    {
-      "title": "مراجعة عقد",
-      "image": "assets/images/841015.jpeg",
-      "likes": 10,
-      "files": 3,
-      "comments": 2,
-    },
-    {
-      "title": "صياغة دعوى",
-      "image": "assets/images/32.jpeg",
-      "likes": 15,
-      "files": 2,
-      "comments": 6,
-    },
-  ];
+  // خدمات من API
+  List<Map<String, dynamic>> get services => _apiServices;
 
-  late final List<Map<String, dynamic>> _servicesData;
+  late List<Map<String, dynamic>> _servicesData;
 
-  // ✅ معرض خدماتي: أقسام + محتوى (صورة/فيديو) + وصف (بيانات وهمية)
-  final List<Map<String, dynamic>> serviceGallerySections = const [
-    {
-      'title': 'استشارات قانونية',
-      'items': [
-        {
-          'type': 'image',
-          'media': 'assets/images/879797.jpeg',
-          'desc': 'شرح مختصر للخدمة مع صور للمستندات قبل/بعد.',
-        },
-        {
-          'type': 'video',
-          'media': 'assets/videos/sample.mp4',
-          'desc': 'فيديو توضيحي سريع لطريقة العمل والخطوات.',
-        },
-      ],
-    },
-    {
-      'title': 'صياغة عقود',
-      'items': [
-        {
-          'type': 'image',
-          'media': 'assets/images/841015.jpeg',
-          'desc': 'نماذج وصور لملخص بنود تم العمل عليها.',
-        },
-        {
-          'type': 'image',
-          'media': 'assets/images/32.jpeg',
-          'desc': 'صور إضافية توضح النتائج النهائية للخدمة.',
-        },
-      ],
-    },
-    {
-      'title': 'مراجعة عقود',
-      'items': [
-        {
-          'type': 'video',
-          'media': 'assets/videos/sample.mp4',
-          'desc': 'مقطع يوضح آلية المراجعة والنقاط المهمة.',
-        },
-      ],
-    },
-  ];
+  // معرض خدماتي من API — مجموعة حسب subcategory
+  List<Map<String, dynamic>> get serviceGallerySections {
+    if (_apiPortfolio.isEmpty) return [];
+    // Group portfolio items by caption prefix or return as single section
+    return [
+      {
+        'title': 'أعمالي',
+        'items': _apiPortfolio.map((item) {
+          final fileType = (item['file_type'] ?? 'image') as String;
+          final fileUrl = item['file_url'] as String? ?? '';
+          final thumbnailUrl = item['thumbnail_url'] as String? ?? '';
+          return {
+            'type': fileType == 'video' ? 'video' : 'image',
+            'media': fileUrl.isNotEmpty ? fileUrl : thumbnailUrl,
+            'desc': item['caption'] as String? ?? '',
+          };
+        }).toList(),
+      },
+    ];
+  }
 
-  String get providerName => widget.providerName ?? 'أحمد المحامي';
+  String get providerName =>
+      _providerDetail?.displayName ?? widget.providerName ?? 'مزود خدمة';
 
-  String get providerCategory => widget.providerCategory ?? 'محامي';
+  String get providerCategory =>
+      widget.providerCategory ?? '';
 
   String get providerSubCategory =>
-      widget.providerSubCategory ?? 'استشارات قانونية';
+      widget.providerSubCategory ?? '';
 
-  double get providerRating => widget.providerRating ?? 4.9;
+  double get providerRating =>
+      _providerDetail?.ratingAvg ?? widget.providerRating ?? 0.0;
 
-  int get providerOperations => widget.providerOperations ?? 120;
+  int get providerOperations =>
+      _providerDetail?.completedRequests ?? widget.providerOperations ?? 0;
 
-  String get providerImage => widget.providerImage ?? 'assets/images/8410.jpeg';
+  String get providerImage =>
+      _providerDetail?.profileImage ?? widget.providerImage ?? 'assets/images/8410.jpeg';
 
-  bool get providerVerified => widget.providerVerified ?? true;
+  bool get providerVerified =>
+      _providerDetail?.isVerified ?? widget.providerVerified ?? false;
 
-  String get providerPhone => widget.providerPhone ?? '0505511111';
+  String get providerPhone =>
+      _providerDetail?.phone ?? widget.providerPhone ?? '';
 
-  String get providerHandle => '@xxxxyy';
+  String get providerHandle =>
+      _providerDetail?.username != null ? '@${_providerDetail!.username}' : '';
 
-  String get providerEnglishName => 'Ahmed AlMohamy';
+  String get providerEnglishName => '';
 
   String get providerAccountType => providerCategory;
 
   String get providerServicesDetails =>
-      'شرح تفصيلي (بيانات وهمية): تقديم استشارات متخصصة، مراجعة وصياغة العقود، وتمثيل قانوني عند الحاجة. '
-      'أعمل وفق خطوات واضحة تشمل جمع المتطلبات، التقييم، التنفيذ، والمتابعة لضمان الجودة.';
+      _providerDetail?.aboutDetails ?? _providerDetail?.bio ?? '';
 
-  String get providerQualifications => 'بكالوريوس قانون • دورات متقدمة في صياغة العقود';
+  String get providerQualifications =>
+      _providerDetail?.qualifications ?? '';
 
-  String get providerExperienceYears => '5 سنوات';
+  String get providerExperienceYears {
+    final years = _providerDetail?.yearsExperience;
+    if (years == null || years == 0) return '';
+    return '$years سنوات';
+  }
 
-  String get providerCommunicationLanguage => 'العربية، الإنجليزية';
+  String get providerCommunicationLanguage =>
+      _providerDetail?.languages ?? '';
 
-  String get providerGeoScope => 'الرياض وما حولها (حضورياً) • متاح عن بُعد';
+  String get providerGeoScope {
+    final radius = _providerDetail?.coverageRadiusKm;
+    final city = _providerDetail?.city ?? '';
+    if (radius != null && radius > 0) {
+      return '$city (ضمن نطاق ${radius.toStringAsFixed(0)} كم)';
+    }
+    return city;
+  }
 
-  String get providerCityName => 'الرياض';
-  String get providerRegionName => 'منطقة الرياض';
-  String get providerCountryName => 'المملكة العربية السعودية';
+  String get providerCityName => _providerDetail?.city ?? '';
+  String get providerRegionName => '';
+  String get providerCountryName => '';
 
-  double get providerLat => widget.providerLat ?? 24.7136;
-  double get providerLng => widget.providerLng ?? 46.6753;
+  double get providerLat => _providerDetail?.lat ?? widget.providerLat ?? 0;
+  double get providerLng => _providerDetail?.lng ?? widget.providerLng ?? 0;
+
+  int get _serviceRangeKm =>
+      (_providerDetail?.coverageRadiusKm?.toInt()) ?? 5;
 
   String _extractSocialHandle(String url) {
     final trimmed = url.trim();
@@ -225,16 +217,13 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   String _geoScopeDisplayValue() {
-    switch (_dummyGeoScopeSelection) {
-      case _ServiceGeoScope.city:
-        return 'مدينتي: $providerCityName';
-      case _ServiceGeoScope.region:
-        return 'منطقتي: $providerRegionName';
-      case _ServiceGeoScope.country:
-        return 'دولتي: $providerCountryName';
-      case _ServiceGeoScope.withinRadius:
-        return 'ضمن نطاق محدد: $_dummyServiceRangeKm كم';
+    final radius = _serviceRangeKm;
+    final city = providerCityName;
+    if (radius > 0 && city.isNotEmpty) {
+      return 'ضمن نطاق محدد: $radius كم ($city)';
     }
+    if (city.isNotEmpty) return 'مدينتي: $city';
+    return 'ضمن نطاق محدد: $radius كم';
   }
 
   Widget _serviceRangeMap({
@@ -242,7 +231,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     required bool isDark,
   }) {
     final center = LatLng(providerLat, providerLng);
-    final radiusMeters = _dummyServiceRangeKm * 1000.0;
+    final radiusMeters = _serviceRangeKm * 1000.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,23 +310,117 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     );
   }
 
-  String get providerWebsite => 'https://example.com';
+  String get providerWebsite =>
+      _providerDetail?.website ?? '';
 
-  String get providerInstagramUrl => 'https://instagram.com/example';
+  String get providerInstagramUrl =>
+      _providerDetail?.socialLinks?['instagram'] as String? ?? '';
 
-  String get providerXUrl => 'https://x.com/example';
+  String get providerXUrl =>
+      _providerDetail?.socialLinks?['x'] as String? ??
+      _providerDetail?.socialLinks?['twitter'] as String? ?? '';
 
-  String get providerSnapchatUrl => 'https://snapchat.com/add/example';
+  String get providerSnapchatUrl =>
+      _providerDetail?.socialLinks?['snapchat'] as String? ?? '';
 
   @override
   void initState() {
     super.initState();
-    _servicesData = services
-        .map((e) => <String, dynamic>{
-              ...e,
-              'isLiked': false,
-            })
-        .toList();
+    _servicesData = [];
+    _loadProviderData();
+  }
+
+  Future<void> _loadProviderData() async {
+    final idStr = widget.providerId;
+    if (idStr == null || idStr.isEmpty) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    final providerId = int.tryParse(idStr);
+    if (providerId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      // Fetch all data in parallel
+      final results = await Future.wait([
+        InteractiveService.fetchProviderDetail(providerId),
+        InteractiveService.fetchProviderStats(providerId),
+        InteractiveService.fetchProviderServices(providerId),
+        InteractiveService.fetchProviderPortfolio(providerId),
+        InteractiveService.fetchProviderSpotlights(providerId),
+      ]);
+
+      final detailResp = results[0];
+      final statsResp = results[1];
+      final servicesResp = results[2];
+      final portfolioResp = results[3];
+      final spotlightsResp = results[4];
+
+      if (mounted) {
+        setState(() {
+          // Provider detail
+          if (detailResp.isSuccess && detailResp.dataAsMap != null) {
+            _providerDetail = ProviderPublicModel.fromJson(detailResp.dataAsMap!);
+          }
+
+          // Stats
+          if (statsResp.isSuccess && statsResp.dataAsMap != null) {
+            _statsData = statsResp.dataAsMap;
+          }
+
+          // Services
+          if (servicesResp.isSuccess) {
+            final list = _parseListResponse(servicesResp);
+            _apiServices = list.map((e) {
+              return <String, dynamic>{
+                'id': e['id'],
+                'title': e['title'] ?? '',
+                'description': e['description'] ?? '',
+                'image': '',
+                'likes': 0,
+                'files': 0,
+                'comments': 0,
+                'price_from': e['price_from'],
+                'price_to': e['price_to'],
+                'price_unit': e['price_unit'] ?? '',
+                'subcategory': e['subcategory'],
+                'isLiked': false,
+              };
+            }).toList();
+            _servicesData = List.from(_apiServices);
+          }
+
+          // Portfolio
+          if (portfolioResp.isSuccess) {
+            _apiPortfolio = _parseListResponse(portfolioResp);
+          }
+
+          // Spotlights
+          if (spotlightsResp.isSuccess) {
+            _apiSpotlights = _parseListResponse(spotlightsResp);
+          }
+
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _parseListResponse(ApiResponse resp) {
+    final data = resp.data;
+    if (data is List) {
+      return data.cast<Map<String, dynamic>>();
+    }
+    if (data is Map && data.containsKey('results')) {
+      return (data['results'] as List).cast<Map<String, dynamic>>();
+    }
+    return [];
   }
 
   String _formatPhoneE164(String rawPhone) {
@@ -769,7 +852,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                       backgroundColor: bgColor,
                       child: CircleAvatar(
                         radius: 44,
-                        backgroundImage: AssetImage(providerImage),
+                        backgroundImage: providerImage.startsWith('http')
+                            ? NetworkImage(providerImage) as ImageProvider
+                            : AssetImage(providerImage),
                       ),
                     ),
                   ),
@@ -1386,7 +1471,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'بيانات وهمية: خبرة في تقديم الاستشارات القانونية وصياغة العقود ومراجعتها. ألتزم بالدقة والسرعة وجودة التواصل.',
+                providerServicesDetails.isNotEmpty
+                    ? providerServicesDetails
+                    : 'لا يوجد وصف',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 12,
@@ -1508,7 +1595,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 ),
               ),
 
-              if (_dummyGeoScopeSelection == _ServiceGeoScope.withinRadius) ...[
+              if (_serviceRangeKm > 0 && providerLat != 0 && providerLng != 0) ...[
                 const SizedBox(height: 12),
                 _serviceRangeMap(
                   borderColor: borderColor,
@@ -1796,7 +1883,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'بيانات وهمية: خبرة في تقديم الاستشارات القانونية وصياغة العقود ومراجعتها. ألتزم بالدقة والسرعة وجودة التواصل.',
+            providerServicesDetails.isNotEmpty
+                ? providerServicesDetails
+                : 'لا يوجد وصف',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontSize: 13,
@@ -1828,15 +1917,14 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               context,
               MaterialPageRoute(
                 builder: (_) => ServiceDetailScreen(
-                  title: service["title"],
+                  title: service["title"] ?? '',
                   images: [
-                    service["image"],
-                    "assets/images/8410.jpeg",
-                    "assets/images/841015.jpeg",
+                    if ((service["image"] as String?)?.isNotEmpty == true)
+                      service["image"],
                   ],
-                  likes: service["likes"],
-                  filesCount: service["files"],
-                  initialCommentsCount: service["comments"],
+                  likes: service["likes"] ?? 0,
+                  filesCount: service["files"] ?? 0,
+                  initialCommentsCount: service["comments"] ?? 0,
                 ),
               ),
             );
@@ -1890,11 +1978,36 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-                width: double.infinity,
-              ),
+              child: imagePath.startsWith('http')
+                  ? Image.network(
+                      imagePath,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Center(
+                          child: Icon(Icons.work_outline, size: 34, color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : imagePath.isNotEmpty
+                      ? Image.asset(
+                          imagePath,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(Icons.work_outline, size: 34, color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey.shade200,
+                          child: const Center(
+                            child: Icon(Icons.work_outline, size: 34, color: Colors.grey),
+                          ),
+                        ),
             ),
           ),
           Padding(
@@ -2104,17 +2217,29 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                    child: Image.asset(
-                      isVideo ? 'assets/images/8410.jpeg' : media,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Center(
-                          child: Icon(Icons.image, size: 34, color: Colors.grey),
-                        ),
-                      ),
-                    ),
+                    child: media.startsWith('http')
+                        ? Image.network(
+                            media,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.image, size: 34, color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        : Image.asset(
+                            media.isNotEmpty ? media : 'assets/images/8410.jpeg',
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.image, size: 34, color: Colors.grey),
+                              ),
+                            ),
+                          ),
                   ),
                   if (isVideo)
                     Positioned.fill(
@@ -2225,15 +2350,25 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           child: Stack(
             children: [
               InteractiveViewer(
-                child: Image.asset(
-                  media,
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  height: double.infinity,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image, color: Colors.white70, size: 42),
-                  ),
-                ),
+                child: media.startsWith('http')
+                    ? Image.network(
+                        media,
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.broken_image, color: Colors.white70, size: 42),
+                        ),
+                      )
+                    : Image.asset(
+                        media,
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.broken_image, color: Colors.white70, size: 42),
+                        ),
+                      ),
               ),
               Positioned(
                 top: 6,

@@ -1,0 +1,166 @@
+.nw-home-hero {
+  background: linear-gradient(135deg, #4f2f70 0%, #663d90 46%, #8666ba 100%);
+  padding: 42px 0;
+  color: #fff;
+}
+
+.nw-home-hero h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.6vw, 2.4rem);
+  font-weight: 800;
+}
+
+.nw-home-hero p {
+  margin: 8px 0 0;
+  max-width: 650px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.nw-home-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nw-home-actions .nw-secondary-btn {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+}
+
+.nw-home-section {
+  margin-top: 24px;
+}
+
+.nw-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.nw-section-head h2 {
+  margin: 0;
+  font-size: 1.12rem;
+  color: #1d2939;
+}
+
+.nw-chip-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.nw-chip {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid #d0d5dd;
+  padding: 8px 12px;
+  background: #fff;
+  color: #344054;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.nw-provider-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.nw-provider-card {
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.nw-provider-cover {
+  height: 82px;
+  background: linear-gradient(135deg, #c8b6e8 0%, #e2d9f5 100%);
+  background-size: cover;
+  background-position: center;
+}
+
+.nw-provider-body {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.nw-provider-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.nw-provider-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f4f2ff;
+  border: 2px solid #fff;
+  margin-top: -20px;
+  background-size: cover;
+  background-position: center;
+}
+
+.nw-provider-name {
+  margin: 0;
+  font-weight: 700;
+  color: #101828;
+}
+
+.nw-provider-city {
+  margin: 0;
+  color: #667085;
+  font-size: 0.84rem;
+}
+
+.nw-provider-stats {
+  display: flex;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: #475467;
+}
+
+.nw-banner-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.nw-banner-card {
+  min-width: 260px;
+  width: 260px;
+  border-radius: 14px;
+  border: 1px solid #eaecf0;
+  background: #fff;
+  overflow: hidden;
+}
+
+.nw-banner-image {
+  height: 130px;
+  background: linear-gradient(135deg, #bda6df 0%, #ede6fa 100%);
+  background-size: cover;
+  background-position: center;
+}
+
+.nw-banner-meta {
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.nw-banner-meta strong {
+  font-size: 0.9rem;
+}
+
+.nw-banner-meta span {
+  color: #667085;
+  font-size: 0.82rem;
+}
+

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import '../services/home_service.dart';
+import '../models/category_model.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -14,23 +16,42 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
 
-  final List<String> _categories = [
-    "تطوير برمجي",
-    "تصميم",
-    "استشارات قانونية",
-    "تسويق",
-    "طب",
-    "تعليم",
-  ];
+  List<CategoryModel> _apiCategories = [];
+  bool _isCategoriesLoading = true;
 
-  final List<String> _subCategories = [
-    "تطبيقات موبايل",
-    "مواقع ويب",
-    "واجهات وتجربة مستخدم",
-    "قواعد بيانات",
-  ];
+  List<String> get _categories =>
+      _apiCategories.map((c) => c.name).toList();
+
+  List<String> get _subCategories {
+    if (_selectedCategory == null) return [];
+    final cat = _apiCategories.where((c) => c.name == _selectedCategory).toList();
+    if (cat.isEmpty) return [];
+    return cat.first.subcategories.map((s) => s.name).toList();
+  }
 
   String _deliveryOption = "فوري";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await HomeService.fetchCategories();
+      if (mounted) {
+        setState(() {
+          _apiCategories = categories;
+          _isCategoriesLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isCategoriesLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +86,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   _categories
                       .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                       .toList(),
-              onChanged: (v) => setState(() => _selectedCategory = v),
+              onChanged: (v) => setState(() {
+                _selectedCategory = v;
+                _selectedSubCategory = null;
+              }),
               decoration: _inputDecoration("اختر تصنيف"),
             ),
 

@@ -7,18 +7,25 @@
 class ProviderPublicModel {
   final int id;
   final String displayName;
+  final String? username;
   final String? profileImage;
   final String? coverImage;
   final String? bio;
+  final String? aboutDetails;
   final int? yearsExperience;
   final String? phone;
   final String? whatsapp;
+  final String? website;
+  final Map<String, dynamic>? socialLinks;
+  final String? languages;
   final String? city;
   final double? lat;
   final double? lng;
+  final double? coverageRadiusKm;
   final bool acceptsUrgent;
   final bool isVerifiedBlue;
   final bool isVerifiedGreen;
+  final String? qualifications;
   final double ratingAvg;
   final int ratingCount;
   final String? createdAt;
@@ -32,18 +39,25 @@ class ProviderPublicModel {
   ProviderPublicModel({
     required this.id,
     required this.displayName,
+    this.username,
     this.profileImage,
     this.coverImage,
     this.bio,
+    this.aboutDetails,
     this.yearsExperience,
     this.phone,
     this.whatsapp,
+    this.website,
+    this.socialLinks,
+    this.languages,
     this.city,
     this.lat,
     this.lng,
+    this.coverageRadiusKm,
     this.acceptsUrgent = false,
     this.isVerifiedBlue = false,
     this.isVerifiedGreen = false,
+    this.qualifications,
     this.ratingAvg = 0.0,
     this.ratingCount = 0,
     this.createdAt,
@@ -57,18 +71,27 @@ class ProviderPublicModel {
     return ProviderPublicModel(
       id: _parseInt(json['id']) ?? 0,
       displayName: _parseString(json['display_name']) ?? '',
+      username: _parseString(json['username']),
       profileImage: _parseString(json['profile_image']),
       coverImage: _parseString(json['cover_image']),
       bio: _parseString(json['bio']),
+      aboutDetails: _parseString(json['about_details']),
       yearsExperience: _parseInt(json['years_experience']),
       phone: _parseString(json['phone']),
       whatsapp: _parseString(json['whatsapp']),
+      website: _parseString(json['website']),
+      socialLinks: json['social_links'] is Map<String, dynamic>
+          ? json['social_links'] as Map<String, dynamic>
+          : null,
+      languages: _parseString(json['languages']),
       city: _parseString(json['city']),
       lat: _parseDouble(json['lat']),
       lng: _parseDouble(json['lng']),
+      coverageRadiusKm: _parseDouble(json['coverage_radius_km']),
       acceptsUrgent: _parseBool(json['accepts_urgent']),
       isVerifiedBlue: _parseBool(json['is_verified_blue']),
       isVerifiedGreen: _parseBool(json['is_verified_green']),
+      qualifications: _parseString(json['qualifications']),
       ratingAvg: _parseDouble(json['rating_avg']) ?? 0.0,
       ratingCount: _parseInt(json['rating_count']) ?? 0,
       createdAt: _parseString(json['created_at']),

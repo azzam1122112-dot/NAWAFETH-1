@@ -1,0 +1,81 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}لوحة مزود الخدمة | نوافذ{% endblock %}
+{% block page_id %}provider-dashboard{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/provider-dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-container nw-provider-hero">
+    <div class="nw-provider-header">
+      <div>
+        <h1 id="provider-name">لوحة مزود الخدمة</h1>
+        <p id="provider-meta">جاري تحميل البيانات...</p>
+      </div>
+      <div class="nw-provider-badges">
+        <span id="plan-badge" class="nw-badge">الباقة</span>
+        <span id="completion-badge" class="nw-badge nw-badge-soft">اكتمال الملف</span>
+      </div>
+    </div>
+    <div class="nw-stat-grid">
+      <div class="nw-stat-card"><span>المتابعون</span><strong id="followers-count">0</strong></div>
+      <div class="nw-stat-card"><span>الإعجابات</span><strong id="likes-count">0</strong></div>
+      <div class="nw-stat-card"><span>التقييم</span><strong id="rating-avg">-</strong></div>
+      <div class="nw-stat-card"><span>الخدمات</span><strong id="services-count">0</strong></div>
+    </div>
+    <p id="provider-error" class="nw-form-error" hidden></p>
+  </section>
+
+  <section class="nw-container nw-tabs-shell">
+    <div class="nw-tabs">
+      <button type="button" class="nw-tab is-active" data-tab="services">الخدمات</button>
+      <button type="button" class="nw-tab" data-tab="reviews">المراجعات</button>
+      <button type="button" class="nw-tab" data-tab="promo">الترويج</button>
+      <button type="button" class="nw-tab" data-tab="orders">الطلبات</button>
+    </div>
+
+    <div class="nw-tab-panel is-active" data-panel="services">
+      <form id="service-form" class="nw-inline-form">
+        <input id="service-title" type="text" placeholder="عنوان الخدمة" required>
+        <input id="service-price-from" type="number" step="0.01" min="0" placeholder="من سعر">
+        <input id="service-price-to" type="number" step="0.01" min="0" placeholder="إلى سعر">
+        <select id="service-subcategory"></select>
+        <button type="submit" class="nw-primary-btn">إضافة خدمة</button>
+      </form>
+      <div id="services-list" class="nw-list"></div>
+    </div>
+
+    <div class="nw-tab-panel" data-panel="reviews">
+      <div id="reviews-summary" class="nw-summary-box"></div>
+      <div id="reviews-list" class="nw-list"></div>
+    </div>
+
+    <div class="nw-tab-panel" data-panel="promo">
+      <form id="promo-form" class="nw-inline-form">
+        <input id="promo-title" type="text" placeholder="عنوان الحملة" required>
+        <select id="promo-type">
+          <option value="banner_home">Banner Home</option>
+          <option value="banner_category">Banner Category</option>
+          <option value="banner_search">Banner Search</option>
+          <option value="boost_profile">Boost Profile</option>
+        </select>
+        <input id="promo-start" type="datetime-local" required>
+        <input id="promo-end" type="datetime-local" required>
+        <button type="submit" class="nw-primary-btn">إرسال طلب ترويج</button>
+      </form>
+      <div id="promo-list" class="nw-list"></div>
+    </div>
+
+    <div class="nw-tab-panel" data-panel="orders">
+      <div id="orders-list" class="nw-list"></div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/provider-dashboard.js' %}"></script>
+{% endblock %}
+
