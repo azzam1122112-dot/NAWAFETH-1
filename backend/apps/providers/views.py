@@ -588,6 +588,7 @@ class MyProviderFollowersView(generics.ListAPIView):
 		)
 		return (
 			User.objects.filter(id__in=user_ids)
+			.select_related("provider_profile")
 			.order_by("-id")
 		)
 

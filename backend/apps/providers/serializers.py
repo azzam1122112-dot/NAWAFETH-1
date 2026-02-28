@@ -292,6 +292,7 @@ class ProviderSpotlightItemCreateSerializer(serializers.ModelSerializer):
 
 class UserPublicSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
+    provider_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -299,6 +300,7 @@ class UserPublicSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "display_name",
+            "provider_id",
         )
 
     def get_display_name(self, obj: User) -> str:
@@ -308,6 +310,10 @@ class UserPublicSerializer(serializers.ModelSerializer):
             return (f"{first} {last}").strip()
         username = (getattr(obj, "username", "") or "").strip()
         return username or "مستخدم"
+
+    def get_provider_id(self, obj: User):
+        profile = getattr(obj, "provider_profile", None)
+        return profile.id if profile else None
 
 
 class MyProviderSubcategoriesSerializer(serializers.Serializer):

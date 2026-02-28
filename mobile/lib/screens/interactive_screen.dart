@@ -3,8 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/custom_drawer.dart';
 import 'chat_detail_screen.dart';
+import 'provider_profile_screen.dart';
 
 import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import '../services/interactive_service.dart';
 import '../models/provider_public_model.dart';
 import '../models/user_public_model.dart';
@@ -22,6 +24,8 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   TabController? _tabController;
 
   bool _isProviderMode = false;
+  bool _isLoggedIn = false;
+  bool _authChecked = false;
 
   List<ProviderPublicModel> _following = [];
   List<UserPublicModel> _followers = [];
@@ -42,6 +46,11 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   }
 
   Future<void> _loadAllData() async {
+    final loggedIn = await AuthService.isLoggedIn();
+    if (!mounted) return;
+    setState(() { _isLoggedIn = loggedIn; _authChecked = true; });
+    if (!loggedIn) return;
+
     final prefs = await SharedPreferences.getInstance();
     final isProviderMode = prefs.getBool('isProvider') ?? false;
 
@@ -122,6 +131,16 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     const purple = Colors.deepPurple;
+
+    // Still checking auth
+    if (!_authChecked) {
+      return _shell(isDark, purple, body: const Center(child: CircularProgressIndicator(color: Colors.deepPurple)));
+    }
+
+    // Not logged in — show login prompt
+    if (!_isLoggedIn) {
+      return _shell(isDark, purple, body: _loginRequiredState(isDark, purple));
+    }
 
     if (_tabController == null) {
       return _shell(isDark, purple, body: const Center(child: CircularProgressIndicator(color: Colors.deepPurple)));
@@ -268,6 +287,50 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     );
   }
 
+  Widget _loginRequiredState(bool isDark, Color purple) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: purple.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.lock_outline_rounded, size: 44, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'يجب تسجيل الدخول لعرض هذه الصفحة',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'سجّل دخولك لمتابعة مزودي الخدمة وحفظ المفضلة',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: isDark ? Colors.white38 : Colors.grey.shade500),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/login'),
+              icon: const Icon(Icons.login_rounded, size: 16, color: Colors.white),
+              label: const Text('تسجيل الدخول', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: purple,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // =============================================
   //  TAB: FOLLOWING
   // =============================================
@@ -299,12 +362,14 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     final coverUrl = ApiClient.buildMediaUrl(provider.coverImage);
     final profileUrl = ApiClient.buildMediaUrl(provider.profileImage);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: isDark
-            ? null
+    return GestureDetector(
+      onTap: () => _navigateToProvider(provider),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isDark
+              ? null
             : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
       ),
       child: Column(
@@ -397,7 +462,24 @@ class _InteractiveScreenState extends State<InteractiveScreen>
           ),
         ],
       ),
+      ),
     );
+  }
+
+  void _navigateToProvider(ProviderPublicModel p) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ProviderProfileScreen(
+        providerId: p.id.toString(),
+        providerName: p.displayName,
+        providerRating: p.ratingAvg,
+        providerOperations: p.completedRequests,
+        providerImage: ApiClient.buildMediaUrl(p.profileImage),
+        providerVerified: p.isVerified,
+        providerPhone: p.phone,
+        providerLat: p.lat,
+        providerLng: p.lng,
+      ),
+    ));
   }
 
   Widget _imgPlaceholder(bool isDark) {
@@ -472,9 +554,23 @@ class _InteractiveScreenState extends State<InteractiveScreen>
               ),
             ),
             GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => ChatDetailScreen(peerName: user.displayName, peerId: user.id),
-              )),
+              onTap: () {
+                if (user.hasProviderProfile) {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ChatDetailScreen(peerName: user.displayName, peerProviderId: user.providerId),
+                  ));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('لا يمكن مراسلة هذا المستخدم — ليس لديه ملف مزود خدمة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+                      backgroundColor: Colors.orange.shade700,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
@@ -527,7 +623,9 @@ class _InteractiveScreenState extends State<InteractiveScreen>
   Widget _favoriteCard(MediaItemModel item, int index, bool isDark, Color purple) {
     final imageUrl = ApiClient.buildMediaUrl(item.thumbnailUrl ?? item.fileUrl);
 
-    return ClipRRect(
+    return GestureDetector(
+      onTap: () => _navigateToProviderById(item.providerId, item.providerDisplayName),
+      child: ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Stack(
         fit: StackFit.expand,
@@ -612,7 +710,17 @@ class _InteractiveScreenState extends State<InteractiveScreen>
           ),
         ],
       ),
+      ),
     );
+  }
+
+  void _navigateToProviderById(int providerId, String providerName) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ProviderProfileScreen(
+        providerId: providerId.toString(),
+        providerName: providerName,
+      ),
+    ));
   }
 
   Widget _brokenImgPlaceholder(bool isDark) {
