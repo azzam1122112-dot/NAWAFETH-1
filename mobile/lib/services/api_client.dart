@@ -1,0 +1,217 @@
+/// خدمة HTTP الأساسية للاتصال بالـ Backend API
+///
+/// تتعامل مع:
+/// - إضافة headers المصادقة تلقائياً
+/// - تجديد التوكن عند انتهاء صلاحيته
+/// - معالجة الأخطاء بشكل موحد
+library;
+
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'auth_service.dart';
+
+class ApiClient {
+  // ────────────────────────────────────────────────
+  // ⚙️ Base URL — غيّر هذا القيمة حسب بيئتك
+  // ────────────────────────────────────────────────
+  // للتطوير المحلي (Android Emulator):
+  static const String _baseUrl = 'http://10.0.2.2:8000';
+  // للتطوير المحلي (iOS Simulator أو جهاز حقيقي على نفس الشبكة):
+  // static const String _baseUrl = 'http://192.168.x.x:8000';
+  // للإنتاج:
+  // static const String _baseUrl = 'https://api.nawafeth.com';
+
+  static String get baseUrl => _baseUrl;
+
+  /// GET request مع مصادقة
+  static Future<ApiResponse> get(String path) async {
+    return _request('GET', path);
+  }
+
+  /// POST request مع مصادقة
+  static Future<ApiResponse> post(String path, {Map<String, dynamic>? body}) async {
+    return _request('POST', path, body: body);
+  }
+
+  /// PATCH request مع مصادقة
+  static Future<ApiResponse> patch(String path, {Map<String, dynamic>? body}) async {
+    return _request('PATCH', path, body: body);
+  }
+
+  /// PUT request مع مصادقة
+  static Future<ApiResponse> put(String path, {Map<String, dynamic>? body}) async {
+    return _request('PUT', path, body: body);
+  }
+
+  /// DELETE request مع مصادقة
+  static Future<ApiResponse> delete(String path) async {
+    return _request('DELETE', path);
+  }
+
+  /// ─── الطلب الرئيسي ───
+  static Future<ApiResponse> _request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    bool isRetry = false,
+  }) async {
+    final url = Uri.parse('$_baseUrl$path');
+    final token = await AuthService.getAccessToken();
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    try {
+      http.Response response;
+
+      switch (method) {
+        case 'GET':
+          response = await http.get(url, headers: headers).timeout(
+            const Duration(seconds: 15),
+          );
+          break;
+        case 'POST':
+          response = await http
+              .post(url, headers: headers, body: body != null ? jsonEncode(body) : null)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case 'PATCH':
+          response = await http
+              .patch(url, headers: headers, body: body != null ? jsonEncode(body) : null)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case 'PUT':
+          response = await http
+              .put(url, headers: headers, body: body != null ? jsonEncode(body) : null)
+              .timeout(const Duration(seconds: 15));
+          break;
+        case 'DELETE':
+          response = await http.delete(url, headers: headers).timeout(
+            const Duration(seconds: 15),
+          );
+          break;
+        default:
+          return ApiResponse(statusCode: 0, error: 'طريقة HTTP غير مدعومة');
+      }
+
+      // ✅ محاولة تجديد التوكن إذا انتهت صلاحيته
+      if (response.statusCode == 401 && !isRetry) {
+        final refreshed = await _tryRefreshToken();
+        if (refreshed) {
+          return _request(method, path, body: body, isRetry: true);
+        }
+      }
+
+      return _parseResponse(response);
+    } on SocketException {
+      return ApiResponse(statusCode: 0, error: 'لا يوجد اتصال بالإنترنت');
+    } catch (e) {
+      return ApiResponse(statusCode: 0, error: 'خطأ في الاتصال: $e');
+    }
+  }
+
+  /// محاولة تجديد التوكن
+  static Future<bool> _tryRefreshToken() async {
+    final refreshToken = await AuthService.getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    try {
+      final url = Uri.parse('$_baseUrl/api/accounts/token/refresh/');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'refresh': refreshToken}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final newAccess = data['access'] as String?;
+        if (newAccess != null && newAccess.isNotEmpty) {
+          await AuthService.saveTokens(
+            access: newAccess,
+            refresh: refreshToken,
+          );
+          return true;
+        }
+      }
+    } catch (_) {}
+
+    // فشل التجديد - يجب إعادة تسجيل الدخول
+    await AuthService.logout();
+    return false;
+  }
+
+  /// تحليل الاستجابة
+  static ApiResponse _parseResponse(http.Response response) {
+    try {
+      final body = utf8.decode(response.bodyBytes);
+      final data = body.isNotEmpty ? jsonDecode(body) : null;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return ApiResponse(
+          statusCode: response.statusCode,
+          data: data,
+        );
+      } else {
+        String errorMessage = 'خطأ غير معروف';
+        if (data is Map) {
+          errorMessage = data['detail'] as String? ??
+              data['error'] as String? ??
+              data.toString();
+        }
+        return ApiResponse(
+          statusCode: response.statusCode,
+          data: data,
+          error: errorMessage,
+        );
+      }
+    } catch (e) {
+      return ApiResponse(
+        statusCode: response.statusCode,
+        error: 'خطأ في تحليل الاستجابة',
+      );
+    }
+  }
+
+  /// بناء URL كامل لملف وسائط (صورة/فيديو)
+  static String? buildMediaUrl(String? path) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http')) return path;
+    return '$_baseUrl$path';
+  }
+}
+
+/// نموذج الاستجابة الموحد
+class ApiResponse {
+  final int statusCode;
+  final dynamic data;
+  final String? error;
+
+  ApiResponse({
+    required this.statusCode,
+    this.data,
+    this.error,
+  });
+
+  bool get isSuccess => statusCode >= 200 && statusCode < 300;
+
+  Map<String, dynamic>? get dataAsMap {
+    if (data is Map<String, dynamic>) return data as Map<String, dynamic>;
+    return null;
+  }
+
+  List<dynamic>? get dataAsList {
+    if (data is List) return data as List<dynamic>;
+    return null;
+  }
+}

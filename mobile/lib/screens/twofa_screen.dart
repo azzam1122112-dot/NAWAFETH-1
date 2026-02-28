@@ -1,26 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
-
-import '../services/auth_api.dart';
-import '../services/account_api.dart';
-import '../services/session_storage.dart';
-import '../services/app_snackbar.dart';
-import '../services/role_sync.dart';
-import '../services/role_controller.dart';
-import '../utils/local_user_state.dart';
-import 'home_screen.dart';
+import '../services/auth_api_service.dart';
 import 'signup_screen.dart';
 
 class TwoFAScreen extends StatefulWidget {
   final String phone;
   final Widget? redirectTo;
-  final String? initialDevCode;
+  /// للتوافق مع الأماكن القديمة التي تستخدم nextPage
+  final Widget? nextPage;
 
   const TwoFAScreen({
     super.key,
     required this.phone,
     this.redirectTo,
-    this.initialDevCode,
+    this.nextPage,
   });
 
   @override
@@ -28,108 +20,35 @@ class TwoFAScreen extends StatefulWidget {
 }
 
 class _TwoFAScreenState extends State<TwoFAScreen> {
-  // Development shortcut disabled by default; enable explicitly by build flag.
-  static const bool _devAllowAny4DigitsOtp = bool.fromEnvironment(
-    'DEV_ALLOW_ANY_OTP',
-    defaultValue: false,
-  );
+  final _codeController = TextEditingController();
+  bool _isLoading = false;
+  bool _isResending = false;
+  String? _errorMessage;
 
-  final TextEditingController _codeController = TextEditingController();
-  bool _loading = false;
-
-  String? _extractBackendErrorMessage(DioException e) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final detail = data['detail'];
-      if (detail != null && detail.toString().trim().isNotEmpty) {
-        return detail.toString().trim();
-      }
-      for (final entry in data.entries) {
-        final value = entry.value;
-        if (value is List && value.isNotEmpty) {
-          final first = value.first;
-          final msg = first?.toString().trim() ?? '';
-          if (msg.isNotEmpty) return msg;
-        }
-        final msg = value?.toString().trim() ?? '';
-        if (msg.isNotEmpty && entry.key.toString() != 'ok') {
-          return msg;
-        }
-      }
-    } else if (data is List && data.isNotEmpty) {
-      final msg = data.first?.toString().trim() ?? '';
-      if (msg.isNotEmpty) return msg;
-    } else if (data is String && data.trim().isNotEmpty) {
-      return data.trim();
-    }
-    return null;
-  }
-
-  String _formatError(Object e) {
-    if (e is DioException) {
-      final backendMsg = _extractBackendErrorMessage(e);
-      if (backendMsg != null && backendMsg.isNotEmpty) {
-        return backendMsg;
-      }
-      final msg = (e.message ?? '').trim();
-      final short = msg.isEmpty ? 'تعذر الاتصال بالخادم' : msg;
-      return 'حدث خطأ في الاتصال بالشبكة: $short';
-    }
-    return e.toString();
-  }
-
-  String _normalizeOtp(String input) {
-    final trimmed = input.trim();
-    final buffer = StringBuffer();
-    for (final rune in trimmed.runes) {
-      final ch = String.fromCharCode(rune);
-
-      // Arabic-Indic digits: ٠١٢٣٤٥٦٧٨٩
-      const arabicIndic = {
-        '٠': '0',
-        '١': '1',
-        '٢': '2',
-        '٣': '3',
-        '٤': '4',
-        '٥': '5',
-        '٦': '6',
-        '٧': '7',
-        '٨': '8',
-        '٩': '9',
-      };
-
-      // Eastern Arabic / Persian digits: ۰۱۲۳۴۵۶۷۸۹
-      const easternArabic = {
-        '۰': '0',
-        '۱': '1',
-        '۲': '2',
-        '۳': '3',
-        '۴': '4',
-        '۵': '5',
-        '۶': '6',
-        '۷': '7',
-        '۸': '8',
-        '۹': '9',
-      };
-
-      if (arabicIndic.containsKey(ch)) {
-        buffer.write(arabicIndic[ch]);
-        continue;
-      }
-      if (easternArabic.containsKey(ch)) {
-        buffer.write(easternArabic[ch]);
-        continue;
-      }
-      if (RegExp(r'\d').hasMatch(ch)) {
-        buffer.write(ch);
-      }
-    }
-    return buffer.toString();
-  }
+  /// العد التنازلي لإعادة الإرسال (60 ثانية)
+  int _resendCountdown = 60;
+  bool _canResend = false;
 
   @override
   void initState() {
     super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _resendCountdown = 60;
+    _canResend = false;
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return false;
+      setState(() {
+        _resendCountdown--;
+        if (_resendCountdown <= 0) {
+          _canResend = true;
+        }
+      });
+      return _resendCountdown > 0;
+    });
   }
 
   @override
@@ -138,102 +57,88 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
     super.dispose();
   }
 
-  Future<void> _resend() async {
-    try {
-      await AuthApi().sendOtp(phone: widget.phone);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إعادة إرسال الرمز')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إعادة الإرسال: ${_formatError(e)}')),
-      );
-    }
-  }
-
-  Future<void> _verify() async {
-    final code = _normalizeOtp(_codeController.text);
-    if (code.length != 4 || int.tryParse(code) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل رمز مكون من 4 أرقام')),
-      );
+  /// ✅ التحقق من الرمز عبر الـ API
+  Future<void> _onVerifyOtp() async {
+    final code = _codeController.text.trim();
+    if (code.length != 4) {
+      setState(() => _errorMessage = 'أدخل رمز التحقق المكون من 4 أرقام');
       return;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    try {
-      final codeToVerify = (_devAllowAny4DigitsOtp &&
-              (widget.initialDevCode ?? '').trim().isNotEmpty)
-          ? widget.initialDevCode!.trim()
-          : code;
+    final result = await AuthApiService.verifyOtp(widget.phone, code);
 
-      final result = await AuthApi().otpVerify(
-        phone: widget.phone,
-        code: codeToVerify,
-      );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      await const SessionStorage().saveTokens(access: result.access, refresh: result.refresh);
-
-      // Best-effort: refresh user identity for UI.
-      try {
-        final me = await AccountApi().me();
-
-        String? nonEmpty(dynamic v) {
-          final s = (v ?? '').toString().trim();
-          return s.isEmpty ? null : s;
-        }
-
-        final userId = me['id'] is int ? me['id'] as int : int.tryParse((me['id'] ?? '').toString());
-        if (userId != null) {
-          await LocalUserState.setActiveUserId(userId);
-        }
-
-        await const SessionStorage().saveProfile(
-          userId: userId,
-          username: nonEmpty(me['username']),
-          email: nonEmpty(me['email']),
-          firstName: nonEmpty(me['first_name']),
-          lastName: nonEmpty(me['last_name']),
-          phone: nonEmpty(me['phone']),
-        );
-      } catch (_) {
-        // ignore
-      }
-
-      // Best-effort: sync provider/client role flags for UI.
-      try {
-        await RoleSync.sync(accessToken: result.access);
-        await RoleController.instance.refreshFromPrefs();
-      } catch (_) {
-        // ignore
-      }
-
-      if (!mounted) return;
-
-      if (result.isNewUser || result.needsCompletion) {
-        AppSnackBar.success('أهلاً بك! يرجى استكمال تسجيل بياناتك.');
+    if (result.success) {
+      // ✅ هل يحتاج إكمال البيانات؟
+      if (result.needsCompletion) {
+        // الانتقال لشاشة إكمال البيانات
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const SignUpScreen()),
+          MaterialPageRoute(
+            builder: (_) => SignUpScreen(
+              redirectTo: widget.redirectTo ?? widget.nextPage,
+            ),
+          ),
         );
-        return;
+      } else {
+        // تسجيل الدخول ناجح — التوجيه
+        _navigateAfterLogin();
       }
+    } else {
+      setState(() => _errorMessage = result.error ?? 'الرمز غير صحيح');
+    }
+  }
 
-      AppSnackBar.success('تم تسجيل الدخول بنجاح.');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => widget.redirectTo ?? const HomeScreen()),
-      );
-    } catch (e) {
-      if (!mounted) return;
+  /// ✅ إعادة إرسال الرمز
+  Future<void> _onResendOtp() async {
+    if (!_canResend || _isResending) return;
+
+    setState(() {
+      _isResending = true;
+      _errorMessage = null;
+    });
+
+    final result = await AuthApiService.sendOtp(widget.phone);
+
+    if (!mounted) return;
+    setState(() => _isResending = false);
+
+    if (result.success) {
+      _startCountdown();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_formatError(e))),
+        SnackBar(
+          content: Text(
+            result.devCode != null
+                ? 'تم الإرسال — رمز التطوير: ${result.devCode}'
+                : 'تم إرسال رمز جديد',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
       );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    } else {
+      setState(() => _errorMessage = result.error ?? 'فشل إعادة الإرسال');
+    }
+  }
+
+  void _navigateAfterLogin() {
+    final target = widget.redirectTo ?? widget.nextPage;
+    if (target != null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => target),
+        (route) => false,
+      );
+    } else {
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     }
   }
 
@@ -244,7 +149,7 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("التحقق الثنائي (2FA)"),
+        title: const Text("التحقق من الرمز"),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
       ),
@@ -262,9 +167,9 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ✅ العنوان
+                  // العنوان
                   const Text(
-                    "🔐 مصادقة ثنائية مطلوبة",
+                    "🔐 رمز التحقق",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -275,22 +180,23 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  const Text(
-                    "من فضلك أدخل رمز التحقق المكوّن من 4 أرقام.",
+                  Text(
+                    "أدخل رمز التحقق المرسل إلى\n${widget.phone}",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, fontFamily: 'Cairo'),
+                    style: const TextStyle(fontSize: 14, fontFamily: 'Cairo'),
                   ),
                   const SizedBox(height: 20),
 
-                  // ✅ إدخال الكود
+                  // إدخال الكود
                   TextField(
                     controller: _codeController,
                     keyboardType: TextInputType.number,
                     maxLength: 4,
                     textAlign: TextAlign.center,
+                    onChanged: (_) => setState(() => _errorMessage = null),
                     style: const TextStyle(
-                      fontSize: 20,
-                      letterSpacing: 4,
+                      fontSize: 24,
+                      letterSpacing: 8,
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.bold,
                     ),
@@ -313,48 +219,65 @@ class _TwoFAScreenState extends State<TwoFAScreen> {
                           width: 2,
                         ),
                       ),
+                      errorText: _errorMessage,
+                      errorStyle: const TextStyle(fontFamily: 'Cairo'),
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  TextButton(
-                    onPressed: _loading ? null : _resend,
-                    child: const Text(
-                      'إعادة إرسال الرمز',
-                      style: TextStyle(fontFamily: 'Cairo'),
+                  // زر التأكيد
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _isLoading ? null : _onVerifyOtp,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              "تأكيد",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 16),
 
-                  // ✅ زر التأكيد
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                        horizontal: 40,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _loading ? null : _verify,
-                    child: _loading
+                  // إعادة الإرسال
+                  TextButton(
+                    onPressed: _canResend ? _onResendOtp : null,
+                    child: _isResending
                         ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text(
-                            "تأكيد",
+                        : Text(
+                            _canResend
+                                ? "إعادة إرسال الرمز"
+                                : "إعادة الإرسال بعد $_resendCountdown ثانية",
                             style: TextStyle(
-                              fontSize: 16,
                               fontFamily: 'Cairo',
-                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: _canResend
+                                  ? Colors.deepPurple
+                                  : Colors.grey,
                             ),
                           ),
                   ),

@@ -37,6 +37,13 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
   bool _isLiked = false;
   bool _isSaved = false;
 
+  // ✅ صور المستخدمين المرتبطة بكل فيديو
+  final List<String> userImages = [
+    "assets/images/551.png",
+    "assets/images/251.jpg",
+    "assets/images/1.png",
+  ];
+
   // ⚡ الرسالة التفاعلية (فقاعة الإعجاب / الحفظ)
   bool _showOverlayMessage = false;
   String _overlayText = "";
@@ -73,13 +80,12 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _hintSlideAnim =
-        Tween<Offset>(
-          begin: const Offset(0.18, 0.0), // تبدأ من يمين
-          end: const Offset(-0.02, 0.0), // تتحرك قليلاً لليسار
-        ).animate(
-          CurvedAnimation(parent: _hintController, curve: Curves.easeInOut),
-        );
+    _hintSlideAnim = Tween<Offset>(
+      begin: const Offset(0.18, 0.0), // تبدأ من يمين
+      end: const Offset(-0.02, 0.0), // تتحرك قليلاً لليسار
+    ).animate(
+      CurvedAnimation(parent: _hintController, curve: Curves.easeInOut),
+    );
 
     _initializeVideo();
   }
@@ -191,6 +197,8 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
 
   // ✅ قائمة يمينية (الصورة + إعجاب + حفظ + الرئيسية)
   Widget _buildRightSideMenu() {
+    final userImage = userImages[_currentIndex % userImages.length];
+
     return Positioned(
       right: 12,
       bottom: 110,
@@ -205,9 +213,7 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
                 await widget.onOpenProfile!.call();
               }
 
-              if (mounted &&
-                  _controller != null &&
-                  _controller!.value.isInitialized) {
+              if (mounted && _controller != null && _controller!.value.isInitialized) {
                 _controller!.play();
               }
             },
@@ -219,12 +225,7 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
               ),
               child: CircleAvatar(
                 radius: 27,
-                backgroundColor: AppColors.primaryLight,
-                child: const Icon(
-                  Icons.person,
-                  color: AppColors.deepPurple,
-                  size: 28,
-                ),
+                backgroundImage: AssetImage(userImage),
               ),
             ),
           ),
@@ -393,7 +394,64 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
   // 🧭 شريط علوي بسيط (زر إغلاق فقط)
   Widget _buildTopBar() {
     final paddingTop = MediaQuery.of(context).padding.top;
+
+    final hasMenu = widget.onReportContent != null;
     final canDelete = widget.onDeleteContent != null;
+
+    Future<void> openMenu() async {
+      if (!hasMenu) return;
+      await showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (sheetContext) {
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ListTile(
+                    leading: const Icon(Icons.flag_outlined, color: Colors.red),
+                    title: const Text('الإبلاغ عن المحتوى', style: TextStyle(fontFamily: 'Cairo')),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      final cb = widget.onReportContent;
+                      if (cb != null) {
+                        await cb(_currentIndex);
+                      }
+                    },
+                  ),
+                  if (canDelete)
+                    ListTile(
+                      leading: const Icon(Icons.delete_outline, color: Colors.black87),
+                      title: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        await _confirmDelete();
+                      },
+                    ),
+                  const SizedBox(height: 6),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
 
     return Positioned(
       top: paddingTop + 8,
@@ -401,6 +459,18 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
       right: 8,
       child: Row(
         children: [
+          if (hasMenu)
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.softBlue.withOpacity(0.55),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                onPressed: openMenu,
+                icon: const Icon(Icons.more_horiz, color: Colors.white),
+                tooltip: 'خيارات',
+              ),
+            ),
           const Spacer(),
           if (canDelete)
             Container(
@@ -441,21 +511,12 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
         return Directionality(
           textDirection: TextDirection.rtl,
           child: AlertDialog(
-            title: const Text(
-              'حذف اللمحة',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
-            content: const Text(
-              'هل تريد حذف هذه اللمحة؟',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
+            title: const Text('حذف اللمحة', style: TextStyle(fontFamily: 'Cairo')),
+            content: const Text('هل تريد حذف هذه اللمحة؟', style: TextStyle(fontFamily: 'Cairo')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text(
-                  'إلغاء',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
@@ -501,9 +562,10 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
                 builder: (context, value, child) {
                   final position = value.position;
                   final duration = value.duration;
-                  final totalMs = duration.inMilliseconds == 0
-                      ? 1
-                      : duration.inMilliseconds;
+                  final totalMs =
+                      duration.inMilliseconds == 0
+                          ? 1
+                          : duration.inMilliseconds;
                   final progress =
                       position.inMilliseconds.clamp(0, totalMs) / totalMs;
 
@@ -734,24 +796,25 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
                   // تحديد موقع النقر: إذا كان في النصف الأيمن من الشاشة
                   final screenWidth = MediaQuery.of(context).size.width;
                   final tapX = details.globalPosition.dx;
-
+                  
                   if (tapX > screenWidth / 2) {
                     // نقر مزدوج على يمين الشاشة → تسريع
                     _handleDoubleTapRight();
                   }
                 },
                 child: Center(
-                  child: _hasError
-                      ? const Text(
-                          'تعذر تحميل الفيديو',
-                          style: TextStyle(color: Colors.white),
-                        )
-                      : !_isInitialized || _controller == null
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : AspectRatio(
-                          aspectRatio: _controller!.value.aspectRatio,
-                          child: VideoPlayer(_controller!),
-                        ),
+                  child:
+                      _hasError
+                          ? const Text(
+                            'تعذر تحميل الفيديو',
+                            style: TextStyle(color: Colors.white),
+                          )
+                          : !_isInitialized || _controller == null
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : AspectRatio(
+                            aspectRatio: _controller!.value.aspectRatio,
+                            child: VideoPlayer(_controller!),
+                          ),
                 ),
               );
             },

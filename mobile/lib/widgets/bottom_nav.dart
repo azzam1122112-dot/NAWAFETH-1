@@ -1,27 +1,13 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
-import '../services/role_controller.dart';
-import '../utils/auth_guard.dart';
 
 class CustomBottomNav extends StatelessWidget {
   final int currentIndex;
 
-  const CustomBottomNav({
-    required this.currentIndex,
-    super.key,
-  });
+  const CustomBottomNav({required this.currentIndex, super.key});
 
-  Future<void> _navigate(BuildContext context, int index) async {
+  void _navigate(BuildContext context, int index) {
     if (currentIndex >= 0 && index == currentIndex) return;
-    final role = RoleController.instance.notifier.value;
-    if (index == 1 && role.isProvider) return;
-
-    // Guard tabs that require an authenticated user session.
-    if (index == 1 || index == 2 || index == 3) {
-      if (!await checkAuth(context)) return;
-    }
-
-    if (!context.mounted) return;
 
     switch (index) {
       case 0:
@@ -47,130 +33,132 @@ class CustomBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.bottomCenter,
+      children: [
+        // ✅ الشريط السفلي بخلفية منحنية ومرتبة
+        ClipPath(
+          clipper: CurvedNotchClipper(),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha((0.08 * 255).toInt()),
+                  blurRadius: 20,
+                  spreadRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                // ✅ الرئيسية (أقصى اليمين)
+                IconWithLabel(
+                  icon: Icons.home,
+                  label: "الرئيسية",
+                  selected: currentIndex == 0,
+                  onTap: () => _navigate(context, 0),
+                ),
 
-    return ValueListenableBuilder<RoleState>(
-      valueListenable: RoleController.instance.notifier,
-      builder: (context, role, _) {
-        final hideOrders = role.isProvider;
-        return Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: [
-            // ✅ الشريط السفلي بخلفية منحنية ومرتبة
-            ClipPath(
-              clipper: CurvedNotchClipper(),
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.08 * 255).toInt()),
-                      blurRadius: 20,
-                      spreadRadius: 4,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
+                // ✅ طلباتي
+                IconWithLabel(
+                  icon: Icons.list_alt,
+                  label: "طلباتي",
+                  selected: currentIndex == 1,
+                  onTap: () => _navigate(context, 1),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    IconWithLabel(
-                      icon: Icons.home,
-                      label: "الرئيسية",
-                      selected: currentIndex == 0,
-                      onTap: () => _navigate(context, 0),
-                    ),
-                    if (!hideOrders)
-                      IconWithLabel(
-                        icon: Icons.list_alt,
-                        label: "طلباتي",
-                        selected: currentIndex == 1,
-                        onTap: () => _navigate(context, 1),
-                      )
-                    else
-                      const SizedBox(width: 44),
-                    const SizedBox(width: 40),
-                    IconWithLabel(
-                      icon: Icons.group,
-                      label: "تفاعلي",
-                      selected: currentIndex == 2,
-                      onTap: () => _navigate(context, 2),
-                    ),
-                    IconWithLabel(
-                      icon: Icons.person,
-                      label: "نافذتي",
-                      selected: currentIndex == 3,
-                      onTap: () => _navigate(context, 3),
-                    ),
-                  ],
+
+                // ✅ زر الخدمة في المنتصف
+                const SizedBox(width: 40),
+
+                // ✅ تفاعلي
+                IconWithLabel(
+                  icon: Icons.group,
+                  label: "تفاعلي",
+                  selected: currentIndex == 2,
+                  onTap: () => _navigate(context, 2),
                 ),
+
+                // ✅ نافذتي (أقصى اليسار)
+                IconWithLabel(
+                  icon: Icons.person,
+                  label: "نافذتي",
+                  selected: currentIndex == 3,
+                  onTap: () => _navigate(context, 3),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ✅ زر "خدمة" العائم في المنتصف - يظهر فقط في الصفحة الرئيسية
+        if (currentIndex == 0)
+          Positioned(
+            bottom: 28,
+            child: GestureDetector(
+              onTap: () => _onAddServicePressed(context),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const RadialGradient(
+                        colors: [
+                          Color(0x40DA52FF), // ✅ بديل withOpacity(0.25)
+                          Colors.transparent,
+                        ],
+                        radius: 0.6,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primaryDark, AppColors.primaryDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        const BoxShadow(
+                          color: Color(0x4DFF0000), // ✅ بديل withOpacity(0.3)
+                          blurRadius: 12,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, size: 24, color: Colors.white),
+                        SizedBox(height: 2),
+                        Text(
+                          "خدمة",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (currentIndex == 0)
-              Positioned(
-                bottom: 28,
-                child: GestureDetector(
-                  onTap: () => _onAddServicePressed(context),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            colors: [
-                              Color(0x40DA52FF),
-                              Colors.transparent,
-                            ],
-                            radius: 0.6,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primaryDark, AppColors.primaryDark],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            const BoxShadow(
-                              color: Color(0x4DFF0000),
-                              blurRadius: 12,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add, size: 24, color: Colors.white),
-                            SizedBox(height: 2),
-                            Text(
-                              "خدمة",
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 }
@@ -179,14 +167,12 @@ class IconWithLabel extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
-  final bool enabled;
   final VoidCallback onTap;
 
   const IconWithLabel({
     required this.icon,
     required this.label,
     required this.selected,
-    this.enabled = true,
     required this.onTap,
     super.key,
   });
@@ -197,14 +183,11 @@ class IconWithLabel extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final Color activeColor = AppColors.accentOrange;
     final Color defaultColor = isDark ? Colors.white70 : AppColors.deepPurple;
-    final Color disabledColor = isDark ? Colors.white24 : Colors.black26;
 
-    final Color contentColor = enabled
-        ? (selected ? activeColor : defaultColor)
-        : disabledColor;
+    final Color contentColor = selected ? activeColor : defaultColor;
 
     return InkResponse(
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
       radius: 28,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -225,16 +208,6 @@ class IconWithLabel extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                 color: contentColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: selected && enabled ? 18 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: selected && enabled ? activeColor : Colors.transparent,
-                borderRadius: BorderRadius.circular(99),
               ),
             ),
           ],

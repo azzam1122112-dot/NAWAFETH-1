@@ -1,31 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../constants/colors.dart';
 import '../constants/app_texts.dart';
+import '../screens/provider_dashboard/provider_home_screen.dart';
 import '../screens/home_screen.dart';
-import '../screens/login_screen.dart';
 import '../screens/login_settings_screen.dart';
-import '../screens/twofa_screen.dart';
 import '../screens/terms_screen.dart';
 import '../screens/about_screen.dart';
 import '../screens/contact_screen.dart';
-import '../services/session_storage.dart';
-import '../utils/local_user_state.dart';
-import '../services/account_api.dart';
-import '../services/app_snackbar.dart';
-import '../services/account_switcher.dart';
-import '../services/api_config.dart';
-import '../services/theme_controller.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-class _SessionInfo {
-  final bool loggedIn;
-  final String? fullName;
-  final String? username;
-  final String? phone;
-
-  const _SessionInfo({required this.loggedIn, this.fullName, this.username, this.phone});
-}
+import '../main.dart';
 
 class CustomDrawer extends StatefulWidget {
   const CustomDrawer({super.key});
@@ -36,84 +19,6 @@ class CustomDrawer extends StatefulWidget {
 
 class _CustomDrawerState extends State<CustomDrawer> {
   String selectedLanguage = "ar";
-  late final Future<bool> _isSuperAdminFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _isSuperAdminFuture = _loadIsSuperAdmin();
-  }
-
-  Future<bool> _loadIsProviderRegistered() async {
-    final prefs = await SharedPreferences.getInstance();
-    return (prefs.getBool('isProviderRegistered') ?? false) == true;
-  }
-
-  Future<_SessionInfo> _loadSessionInfo() async {
-    const storage = SessionStorage();
-    final loggedIn = await storage.isLoggedIn();
-    final phone = (await storage.readPhone())?.trim();
-    final username = (await storage.readUsername())?.trim();
-    final fullName = (await storage.readFullName())?.trim();
-    return _SessionInfo(
-      loggedIn: loggedIn,
-      phone: (phone == null || phone.isEmpty) ? null : phone,
-      username: (username == null || username.isEmpty) ? null : username,
-      fullName: (fullName == null || fullName.isEmpty) ? null : fullName,
-    );
-  }
-
-  Future<void> _logout() async {
-    await LocalUserState.clearOnLogout();
-    await const SessionStorage().clear();
-    if (!mounted) return;
-    setState(() {});
-    Navigator.of(context).pushNamedAndRemoveUntil('/home', (r) => false);
-  }
-
-  Future<void> _deleteAccount() async {
-    final access = await const SessionStorage().readAccessToken();
-    if (access == null || access.trim().isEmpty) {
-      await _logout();
-      return;
-    }
-
-    try {
-      await AccountApi().deleteMe(accessToken: access);
-      final fullName = (await const SessionStorage().readFullName())?.trim();
-      final username = (await const SessionStorage().readUsername())?.trim();
-      final name = (fullName != null && fullName.isNotEmpty)
-          ? fullName
-          : ((username != null && username.isNotEmpty) ? username : null);
-
-      AppSnackBar.success(name == null ? 'تم حذف الحساب بنجاح. نأسف لرحيلك.' : 'تم حذف حسابك بنجاح يا $name. نأسف لرحيلك.');
-    } catch (e) {
-      AppSnackBar.error('تعذر حذف الحساب. حاول مرة أخرى لاحقاً.');
-      return;
-    }
-
-    await _logout();
-  }
-
-  Future<bool> _loadIsSuperAdmin() async {
-    final loggedIn = await const SessionStorage().isLoggedIn();
-    if (!loggedIn) return false;
-    try {
-      final me = await AccountApi().me();
-      final role = (me['role_state'] ?? '').toString().trim().toLowerCase();
-      return role == 'staff';
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _openWebDashboard() async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/dashboard/');
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok) {
-      AppSnackBar.error('تعذر فتح لوحة التحكم حالياً.');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,21 +26,12 @@ class _CustomDrawerState extends State<CustomDrawer> {
     final isDark = theme.brightness == Brightness.dark;
 
     final themeController = MyThemeController.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final isDarkMode = themeController?.themeMode == ThemeMode.dark;
 
-    return FutureBuilder<_SessionInfo>(
-      future: _loadSessionInfo(),
-      builder: (context, snapshot) {
-        final info = snapshot.data ?? const _SessionInfo(loggedIn: false);
-        final displayName = info.loggedIn
-            ? (info.fullName ?? info.username ?? 'أهلاً بك')
-            : 'مرحباً زائرنا الكريم';
-        final handleText = (info.loggedIn && info.username != null) ? '@${info.username}' : '';
-
-        return Drawer(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          child: Column(
-            children: [
+    return Drawer(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      child: Column(
+        children: [
           // ✅ رأس القائمة
           Container(
             width: double.infinity,
@@ -148,8 +44,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
             decoration: BoxDecoration(
               color:
                   isDark
-                      ? Colors.deepPurple.withValues(alpha: 0.15)
-                      : Colors.deepPurple.withValues(alpha: 0.05),
+                      ? Colors.deepPurple.withOpacity(0.15)
+                      : Colors.deepPurple.withOpacity(0.05),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -159,7 +55,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      displayName,
+                      "أهلاً عبدالسلام",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -167,24 +63,22 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         color: isDark ? Colors.white : AppColors.primaryDark,
                       ),
                     ),
-                    if (handleText.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        handleText,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'Cairo',
-                          color: isDark ? Colors.grey[300] : Colors.black54,
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "0505111111",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: 'Cairo',
+                        color: isDark ? Colors.grey[300] : Colors.black54,
                       ),
-                    ],
+                    ),
                   ],
                 ),
                 Column(
                   children: [
                     Switch(
                       value: isDarkMode,
-                      activeThumbColor: AppColors.primaryDark,
+                      activeColor: AppColors.primaryDark,
                       onChanged: (val) {
                         final mode = val ? ThemeMode.dark : ThemeMode.light;
                         themeController?.changeTheme(mode);
@@ -214,20 +108,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               children: [
-                if (!info.loggedIn)
-                  _buildDrawerItem(
-                    icon: Icons.login,
-                    label: 'تسجيل الدخول',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginScreen(redirectTo: HomeScreen()),
-                        ),
-                      );
-                    },
-                    isDark: isDark,
-                  ),
                 _buildDrawerItem(
                   icon: Icons.home_outlined,
                   label: AppTexts.getText(context, "home"),
@@ -248,67 +128,33 @@ class _CustomDrawerState extends State<CustomDrawer> {
                     Future.delayed(const Duration(milliseconds: 100), () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => FutureBuilder<String?>(
-                            future: const SessionStorage().readPhone(),
-                            builder: (context, snap) {
-                              final phone = (snap.data ?? '').trim();
-                              if (!info.loggedIn || phone.isEmpty) {
-                                return const LoginScreen(redirectTo: LoginSettingsScreen());
-                              }
-                              return TwoFAScreen(
-                                phone: phone,
-                                redirectTo: const LoginSettingsScreen(),
-                              );
-                            },
-                          ),
+                          builder: (_) => const LoginSettingsScreen(),
                         ),
                       );
                     });
                   },
                   isDark: isDark,
                 ),
-                if (info.loggedIn)
-                  FutureBuilder<bool>(
-                    future: _isSuperAdminFuture,
-                    builder: (context, adminSnap) {
-                      if (adminSnap.data != true) {
-                        return const SizedBox.shrink();
-                      }
-                      return _buildDrawerItem(
-                        icon: Icons.dashboard_customize_outlined,
-                        label: 'لوحة التحكم (Web)',
-                        onTap: () {
-                          Navigator.pop(context);
-                          _openWebDashboard();
-                        },
-                        isDark: isDark,
-                      );
-                    },
-                  ),
                 _buildDrawerItem(
                   icon: Icons.language,
                   label: AppTexts.getText(context, "language"),
                   onTap: () => _showLanguageDialog(),
                   isDark: isDark,
                 ),
-                FutureBuilder<bool>(
-                  future: _loadIsProviderRegistered(),
-                  builder: (context, providerSnap) {
-                    final canShowProvider = providerSnap.data == true;
-                    if (!canShowProvider) return const SizedBox.shrink();
-
-                    return _buildDrawerItem(
-                      icon: Icons.swap_horiz_rounded,
-                      label: AppTexts.getText(context, "switch_account"),
-                      onTap: () {
-                        Navigator.pop(context); // إغلاق الـ Drawer
-                        Future.delayed(const Duration(milliseconds: 100), () async {
-                          await AccountSwitcher.show(context);
-                        });
-                      },
-                      isDark: isDark,
-                    );
+                _buildDrawerItem(
+                  icon: FontAwesomeIcons.qrcode,
+                  label: AppTexts.getText(context, "qr"),
+                  onTap: () {
+                    Navigator.pop(context); // إغلاق الـ Drawer
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProviderHomeScreen(),
+                        ),
+                      );
+                    });
                   },
+                  isDark: isDark,
                 ),
                 _buildDrawerItem(
                   icon: Icons.article_outlined,
@@ -359,29 +205,26 @@ class _CustomDrawerState extends State<CustomDrawer> {
           ),
 
           // ✅ أزرار أسفل
-          if (info.loggedIn)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                children: [
-                  _buildActionBtn(
-                    text: AppTexts.getText(context, "logout"),
-                    color: AppColors.primaryDark,
-                    onPressed: _logout,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildActionBtn(
-                    text: AppTexts.getText(context, "delete"),
-                    color: Colors.red.shade600,
-                    onPressed: () => _showDeleteConfirmDialog(context),
-                  ),
-                ],
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              children: [
+                _buildActionBtn(
+                  text: AppTexts.getText(context, "logout"),
+                  color: AppColors.primaryDark,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const SizedBox(height: 10),
+                _buildActionBtn(
+                  text: AppTexts.getText(context, "delete"),
+                  color: Colors.red.shade600,
+                  onPressed: () => _showDeleteConfirmDialog(context),
+                ),
+              ],
             ),
-            ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -412,6 +255,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
     );
   }
 
+  /// ✅ نافذة تأكيد الحذف
   void _showDeleteConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -429,7 +273,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
             ),
           ),
           content: const Text(
-            "سيتم حذف الحساب نهائياً. هل أنت متأكد؟",
+            "ستقوم بحذف حسابك نهائياً، ولن نتمكن من استعادة بياناتك أو طلباتك السابقة.\n\n"
+            "هل أنت متأكد أنك تريد المتابعة؟",
             style: TextStyle(fontFamily: 'Cairo', fontSize: 14),
           ),
           actions: [
@@ -443,9 +288,67 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 "تأكيد الحذف",
                 style: TextStyle(color: Colors.white, fontFamily: 'Cairo'),
               ),
-              onPressed: () async {
+              onPressed: () {
                 Navigator.pop(context);
-                await _deleteAccount();
+                _showVerifyCodeDialog(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// ✅ نافذة إدخال رمز تحقق
+  void _showVerifyCodeDialog(BuildContext context) {
+    TextEditingController codeController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            "🔑 رمز التحقق",
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "أدخل رمز التحقق المرسل إلى جوالك لمتابعة الحذف.",
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeController,
+                decoration: InputDecoration(
+                  labelText: "رمز التحقق",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: const Text("إلغاء", style: TextStyle(fontFamily: 'Cairo')),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                "تأكيد",
+                style: TextStyle(color: Colors.white, fontFamily: 'Cairo'),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("✅ تم حذف الحساب (وهمياً)")),
+                );
               },
             ),
           ],
@@ -506,7 +409,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
       ),
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      hoverColor: AppColors.primaryDark.withValues(alpha: 0.08),
+      hoverColor: AppColors.primaryDark.withOpacity(0.08),
     );
   }
 

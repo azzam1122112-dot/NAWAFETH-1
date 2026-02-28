@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/theme_controller.dart';
+import '../main.dart';
 
 class AppTexts {
   static Map<String, Map<String, String>> translations = {
@@ -8,7 +8,6 @@ class AppTexts {
       "settings": "إعدادات الدخول للمنصة",
       "language": "اللغة",
       "qr": "QR نافذتي",
-      "switch_account": "تبديل الحساب",
       "terms": "الشروط والأحكام",
       "support": "تواصل مع منصة نوافذ",
       "about": "حول منصة نوافذ",
@@ -20,7 +19,6 @@ class AppTexts {
       "settings": "Login Settings",
       "language": "Language",
       "qr": "My QR",
-      "switch_account": "Switch Account",
       "terms": "Terms & Conditions",
       "support": "Contact Support",
       "about": "About Nawafeth",

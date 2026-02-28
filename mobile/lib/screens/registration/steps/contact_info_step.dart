@@ -1,18 +1,9 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../utils/user_scoped_prefs.dart';
-
-import '../../../services/account_api.dart';
-import '../../../services/providers_api.dart';
-import '../../../utils/whatsapp_helper.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ContactInfoStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -26,11 +17,6 @@ class ContactInfoStep extends StatefulWidget {
   
   final Function(double)? onValidationChanged;
 
-  // Optional external controllers (used by initial provider registration flow)
-  final TextEditingController? phoneExternalController;
-  final TextEditingController? whatsappExternalController;
-  final TextEditingController? cityExternalController;
-
   const ContactInfoStep({
     super.key,
     required this.onNext,
@@ -38,9 +24,6 @@ class ContactInfoStep extends StatefulWidget {
     this.isInitialRegistration = false,
     this.isFinalStep = false,
     this.onValidationChanged,
-    this.phoneExternalController,
-    this.whatsappExternalController,
-    this.cityExternalController,
   });
 
   @override
@@ -48,33 +31,16 @@ class ContactInfoStep extends StatefulWidget {
 }
 
 class _ContactInfoStepState extends State<ContactInfoStep> {
-  static const String _draftKeyFull = 'provider_contact_info_draft_full_v1';
-  static const String _draftKeyInitial = 'provider_contact_info_draft_initial_v1';
-
   // Controllers
-  late final TextEditingController websiteController;
-  late final TextEditingController phoneController;
-  late final TextEditingController whatsappController;
-  late final TextEditingController cityController;
-  late final List<TextEditingController> socialControllers;
-
-  late final bool _ownsPhone;
-  late final bool _ownsWhatsapp;
-  late final bool _ownsCity;
+  final websiteController = TextEditingController();
+  final phoneController = TextEditingController();
+  final whatsappController = TextEditingController();
+  final mapLocationController = TextEditingController();
+  final socialControllers = List.generate(9, (_) => TextEditingController());
 
   // Logo
   final ImagePicker _picker = ImagePicker();
   File? _logoFile;
-
-  bool _loadingFromBackend = false;
-  bool _saving = false;
-  String? _initialWhatsapp;
-  String? _initialWebsite;
-  String _initialSocialSignature = '[]';
-
-  Timer? _draftTimer;
-  Timer? _patchTimer;
-  String? _lastPatchedWhatsapp;
 
   // Accordion state (للوضع الكامل فقط)
   Map<String, bool> expanded = {
@@ -82,6 +48,7 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
     "social": false,
     "whatsapp": false,
     "phone": false,
+    "map": false,
   };
 
   final socialIcons = [
@@ -107,420 +74,62 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
     "TikTok",
     "Behance",
   ];
-  
-  final List<String> _saudiCities = [
-    'الرياض',
-    'جدة',
-    'مكة المكرمة',
-    'المدينة المنورة',
-    'الدمام',
-    'الخبر',
-    'الظهران',
-    'الطائف',
-    'تبوك',
-    'بريدة',
-    'خميس مشيط',
-    'الأحساء',
-    'حفر الباطن',
-    'حائل',
-    'نجران',
-    'جازان',
-    'ينبع',
-    'الجبيل',
-    'الخرج',
-    'أبها',
-  ];
 
-  String? _selectedCity;
+  Future<void> _pickLocation() async {
+    final lat = 24.7136;
+    final lng = 46.6753;
+    final appUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng");
+    final webUri = Uri.parse(
+      "https://www.google.com/maps/search/?api=1&query=$lat,$lng",
+    );
+
+    try {
+      if (await canLaunchUrl(appUri)) {
+        await launchUrl(appUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+
+      if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("تعذر فتح خرائط Google حاليًا.")),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("تعذر فتح خرائط Google حاليًا.")),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-
-    websiteController = TextEditingController();
-    _ownsPhone = widget.phoneExternalController == null;
-    _ownsWhatsapp = widget.whatsappExternalController == null;
-    _ownsCity = widget.cityExternalController == null;
-    phoneController = widget.phoneExternalController ?? TextEditingController();
-    whatsappController = widget.whatsappExternalController ?? TextEditingController();
-    cityController = widget.cityExternalController ?? TextEditingController();
-    socialControllers = List.generate(9, (_) => TextEditingController());
-
-    void onAnyChange() {
-      _validateForm();
-      _scheduleDraftSave();
-      _updateSectionDoneFlag();
-      _scheduleWhatsappPatch();
-    }
-
-    phoneController.addListener(onAnyChange);
-    whatsappController.addListener(onAnyChange);
-    cityController.addListener(onAnyChange);
-    websiteController.addListener(onAnyChange);
-    for (final c in socialControllers) {
-      c.addListener(onAnyChange);
-    }
-
+    phoneController.addListener(_validateForm);
+    whatsappController.addListener(_validateForm);
     // تأجيل الاستدعاء الأول حتى بعد اكتمال البناء
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDraft();
       _validateForm();
-      _updateSectionDoneFlag();
-      _prefillFromBackendIfNeeded();
     });
-  }
-
-  String get _draftKey => widget.isInitialRegistration ? _draftKeyInitial : _draftKeyFull;
-
-  Future<void> _loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _draftKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) return;
-      final data = jsonDecode(raw);
-      if (data is! Map) return;
-
-      String asString(dynamic v) => (v ?? '').toString();
-      List asList(dynamic v) => v is List ? v : const [];
-
-      String keepDigits(String input) => input.replaceAll(RegExp(r'[^0-9]'), '');
-      String normalizeLocal05(String input) {
-        final digits = keepDigits(input.trim());
-        if (RegExp(r'^05\d{8}$').hasMatch(digits)) return digits;
-        if (RegExp(r'^5\d{8}$').hasMatch(digits)) return '0$digits';
-        if (RegExp(r'^9665\d{8}$').hasMatch(digits)) return '0${digits.substring(3)}';
-        if (RegExp(r'^009665\d{8}$').hasMatch(digits)) return '0${digits.substring(5)}';
-        return input;
-      }
-
-      // Only fill if empty to avoid overriding user input.
-      if (phoneController.text.trim().isEmpty) {
-        phoneController.text = normalizeLocal05(asString(data['phone']));
-      }
-      if (whatsappController.text.trim().isEmpty) {
-        final savedWhatsApp = asString(data['whatsapp']).trim();
-        if (savedWhatsApp.isNotEmpty) {
-          whatsappController.text = savedWhatsApp;
-        } else {
-          final autoWa = WhatsAppHelper.toWaMeLink(phoneController.text);
-          if (autoWa != null) {
-            whatsappController.text = autoWa;
-          }
-        }
-      }
-      if (cityController.text.trim().isEmpty) {
-        cityController.text = asString(data['city']);
-        _selectedCity = asString(data['city']).isNotEmpty ? asString(data['city']) : null;
-      }
-      if (websiteController.text.trim().isEmpty) {
-        websiteController.text = asString(data['website']);
-      }
-
-      final socials = asList(data['social']);
-      for (var i = 0; i < socialControllers.length && i < socials.length; i++) {
-        if (socialControllers[i].text.trim().isEmpty) {
-          socialControllers[i].text = asString(socials[i]);
-        }
-      }
-    } catch (_) {
-      // Best-effort.
-    }
-  }
-
-  void _scheduleDraftSave() {
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        String keepDigits(String input) => input.replaceAll(RegExp(r'[^0-9]'), '');
-        String normalizeLocal05(String input) {
-          final digits = keepDigits(input.trim());
-          if (RegExp(r'^05\d{8}$').hasMatch(digits)) return digits;
-          if (RegExp(r'^5\d{8}$').hasMatch(digits)) return '0$digits';
-          if (RegExp(r'^9665\d{8}$').hasMatch(digits)) return '0${digits.substring(3)}';
-          if (RegExp(r'^009665\d{8}$').hasMatch(digits)) return '0${digits.substring(5)}';
-          return input.trim();
-        }
-
-        final prefs = await SharedPreferences.getInstance();
-        final userId = await UserScopedPrefs.readUserId();
-        final data = <String, dynamic>{
-          'phone': normalizeLocal05(phoneController.text),
-          'whatsapp': whatsappController.text.trim(),
-          'city': cityController.text.trim(),
-          'website': websiteController.text.trim(),
-          'social': socialControllers.map((c) => c.text.trim()).toList(growable: false),
-        };
-        await UserScopedPrefs.setStringScoped(
-          prefs,
-          _draftKey,
-          jsonEncode(data),
-          userId: userId,
-        );
-      } catch (_) {
-        // ignore
-      }
-    });
-  }
-
-  void _updateSectionDoneFlag() {
-    if (widget.isInitialRegistration) return;
-    final done = whatsappController.text.trim().isNotEmpty;
-    // Best-effort; no need to await.
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.setBoolScoped(
-        prefs,
-        'provider_section_done_contact_full',
-        done,
-        userId: userId,
-      );
-    }).catchError((_) {});
-  }
-
-  void _scheduleWhatsappPatch() {
-    if (widget.isInitialRegistration) return;
-    final whatsapp = whatsappController.text.trim();
-    if (_lastPatchedWhatsapp != null && whatsapp == _lastPatchedWhatsapp) return;
-
-    _patchTimer?.cancel();
-    _patchTimer = Timer(const Duration(milliseconds: 900), () async {
-      if (!mounted) return;
-      final current = whatsappController.text.trim();
-      if (_lastPatchedWhatsapp != null && current == _lastPatchedWhatsapp) return;
-
-      final ok = await _saveToBackendIfNeeded();
-      if (ok) {
-        _lastPatchedWhatsapp = current;
-      }
-    });
-  }
-
-  Future<void> _prefillFromBackendIfNeeded() async {
-    // In the provider registration wizard, controllers are passed from outside.
-    // In that case, do not override user input.
-    if (!mounted) return;
-    if (!_ownsPhone && !_ownsWhatsapp && !_ownsCity) return;
-
-    setState(() => _loadingFromBackend = true);
-    try {
-      String keepDigits(String input) => input.replaceAll(RegExp(r'[^0-9]'), '');
-      String normalizeLocal05(String input) {
-        final digits = keepDigits(input.trim());
-        if (RegExp(r'^05\d{8}$').hasMatch(digits)) return digits;
-        if (RegExp(r'^5\d{8}$').hasMatch(digits)) return '0$digits';
-        if (RegExp(r'^9665\d{8}$').hasMatch(digits)) return '0${digits.substring(3)}';
-        if (RegExp(r'^009665\d{8}$').hasMatch(digits)) return '0${digits.substring(5)}';
-        return input.trim();
-      }
-
-      final me = await AccountApi().me();
-      final phone = (me['phone'] ?? '').toString().trim();
-      if (_ownsPhone && phoneController.text.trim().isEmpty && phone.isNotEmpty) {
-        phoneController.text = normalizeLocal05(phone);
-      }
-      
-      final myProfile = await ProvidersApi().getMyProviderProfile();
-      // Load city from account payload first (provider_city), then provider profile.
-      final cityFromAccount = (me['provider_city'] ?? me['city'] ?? '').toString().trim();
-      final cityFromProfile = (myProfile?['city'] ?? '').toString().trim();
-      final city = cityFromAccount.isNotEmpty ? cityFromAccount : cityFromProfile;
-      if (_ownsCity && cityController.text.trim().isEmpty && city.isNotEmpty) {
-        cityController.text = city;
-        _selectedCity = city;
-      }
-
-      // Contact profile fields are stored on provider profile.
-      final whatsapp = (myProfile?['whatsapp'] ?? '').toString().trim();
-      final website = (myProfile?['website'] ?? '').toString().trim();
-      List<String> socials = <String>[];
-      final rawSocial = myProfile?['social_links'];
-      if (rawSocial is List) {
-        socials = rawSocial
-            .map((e) => (e ?? '').toString().trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
-      }
-      _initialWhatsapp = whatsapp;
-      _initialWebsite = website;
-      _initialSocialSignature = jsonEncode(socials);
-      _lastPatchedWhatsapp = whatsapp;
-      if (_ownsWhatsapp && whatsappController.text.trim().isEmpty && whatsapp.isNotEmpty) {
-        whatsappController.text = whatsapp;
-      }
-      if (_ownsWhatsapp && whatsappController.text.trim().isEmpty) {
-        final autoWa = WhatsAppHelper.toWaMeLink(phoneController.text);
-        if (autoWa != null) {
-          whatsappController.text = autoWa;
-        }
-      }
-      if (websiteController.text.trim().isEmpty && website.isNotEmpty) {
-        websiteController.text = website;
-      }
-      if (socials.isNotEmpty) {
-        for (var i = 0; i < socialControllers.length && i < socials.length; i++) {
-          if (socialControllers[i].text.trim().isEmpty) {
-            socialControllers[i].text = socials[i];
-          }
-        }
-      }
-    } catch (_) {
-      // Best-effort.
-    } finally {
-      if (mounted) {
-        setState(() => _loadingFromBackend = false);
-      } else {
-        _loadingFromBackend = false;
-      }
-    }
-  }
-
-  Future<bool> _saveToBackendIfNeeded() async {
-    if (widget.isInitialRegistration) return true;
-    if (_saving) return false;
-    setState(() => _saving = true);
-    try {
-      final whatsapp = whatsappController.text.trim();
-      final website = websiteController.text.trim();
-      final social = socialControllers
-          .map((c) => c.text.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(growable: false);
-      final socialSignature = jsonEncode(social);
-      final sameWhatsapp = whatsapp == (_initialWhatsapp ?? '');
-      final sameWebsite = website == (_initialWebsite ?? '');
-      final sameSocial = socialSignature == _initialSocialSignature;
-      final hasBaseline =
-          _initialWhatsapp != null ||
-          _initialWebsite != null ||
-          _initialSocialSignature != '[]';
-      if (hasBaseline && sameWhatsapp && sameWebsite && sameSocial) return true;
-
-      final updated = await ProvidersApi().updateMyProviderProfile({
-        'whatsapp': whatsapp,
-        'website': website,
-        'social_links': social,
-      });
-      if (updated == null) { 
-        if (!mounted) return false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر حفظ بيانات التواصل حالياً.')),
-        );
-        return false;
-      }
-      _initialWhatsapp = (updated['whatsapp'] ?? '').toString().trim();
-      _initialWebsite = (updated['website'] ?? '').toString().trim();
-      final savedSocial = updated['social_links'];
-      if (savedSocial is List) {
-        _initialSocialSignature = jsonEncode(
-          savedSocial
-              .map((e) => (e ?? '').toString().trim())
-              .where((s) => s.isNotEmpty)
-              .toList(),
-        );
-      } else {
-        _initialSocialSignature = '[]';
-      }
-      return true;
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_formatDioError(e))),
-      );
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      } else {
-        _saving = false;
-      }
-    }
-  }
-
-  String _formatDioError(Object error) {
-    if (error is DioException) {
-      final status = error.response?.statusCode;
-      if (status == 401) {
-        return 'انتهت الجلسة. فضلاً سجّل الدخول مرة أخرى.';
-      }
-
-      final data = error.response?.data;
-      if (data is String) {
-        final msg = data.trim();
-        if (msg.isNotEmpty) return msg;
-      }
-
-      if (data is Map) {
-        final map = data.map((k, v) => MapEntry(k.toString(), v));
-        final detail = map['detail'];
-        if (detail is String && detail.trim().isNotEmpty) {
-          return detail.trim();
-        }
-
-        final parts = <String>[];
-        for (final entry in map.entries) {
-          final key = entry.key;
-          final value = entry.value;
-
-          if (value is List) {
-            final msgs = value
-                .map((e) => e?.toString().trim())
-                .whereType<String>()
-                .where((s) => s.isNotEmpty)
-                .toList();
-            if (msgs.isNotEmpty) parts.add('$key: ${msgs.join('، ')}');
-          } else if (value is String && value.trim().isNotEmpty) {
-            parts.add('$key: ${value.trim()}');
-          }
-        }
-        if (parts.isNotEmpty) return parts.join('\n');
-      }
-
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-          return 'تعذر الاتصال بالخادم حالياً. حاول مرة أخرى.';
-        case DioExceptionType.connectionError:
-          return 'لا يوجد اتصال بالإنترنت حالياً.';
-        default:
-          break;
-      }
-
-      if (status != null) {
-        return 'تعذر حفظ بيانات التواصل حالياً (HTTP $status).';
-      }
-    }
-
-    return 'تعذر حفظ بيانات التواصل حالياً.';
   }
 
   void _validateForm() {
     // حساب النسبة بناءً على الحقول المملوءة
     double completionPercent = 0.0;
-
-    // للتسجيل الأولي: نحتاج المدينة + رقم الهاتف كحد أدنى
-    if (widget.isInitialRegistration) {
-      if (phoneController.text.trim().isNotEmpty) {
-        completionPercent += 0.5;
-      }
-      if (cityController.text.trim().isNotEmpty) {
-        completionPercent += 0.5;
-      }
-    } else {
-      // رقم الهاتف الأساسي (60% من الصفحة)
-      if (phoneController.text.trim().isNotEmpty) {
-        completionPercent += 0.6;
-      }
-
-      // واتساب (40% من الصفحة - اختياري)
-      if (whatsappController.text.trim().isNotEmpty) {
-        completionPercent += 0.4;
-      }
+    
+    // رقم الهاتف الأساسي (60% من الصفحة)
+    if (phoneController.text.trim().isNotEmpty) {
+      completionPercent += 0.6;
+    }
+    
+    // واتساب (40% من الصفحة - اختياري)
+    if (whatsappController.text.trim().isNotEmpty) {
+      completionPercent += 0.4;
     }
     
     widget.onValidationChanged?.call(completionPercent);
@@ -545,18 +154,10 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
 
   @override
   void dispose() {
-    _draftTimer?.cancel();
-    _patchTimer?.cancel();
     websiteController.dispose();
-    if (_ownsPhone) {
-      phoneController.dispose();
-    }
-    if (_ownsWhatsapp) {
-      whatsappController.dispose();
-    }
-    if (_ownsCity) {
-      cityController.dispose();
-    }
+    phoneController.dispose();
+    whatsappController.dispose();
+    mapLocationController.dispose();
     for (final c in socialControllers) {
       c.dispose();
     }
@@ -713,26 +314,13 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
         ),
         const SizedBox(height: 16),
         _sectionCard(
-          title: "المدينة",
-          icon: Icons.location_city,
-          child: _buildCityDropdown(),
-        ),
-        _sectionCard(
           title: "رقم الهاتف الأساسي",
           icon: Icons.phone_android,
           child: _styledField(
             controller: phoneController,
-            hint: "05xxxxxxxx",
+            hint: "+9665xxxxxxxx",
             icon: Icons.phone,
             keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            maxLength: 10,
-            // أثناء التسجيل: اسمح للمستخدم بتعديل رقم الجوال دائماً.
-            // الحفظ يتم عند الإرسال من صفحة التسجيل عبر AccountApi.updateMe.
-            readOnly: false,
           ),
         ),
         _sectionCard(
@@ -754,11 +342,6 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
   Widget _buildFullAccordion() {
     return Column(
       children: [
-        if (_loadingFromBackend)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: LinearProgressIndicator(minHeight: 3),
-          ),
         _infoTip(
           icon: Icons.info_outline,
           text:
@@ -820,10 +403,65 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
           title: "رقم الهاتف",
           child: _styledField(
             controller: phoneController,
-            hint: "05xxxxxxxx",
+            hint: "+9665xxxxxxxx",
             icon: Icons.phone,
             keyboardType: TextInputType.phone,
-            readOnly: true,
+          ),
+        ),
+
+        // موقعي على الخريطة
+        _accordionCard(
+          id: "map",
+          icon: Icons.location_on_outlined,
+          title: "موقعي على الخريطة",
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _styledField(
+                      controller: mapLocationController,
+                      hint: "رابط موقعي على الخريطة",
+                      icon: FontAwesomeIcons.mapLocationDot,
+                      keyboardType: TextInputType.url,
+                      readOnly: true,
+                      onTap: _pickLocation,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _pickLocation,
+                    icon: const Icon(Icons.my_location, size: 18),
+                    label: const Text(
+                      "تحديد",
+                      style: TextStyle(fontFamily: "Cairo"),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "اضغط على حقل الموقع أو زر \"تحديد\" لفتح خرائط Google وتحديد موقعك.",
+                style: TextStyle(
+                  fontFamily: "Cairo",
+                  fontSize: 11.5,
+                  color: Colors.black54,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -980,108 +618,23 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
 
   // ---------------- INPUT FIELD ----------------
 
-  Widget _buildCityDropdown() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800] : const Color(0xFFF7F5FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? Colors.grey[700]!
-              : const Color(0xFF6366F1).withOpacity(0.2),
-          width: 1.5,
-        ),
-      ),
-      child: DropdownButtonFormField<String>(
-        value: _selectedCity,
-        hint: Row(
-          children: [
-            Icon(
-              Icons.location_city_rounded,
-              color: const Color(0xFF6366F1).withOpacity(0.7),
-              size: 22,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'اختر مدينتك',
-              style: TextStyle(
-                color: isDark ? Colors.grey[400] : Colors.grey[500],
-                fontSize: 13,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ],
-        ),
-        icon: Icon(
-          Icons.keyboard_arrow_down_rounded,
-          color: isDark ? Colors.grey[400] : Colors.grey[600],
-        ),
-        decoration: const InputDecoration(
-          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: InputBorder.none,
-        ),
-        dropdownColor: isDark ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        items: _saudiCities.map((city) {
-          return DropdownMenuItem<String>(
-            value: city,
-            alignment: AlignmentDirectional.centerEnd,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  city,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontFamily: 'Cairo',
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.location_on_rounded,
-                  color: const Color(0xFF6366F1).withOpacity(0.6),
-                  size: 18,
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            _selectedCity = value;
-            cityController.text = value ?? '';
-          });
-        },
-      ),
-    );
-  }
-
   Widget _styledField({
     required TextEditingController controller,
     IconData? icon,
     String? hint,
     TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-    int? maxLength,
     bool readOnly = false,
     VoidCallback? onTap,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      maxLength: maxLength,
       readOnly: readOnly,
       onTap: onTap,
       style: const TextStyle(fontFamily: "Cairo", fontSize: 13.5),
       decoration: InputDecoration(
         prefixIcon: icon != null ? Icon(icon, color: Colors.deepPurple) : null,
         hintText: hint,
-        counterText: '',
         hintStyle: const TextStyle(
           color: Colors.grey,
           fontFamily: "Cairo",
@@ -1130,13 +683,7 @@ class _ContactInfoStepState extends State<ContactInfoStep> {
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: _saving
-                ? null
-                : () async {
-                    final ok = await _saveToBackendIfNeeded();
-                    if (!ok) return;
-                    widget.onNext();
-                  },
+            onPressed: widget.onNext,
             icon: const Icon(Icons.arrow_forward),
             label: Text(
               primaryLabel,

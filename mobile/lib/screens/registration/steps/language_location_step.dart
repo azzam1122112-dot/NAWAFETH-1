@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../services/providers_api.dart';
-import '../../../utils/user_scoped_prefs.dart';
-import '../../provider_dashboard/google_map_location_picker_screen.dart';
-import '../../../widgets/profile_wizard_shell.dart';
+import 'map_radius_picker_screen.dart';
 
 class LanguageLocationStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -27,8 +20,6 @@ class LanguageLocationStep extends StatefulWidget {
 }
 
 class _LanguageLocationStepState extends State<LanguageLocationStep> {
-  static const String _draftKey = 'provider_lang_loc_draft_v1';
-
   final List<String> predefinedLanguages = ['عربي', 'English', 'أخرى'];
   final List<String> selectedLanguages = [];
   final List<String> customLanguages = [];
@@ -36,368 +27,50 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
       TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
+  int? _selectedDistanceKm;
   LatLng? _selectedCenter;
-  bool _loadingFromBackend = false;
-  bool _savingLocation = false;
 
-  Timer? _draftTimer;
+  final Map<String, bool> serviceRange = {
+    'مدينتي 🏙️': false,
+    'منطقتي 🗺️': false,
+    'دولتي 🌍': false,
+    'ضمن نطاق محدد 📍': false,
+  };
 
-  Future<void> _saveDraftNow() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final data = <String, dynamic>{
-        'selected_languages': selectedLanguages,
-        'custom_languages': customLanguages,
-        'lat': _selectedCenter?.latitude,
-        'lng': _selectedCenter?.longitude,
-        'location_text': locationController.text.trim(),
-      };
-      await UserScopedPrefs.setStringScoped(
-        prefs,
-        _draftKey,
-        jsonEncode(data),
-        userId: userId,
-      );
-    } catch (_) {
-      // ignore
+  static const List<int> _distanceOptionsKm = [2, 5, 10, 20, 50];
+
+  void _ensureDefaultDistance() {
+    if (_selectedDistanceKm == null) {
+      _selectedDistanceKm = 10;
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDraft();
-    _loadFromBackendBestEffort();
-    customLanguageController.addListener(_scheduleDraftSave);
-    locationController.addListener(_scheduleDraftSave);
-  }
-
-  Future<void> _loadFromBackendBestEffort() async {
-    if (_loadingFromBackend) return;
-    setState(() => _loadingFromBackend = true);
-    try {
-      final json = await ProvidersApi().getMyProviderProfile();
-      if (json == null) return;
-
-      double? asDouble(dynamic v) {
-        if (v is double) return v;
-        if (v is num) return v.toDouble();
-        return double.tryParse((v ?? '').toString());
-      }
-
-      final lat = asDouble(json['lat']);
-      final lng = asDouble(json['lng']);
-      List<String> asList(dynamic v) {
-        if (v is! List) return <String>[];
-        return v
-            .map((e) => (e ?? '').toString().trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
-      }
-      final langs = asList(json['languages']);
-      if (!mounted) return;
-
-      setState(() {
-        if (selectedLanguages.isEmpty && langs.isNotEmpty) {
-          selectedLanguages
-            ..clear()
-            ..addAll(langs);
-        }
-        if (lat != null && lng != null) {
-          _selectedCenter = LatLng(lat, lng);
-          locationController.text =
-              '(${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)})';
-        }
-      });
-      // Keep local draft in sync when backend location changes.
-      await _saveDraftNow();
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-    } finally {
-      if (mounted) setState(() => _loadingFromBackend = false);
-    }
-  }
-
-  Future<void> _loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _draftKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) return;
-      final data = jsonDecode(raw);
-      if (data is! Map) return;
-
-      List<String> asStringList(dynamic v) {
-        if (v is! List) return <String>[];
-        return v.map((e) => (e ?? '').toString()).where((s) => s.trim().isNotEmpty).toList();
-      }
-
-      double? asDouble(dynamic v) {
-        if (v is double) return v;
-        if (v is num) return v.toDouble();
-        return double.tryParse((v ?? '').toString());
-      }
-
-      final langs = asStringList(data['selected_languages']);
-      final custom = asStringList(data['custom_languages']);
-      final lat = asDouble(data['lat']);
-      final lng = asDouble(data['lng']);
-      final locationText = (data['location_text'] ?? '').toString();
-
-      if (!mounted) return;
-      setState(() {
-        if (langs.isNotEmpty) {
-          selectedLanguages
-            ..clear()
-            ..addAll(langs);
-        }
-        if (custom.isNotEmpty) {
-          customLanguages
-            ..clear()
-            ..addAll(custom);
-        }
-        if (lat != null && lng != null) {
-          _selectedCenter = LatLng(lat, lng);
-        }
-        if (locationController.text.trim().isEmpty && locationText.trim().isNotEmpty) {
-          locationController.text = locationText;
-        }
-      });
-
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-    }
-  }
-
-  void _scheduleDraftSave() {
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = await UserScopedPrefs.readUserId();
-        final data = <String, dynamic>{
-          'selected_languages': selectedLanguages,
-          'custom_languages': customLanguages,
-          'lat': _selectedCenter?.latitude,
-          'lng': _selectedCenter?.longitude,
-          'location_text': locationController.text.trim(),
-        };
-        await UserScopedPrefs.setStringScoped(
-          prefs,
-          _draftKey,
-          jsonEncode(data),
-          userId: userId,
-        );
-      } catch (_) {
-        // ignore
-      }
-    });
-  }
-
-  void _updateSectionDone() {
-    final done =
-        selectedLanguages.isNotEmpty || customLanguages.isNotEmpty || _selectedCenter != null;
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.setBoolScoped(
-        prefs,
-        'provider_section_done_lang_loc',
-        done,
-        userId: userId,
-      );
-    }).catchError((_) {});
-  }
-
-  Future<bool> _saveLanguagesToBackendBestEffort() async {
-    try {
-      final langs = <String>[
-        ...selectedLanguages.where((s) => s.trim().isNotEmpty),
-        ...customLanguages.where((s) => s.trim().isNotEmpty),
-      ];
-      final updated = await ProvidersApi().updateMyProviderProfile({
-        'languages': langs,
-      });
-      return updated != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _handleNext() async {
-    _updateSectionDone();
-    final prefsDone = selectedLanguages.isNotEmpty ||
-      customLanguages.isNotEmpty ||
-      _selectedCenter != null;
-
-    if (!prefsDone) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'اختر لغة واحدة على الأقل أو حدّد موقعك قبل المتابعة.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    // If user typed coordinates but didn't use the picker, try to parse them.
-    if (_selectedCenter == null) {
-      final text = locationController.text.trim();
-      final m = RegExp(r'\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?').firstMatch(text);
-      if (m != null) {
-        final lat = double.tryParse(m.group(1) ?? '');
-        final lng = double.tryParse(m.group(2) ?? '');
-        if (lat != null && lng != null) {
-          _selectedCenter = LatLng(lat, lng);
-        }
-      }
-    }
-
-    await _saveDraftNow();
-
-    final langsSaved = await _saveLanguagesToBackendBestEffort();
-    if (!langsSaved && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ اللغات حالياً.')),
-      );
-      return;
-    }
-
-    final point = _selectedCenter;
-    if (point != null) {
-      await _saveLocationToBackendBestEffort(point, showSnack: false);
-    }
-
-    _scheduleDraftSave();
-    widget.onNext();
   }
 
   Future<void> _pickMapLocation() async {
-    final picked = await Navigator.push<Map<String, dynamic>>(
+    if (_selectedDistanceKm == null) {
+      _ensureDefaultDistance();
+      if (mounted) setState(() {});
+    }
+
+    final picked = await Navigator.push<LatLng>(
       context,
       MaterialPageRoute(
-        builder: (_) => GoogleMapLocationPickerScreen(
+        builder: (_) => MapRadiusPickerScreen(
+          radiusKm: _selectedDistanceKm!,
           initialCenter: _selectedCenter,
         ),
       ),
     );
 
     if (picked == null || !mounted) return;
-    final lat = picked['lat'];
-    final lng = picked['lng'];
-    if (lat is! num || lng is! num) return;
-
-    final point = LatLng(lat.toDouble(), lng.toDouble());
     setState(() {
-      _selectedCenter = point;
+      _selectedCenter = picked;
       locationController.text =
-          '(${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)})';
+          '(${picked.latitude.toStringAsFixed(5)}, ${picked.longitude.toStringAsFixed(5)}) • ${_selectedDistanceKm} كم';
     });
-
-    await _saveDraftNow();
-    await _saveLocationToBackendBestEffort(point);
-    _scheduleDraftSave();
-    _updateSectionDone();
-  }
-
-  Future<void> _saveLocationToBackendBestEffort(LatLng point, {bool showSnack = true}) async {
-    if (_savingLocation) return;
-    setState(() => _savingLocation = true);
-    try {
-      final res = await ProvidersApi().updateMyProviderProfile({
-        'lat': point.latitude,
-        'lng': point.longitude,
-      });
-      if (!mounted) return;
-      if (!showSnack) return;
-      if (res == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر حفظ الموقع حالياً.')),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم حفظ الموقع الجغرافي.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      if (showSnack) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_formatDioError(e))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _savingLocation = false);
-    }
-  }
-
-  String _formatDioError(Object error) {
-    if (error is DioException) {
-      final status = error.response?.statusCode;
-      if (status == 401) {
-        return 'انتهت الجلسة. فضلاً سجّل الدخول مرة أخرى.';
-      }
-
-      final data = error.response?.data;
-      if (data is String) {
-        final msg = data.trim();
-        if (msg.isNotEmpty) return msg;
-      }
-
-      if (data is Map) {
-        final map = data.map((k, v) => MapEntry(k.toString(), v));
-        final detail = map['detail'];
-        if (detail is String && detail.trim().isNotEmpty) {
-          return detail.trim();
-        }
-
-        final parts = <String>[];
-        for (final entry in map.entries) {
-          final key = entry.key;
-          final value = entry.value;
-
-          if (value is List) {
-            final msgs = value
-                .map((e) => e?.toString().trim())
-                .whereType<String>()
-                .where((s) => s.isNotEmpty)
-                .toList();
-            if (msgs.isNotEmpty) parts.add('$key: ${msgs.join('، ')}');
-          } else if (value is String && value.trim().isNotEmpty) {
-            parts.add('$key: ${value.trim()}');
-          }
-        }
-        if (parts.isNotEmpty) return parts.join('\n');
-      }
-
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-          return 'تعذر الاتصال بالخادم حالياً. حاول مرة أخرى.';
-        case DioExceptionType.connectionError:
-          return 'لا يوجد اتصال بالإنترنت حالياً.';
-        default:
-          break;
-      }
-
-      if (status != null) {
-        return 'تعذر حفظ الموقع حالياً (HTTP $status).';
-      }
-    }
-    return 'تعذر حفظ الموقع حالياً.';
   }
 
   @override
   void dispose() {
-    _draftTimer?.cancel();
     customLanguageController.dispose();
     locationController.dispose();
     super.dispose();
@@ -405,30 +78,59 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
 
   @override
   Widget build(BuildContext context) {
-    return ProfileWizardShell(
-      title: 'اللغة والموقع',
-      subtitle: 'حدد نطاق عملك الجغرافي واللغات لتصل للعملاء المناسبين أسرع.',
-      showTopLoader: _loadingFromBackend,
-      onBack: () {
-        _scheduleDraftSave();
-        _updateSectionDone();
-        widget.onBack();
-      },
-      onNext: _handleNext,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-        child: Column(
-          children: [
-            _infoTip(
-              icon: Icons.info_outline,
-              text:
-                  "اختيار اللغات وتحديد موقعك الجغرافي يساعد في عرضك للعملاء المناسبين أكثر.",
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F4FC),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 12),
+                Expanded(child: SingleChildScrollView(child: _buildForm())),
+                const SizedBox(height: 12),
+                _buildActionButtons(),
+              ],
             ),
-            const SizedBox(height: 12),
-            _buildForm(),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  // ---------------- HEADER ----------------
+
+  Widget _buildHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "اللغة والموقع الجغرافي",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.deepPurple,
+            fontFamily: "Cairo",
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "حدد اللغات التي يمكنك التعامل بها ونطاق تقديم خدماتك.",
+          style: TextStyle(
+            fontFamily: "Cairo",
+            fontSize: 13,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _infoTip(
+          icon: Icons.info_outline,
+          text:
+              "اختيار اللغات ونطاق الخدمة يساعد في عرضك للعملاء المناسبين أكثر لاهتماماتك وموقعك.",
+        ),
+      ],
     );
   }
 
@@ -445,15 +147,15 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: Colors.deepPurple, size: 20),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12.5,
-                height: 1.4,
+                fontFamily: "Cairo",
+                fontSize: 11.5,
                 color: Colors.black87,
+                height: 1.5,
               ),
             ),
           ),
@@ -466,129 +168,182 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
 
   Widget _buildForm() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionCard(
           icon: FontAwesomeIcons.language,
-          title: 'اللغة',
-          subtitle: 'اختر اللغات التي يمكنك التواصل بها مع العملاء.',
+          title: 'ما اللغة التي يمكنك تقديم الخدمة من خلالها؟',
+          subtitle:
+              "اختر اللغات التي يمكنك التحدث والتعامل بها مع العملاء، ويمكنك إضافة لغات أخرى يدويًا.",
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: predefinedLanguages.map((lang) {
-                  final selected = selectedLanguages.contains(lang);
-                  return FilterChip(
-                    label: Text(lang, style: const TextStyle(fontFamily: 'Cairo')),
-                    selected: selected,
-                    selectedColor: Colors.deepPurple.withOpacity(0.14),
-                    checkmarkColor: Colors.deepPurple,
-                    onSelected: (v) {
-                      setState(() {
-                        if (v) {
-                          if (!selectedLanguages.contains(lang)) {
-                            selectedLanguages.add(lang);
-                          }
-                        } else {
-                          selectedLanguages.remove(lang);
-                        }
-                      });
-                      _scheduleDraftSave();
-                      _updateSectionDone();
-                    },
-                  );
-                }).toList(),
+                spacing: 10,
+                runSpacing: 10,
+                children:
+                    predefinedLanguages.map((lang) {
+                      final selected = selectedLanguages.contains(lang);
+                      return FilterChip(
+                        label: Text(lang),
+                        selected: selected,
+                        onSelected: (val) {
+                          setState(() {
+                            val
+                                ? selectedLanguages.add(lang)
+                                : selectedLanguages.remove(lang);
+                          });
+                        },
+                        selectedColor: Colors.deepPurple,
+                        backgroundColor: Colors.grey.shade200,
+                        labelStyle: TextStyle(
+                          fontFamily: "Cairo",
+                          color: selected ? Colors.white : Colors.black,
+                        ),
+                      );
+                    }).toList(),
               ),
-              if (selectedLanguages.contains('أخرى')) _buildCustomLanguageInput(),
-              if (customLanguages.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: customLanguages.map((lang) {
-                    return Chip(
-                      label: Text(lang, style: const TextStyle(fontFamily: 'Cairo')),
-                      deleteIcon: const Icon(Icons.close, size: 18),
-                      onDeleted: () {
-                        setState(() => customLanguages.remove(lang));
-                        _scheduleDraftSave();
-                        _updateSectionDone();
-                      },
-                    );
-                  }).toList(),
+              if (selectedLanguages.contains('أخرى'))
+                _buildCustomLanguageInput(),
+              if (customLanguages.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Wrap(
+                    spacing: 8,
+                    children:
+                        customLanguages.map((lang) {
+                          return Chip(
+                            label: Text(
+                              lang,
+                              style: const TextStyle(fontFamily: "Cairo"),
+                            ),
+                            onDeleted: () {
+                              setState(() => customLanguages.remove(lang));
+                            },
+                          );
+                        }).toList(),
+                  ),
                 ),
-              ],
             ],
           ),
         ),
+
         _sectionCard(
           icon: FontAwesomeIcons.mapMarkedAlt,
-          title: 'الموقع الجغرافي',
+          title: 'نطاق الخدمة الجغرافي',
           subtitle:
-              'حدد موقعك الجغرافي الدقيق. سيتم محاولة تحديد موقعك تلقائياً عند فتح الخريطة ويمكنك تحريك الدبوس.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _savingLocation ? null : _pickMapLocation,
-                      icon: const Icon(Icons.map_outlined),
-                      label: Text(
-                        _savingLocation ? 'جارٍ الحفظ…' : 'تحديد الموقع على الخريطة',
-                        style: const TextStyle(fontFamily: 'Cairo'),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.deepPurple,
-                        side: const BorderSide(color: Colors.deepPurple),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
+              "حدد النطاق الذي يمكنك تقديم خدماتك فيه. يمكن اختيار أكثر من خيار حسب طبيعة عملك.",
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children:
+                serviceRange.entries.map((entry) {
+                  final selected = entry.value;
+                  return FilterChip(
+                    label: Text(
+                      entry.key,
+                      style: const TextStyle(fontFamily: "Cairo"),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  if (_loadingFromBackend)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    selected: selected,
+                    onSelected: (val) {
+                      setState(() {
+                        serviceRange[entry.key] = val;
+                        if (entry.key == 'ضمن نطاق محدد 📍' && val) {
+                          _ensureDefaultDistance();
+                        }
+                      });
+                    },
+                    selectedColor: Colors.deepPurple,
+                    backgroundColor: Colors.grey.shade200,
+                    labelStyle: TextStyle(
+                      color: selected ? Colors.white : Colors.black,
                     ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: locationController,
-                readOnly: true,
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'لم يتم تحديد موقع بعد',
-                  hintStyle: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 13,
-                    color: Colors.grey,
+                  );
+                }).toList(),
+          ),
+        ),
+
+        if (serviceRange['ضمن نطاق محدد 📍'] == true)
+          _sectionCard(
+            icon: FontAwesomeIcons.locationCrosshairs,
+            title: 'المسافة والموقع المحدد',
+            subtitle:
+                "اختر المسافة التي يمكنك تغطيتها، وحدد موقعك الجغرافي على الخريطة.",
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  children:
+                      _distanceOptionsKm.map((km) {
+                        final selected = _selectedDistanceKm == km;
+                        return FilterChip(
+                          label: Text(
+                            '$km كم',
+                            style: const TextStyle(fontFamily: 'Cairo'),
+                          ),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedDistanceKm = km;
+                              if (_selectedCenter != null) {
+                                locationController.text =
+                                    '(${_selectedCenter!.latitude.toStringAsFixed(5)}, ${_selectedCenter!.longitude.toStringAsFixed(5)}) • $_selectedDistanceKm كم';
+                              }
+                            });
+                          },
+                          selectedColor: Colors.deepPurple,
+                          backgroundColor: Colors.grey.shade200,
+                          labelStyle: TextStyle(
+                            color: selected ? Colors.white : Colors.black87,
+                          ),
+                        );
+                      }).toList(),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _pickMapLocation,
+                  icon: const Icon(Icons.my_location),
+                  label: const Text(
+                    "تحديد موقعي الجغرافي",
+                    style: TextStyle(fontFamily: "Cairo"),
                   ),
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Colors.deepPurple,
-                      width: 1.4,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.deepPurple,
+                    side: const BorderSide(color: Colors.deepPurple),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: locationController,
+                  readOnly: true,
+                  style: const TextStyle(fontFamily: "Cairo", fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'موقعي المختار والمسافة',
+                    hintStyle: const TextStyle(
+                      fontFamily: "Cairo",
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
+                    prefixIcon: const Icon(Icons.link),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Colors.deepPurple,
+                        width: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -629,9 +384,6 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
                   customLanguages.add(lang);
                   customLanguageController.clear();
                 });
-
-                _scheduleDraftSave();
-                _updateSectionDone();
               }
             },
             style: ElevatedButton.styleFrom(
@@ -703,4 +455,43 @@ class _LanguageLocationStepState extends State<LanguageLocationStep> {
     );
   }
 
+  // ---------------- ACTION BUTTONS ----------------
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: widget.onBack,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text("السابق", style: TextStyle(fontFamily: "Cairo")),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: Colors.deepPurple),
+              foregroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: widget.onNext,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text("التالي", style: TextStyle(fontFamily: "Cairo")),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

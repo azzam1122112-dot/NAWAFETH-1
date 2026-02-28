@@ -1,26 +1,19 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import '../core/permissions/permissions_service.dart';
 import '../models/ticket_model.dart';
-import '../services/notifications_badge_controller.dart';
-import '../services/support_api.dart';
 
 class ContactScreen extends StatefulWidget {
   final bool startNewTicketForm;
   final String? initialSupportTeam;
   final String? initialDescription;
-  final int? initialTicketId;
 
   const ContactScreen({
     super.key,
     this.startNewTicketForm = false,
     this.initialSupportTeam,
     this.initialDescription,
-    this.initialTicketId,
   });
 
   @override
@@ -28,14 +21,34 @@ class ContactScreen extends StatefulWidget {
 }
 
 class _ContactScreenState extends State<ContactScreen> {
-  final SupportApi _supportApi = SupportApi();
-  bool _isFeatureActionInProgress = false;
-  bool _isLoadingTickets = false;
-  Timer? _liveRefreshTimer;
-  int? _lastUnreadCount;
-
-  // لا توجد بيانات محلية وهمية؛ يجب أن تأتي التذاكر من API الدعم.
-  List<Ticket> tickets = [];
+  // البيانات التجريبية
+  List<Ticket> tickets = [
+    Ticket(
+      id: 'HD0002',
+      createdAt: DateTime(2024, 10, 25, 19, 40),
+      status: 'جديد',
+      supportTeam: 'الدعم الفني',
+      title: 'شكاوى التعليقات',
+      description: 'وجود تعليق مسيء يحتاج إجراء الإزالة',
+      lastUpdate: DateTime(2024, 10, 25, 19, 40),
+      replies: [
+        TicketReply(
+          from: 'platform',
+          message: 'تعليق منصة نوافذ (300 حرف)',
+          timestamp: DateTime(2024, 10, 25, 20, 15),
+        ),
+      ],
+    ),
+    Ticket(
+      id: 'HD0003',
+      createdAt: DateTime(2024, 10, 25, 19, 40),
+      status: 'تحت المعالجة',
+      supportTeam: 'الاشتراكات',
+      title: 'مشكلة في الاشتراك',
+      description: 'لم يتم تفعيل الاشتراك بعد الدفع',
+      lastUpdate: DateTime(2024, 10, 25, 20, 0),
+    ),
+  ];
 
   Ticket? selectedTicket;
   bool showNewTicketForm = false;
@@ -47,10 +60,15 @@ class _ContactScreenState extends State<ContactScreen> {
   String? selectedSupportTeam;
   List<String> attachments = [];
 
-  // قوائم فرق الدعم من الباكند
-  List<String> supportTeams = const [];
-  final Map<String, String> _teamNameToCode = <String, String>{};
-  final Map<String, String> _teamCodeToName = <String, String>{};
+  // قائمة فرق الدعم
+  final List<String> supportTeams = [
+    'الدعم الفني',
+    'الاشتراكات',
+    'التوثيق',
+    'الاقتراحات',
+    'الإعلانات',
+    'الشكاوى والبلاغات',
+  ];
 
   @override
   void initState() {
@@ -61,228 +79,26 @@ class _ContactScreenState extends State<ContactScreen> {
       selectedTicket = null;
     }
 
+    final team = widget.initialSupportTeam;
+    if (team != null && supportTeams.contains(team)) {
+      selectedSupportTeam = team;
+    }
+
     final desc = widget.initialDescription;
     if (desc != null && desc.trim().isNotEmpty) {
       _descriptionController.text = desc;
     }
-    _bootstrapSupportData();
-    NotificationsBadgeController.instance.unreadNotifier.addListener(_onUnreadChanged);
-    _lastUnreadCount = NotificationsBadgeController.instance.unreadNotifier.value;
-    _startLiveRefresh();
   }
 
   @override
   void dispose() {
-    _liveRefreshTimer?.cancel();
-    NotificationsBadgeController.instance.unreadNotifier.removeListener(_onUnreadChanged);
     _descriptionController.dispose();
     _replyController.dispose();
     super.dispose();
   }
 
-  void _startLiveRefresh() {
-    _liveRefreshTimer?.cancel();
-    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) return;
-      _loadTickets(silent: true);
-    });
-  }
-
-  void _onUnreadChanged() {
-    final current = NotificationsBadgeController.instance.unreadNotifier.value;
-    final previous = _lastUnreadCount;
-    _lastUnreadCount = current;
-    if (current == null || previous == null) return;
-    if (current <= previous) return;
-    _loadTickets(silent: true);
-  }
-
   String _formatDateTime(DateTime dt) {
     return DateFormat('dd/MM/yyyy - HH:mm').format(dt);
-  }
-
-  String _normalizeSupportStatus(String raw) {
-    switch (raw.trim()) {
-      case 'new':
-        return 'جديد';
-      case 'in_progress':
-        return 'تحت المعالجة';
-      case 'returned':
-        return 'معاد للعميل';
-      case 'closed':
-        return 'مغلق';
-      default:
-        return 'جديد';
-    }
-  }
-
-  String _statusLabelFromCode(String raw) {
-    switch (raw.trim()) {
-      case 'new':
-        return 'جديد';
-      case 'in_progress':
-        return 'تحت المعالجة';
-      case 'returned':
-        return 'معاد للعميل';
-      case 'closed':
-        return 'مغلق';
-      default:
-        return raw;
-    }
-  }
-
-  Ticket _ticketFromApi(Map<String, dynamic> json) {
-    DateTime parseDate(dynamic value) {
-      final s = value?.toString();
-      if (s == null || s.trim().isEmpty) return DateTime.now();
-      return DateTime.tryParse(s)?.toLocal() ?? DateTime.now();
-    }
-
-    final comments = (json['comments'] as List? ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .where((e) => e['is_internal'] != true)
-        .map(
-          (e) => TicketReply(
-            from: ((e['created_by_name'] ?? '').toString().trim() == 'منصة نوافذ')
-                ? 'platform'
-                : 'user',
-            message: (e['text'] ?? '').toString(),
-            timestamp: parseDate(e['created_at']),
-          ),
-        )
-        .toList();
-
-    final statusReplies = (json['status_logs'] as List? ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .map((e) {
-          final from = _statusLabelFromCode((e['from_status'] ?? '').toString());
-          final to = _statusLabelFromCode((e['to_status'] ?? '').toString());
-          final note = (e['note'] ?? '').toString().trim();
-          final msg = note.isEmpty
-              ? 'تم تحديث حالة البلاغ من "$from" إلى "$to".'
-              : 'تم تحديث حالة البلاغ من "$from" إلى "$to". الملاحظة: $note';
-          return TicketReply(
-            from: 'platform',
-            message: msg,
-            timestamp: parseDate(e['created_at']),
-          );
-        })
-        .toList();
-
-    final allReplies = <TicketReply>[
-      ...comments,
-      ...statusReplies,
-    ]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-
-    final attachmentsApi = (json['attachments'] as List? ?? const [])
-        .whereType<Map>()
-        .map((e) => (e['file'] ?? '').toString())
-        .where((e) => e.trim().isNotEmpty)
-        .toList();
-
-    final teamObj = json['assigned_team_obj'];
-    String supportTeamName = 'غير محدد';
-    if (teamObj is Map) {
-      supportTeamName = (teamObj['name_ar'] ?? 'غير محدد').toString();
-    } else {
-      final typeCode = (json['ticket_type'] ?? '').toString();
-      supportTeamName = _teamCodeToName[typeCode] ?? typeCode;
-    }
-
-    final code = (json['code'] ?? json['id'] ?? '').toString();
-    return Ticket(
-      backendId: json['id'] is int ? json['id'] as int : int.tryParse('${json['id']}'),
-      id: code.isEmpty ? '—' : code,
-      createdAt: parseDate(json['created_at']),
-      status: _normalizeSupportStatus((json['status'] ?? '').toString()),
-      supportTeam: supportTeamName,
-      title: supportTeamName,
-      description: (json['description'] ?? '').toString(),
-      attachments: attachmentsApi,
-      replies: allReplies,
-      lastUpdate: parseDate(json['updated_at']),
-    );
-  }
-
-  Future<void> _bootstrapSupportData() async {
-    await _loadSupportTeams();
-    await _loadTickets();
-  }
-
-  Future<void> _loadSupportTeams() async {
-    try {
-      final teams = await _supportApi.getTeams();
-      if (!mounted) return;
-      setState(() {
-        supportTeams = teams
-            .map((e) => (e['name_ar'] ?? '').toString().trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-        _teamNameToCode
-          ..clear()
-          ..addEntries(
-            teams.map((e) {
-              final name = (e['name_ar'] ?? '').toString().trim();
-              final code = (e['code'] ?? '').toString().trim();
-              return MapEntry(name, code);
-            }),
-          );
-        _teamCodeToName
-          ..clear()
-          ..addEntries(
-            teams.map((e) {
-              final name = (e['name_ar'] ?? '').toString().trim();
-              final code = (e['code'] ?? '').toString().trim();
-              return MapEntry(code, name);
-            }),
-          );
-      });
-
-      final initialTeam = widget.initialSupportTeam?.trim();
-      if (initialTeam != null && initialTeam.isNotEmpty && mounted) {
-        if (supportTeams.contains(initialTeam)) {
-          setState(() => selectedSupportTeam = initialTeam);
-        }
-      }
-    } catch (_) {
-      // ignore: fallback to empty team list
-    }
-  }
-
-  Future<void> _loadTickets({bool silent = false}) async {
-    if (_isLoadingTickets && silent) return;
-    if (!silent) {
-      setState(() => _isLoadingTickets = true);
-    }
-    try {
-      final list = await _supportApi.getMyTickets();
-      final mapped = list.map(_ticketFromApi).toList();
-      if (!mounted) return;
-      setState(() {
-        tickets = mapped;
-        final initialTicketId = widget.initialTicketId;
-        if (initialTicketId != null && selectedTicket == null) {
-          final targeted = tickets.where((t) => t.backendId == initialTicketId).toList();
-          if (targeted.isNotEmpty) {
-            selectedTicket = targeted.first;
-            showNewTicketForm = false;
-          }
-        }
-        if (selectedTicket != null) {
-          final current = tickets.where((t) => t.id == selectedTicket!.id).toList();
-          if (current.isNotEmpty) selectedTicket = current.first;
-        }
-      });
-    } catch (_) {
-      if (!mounted || silent) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تحميل تذاكر الدعم')),
-      );
-    } finally {
-      if (mounted && !silent) setState(() => _isLoadingTickets = false);
-    }
   }
 
   Color _getStatusColor(String status, bool isDark) {
@@ -291,8 +107,6 @@ class _ContactScreenState extends State<ContactScreen> {
         return isDark ? Colors.blue.shade300 : Colors.blue.shade100;
       case 'تحت المعالجة':
         return isDark ? Colors.deepPurple.shade300 : Colors.deepPurple.shade100;
-      case 'معاد للعميل':
-        return isDark ? Colors.orange.shade300 : Colors.orange.shade100;
       case 'مغلق':
         return isDark ? Colors.grey.shade400 : Colors.grey.shade300;
       default:
@@ -306,8 +120,6 @@ class _ContactScreenState extends State<ContactScreen> {
         return isDark ? Colors.blue.shade900 : Colors.blue.shade700;
       case 'تحت المعالجة':
         return isDark ? Colors.deepPurple.shade900 : Colors.deepPurple.shade700;
-      case 'معاد للعميل':
-        return isDark ? Colors.orange.shade900 : Colors.orange.shade700;
       case 'مغلق':
         return isDark ? Colors.grey.shade900 : Colors.grey.shade700;
       default:
@@ -316,15 +128,6 @@ class _ContactScreenState extends State<ContactScreen> {
   }
 
   Future<void> _pickImage() async {
-    final perm = await PermissionsService.ensureGallery();
-    if (!perm.isGranted) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(perm.messageAr)),
-      );
-      return;
-    }
-
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
@@ -335,15 +138,6 @@ class _ContactScreenState extends State<ContactScreen> {
   }
 
   Future<void> _takePhoto() async {
-    final perm = await PermissionsService.ensureCamera();
-    if (!perm.isGranted) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(perm.messageAr)),
-      );
-      return;
-    }
-
     final ImagePicker picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera);
     if (photo != null) {
@@ -354,15 +148,6 @@ class _ContactScreenState extends State<ContactScreen> {
   }
 
   Future<void> _pickFile() async {
-    final perm = await PermissionsService.ensureFileAccess();
-    if (!perm.isGranted) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(perm.messageAr)),
-      );
-      return;
-    }
-
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null && result.files.single.path != null) {
       setState(() {
@@ -371,102 +156,59 @@ class _ContactScreenState extends State<ContactScreen> {
     }
   }
 
-  Future<void> _sendCurrentLocation() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('إرسال الموقع متاح بعد فتح تذكرة.')),
-    );
-  }
-
-  Future<void> _createNewTicket() async {
+  void _createNewTicket() {
     if (selectedSupportTeam == null || _descriptionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الرجاء اختيار فريق الدعم وكتابة التفاصيل')),
       );
       return;
     }
-    final teamCode = _teamNameToCode[selectedSupportTeam!];
-    if (teamCode == null || teamCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تحديد نوع التذكرة من فريق الدعم المختار')),
-      );
-      return;
-    }
 
-    setState(() => _isFeatureActionInProgress = true);
-    try {
-      final created = await _supportApi.createTicket(
-        ticketType: teamCode,
-        description: _descriptionController.text.trim(),
-      );
-      final ticketIdRaw = created['id'];
-      final ticketId = ticketIdRaw is int ? ticketIdRaw : int.tryParse('$ticketIdRaw');
-      if (ticketId != null) {
-        for (final path in attachments) {
-          try {
-            await _supportApi.addAttachment(ticketId: ticketId, filePath: path);
-          } catch (_) {}
-        }
-      }
+    final newTicket = Ticket(
+      id: 'HD${(tickets.length + 1).toString().padLeft(4, '0')}',
+      createdAt: DateTime.now(),
+      status: 'جديد',
+      supportTeam: selectedSupportTeam!,
+      title: selectedSupportTeam!,
+      description: _descriptionController.text.trim(),
+      attachments: List.from(attachments),
+      lastUpdate: DateTime.now(),
+    );
 
-      await _loadTickets();
-      if (!mounted) return;
-      setState(() {
-        showNewTicketForm = false;
-        _descriptionController.clear();
-        selectedSupportTeam = null;
-        attachments.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إنشاء التذكرة بنجاح')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('فشل إنشاء التذكرة')),
-      );
-    } finally {
-      if (mounted) setState(() => _isFeatureActionInProgress = false);
-    }
+    setState(() {
+      tickets.insert(0, newTicket);
+      showNewTicketForm = false;
+      isSupportTeamDropdownOpen = false;
+      _descriptionController.clear();
+      selectedSupportTeam = null;
+      attachments.clear();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم إنشاء البلاغ بنجاح')),
+    );
   }
 
-  Future<void> _sendReply() async {
+  void _sendReply() {
     if (_replyController.text.trim().isEmpty || selectedTicket == null) return;
-    final idRaw = selectedTicket!.id.replaceAll(RegExp(r'[^0-9]'), '');
-    final ticketId = int.tryParse(idRaw);
-    if (ticketId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تحديد رقم التذكرة')),
-      );
-      return;
-    }
 
-    try {
-      await _supportApi.addComment(
-        ticketId: ticketId,
-        text: _replyController.text.trim(),
-      );
+    final reply = TicketReply(
+      from: 'user',
+      message: _replyController.text.trim(),
+      timestamp: DateTime.now(),
+    );
+
+    setState(() {
+      final index = tickets.indexWhere((t) => t.id == selectedTicket!.id);
+      if (index != -1) {
+        tickets[index] = tickets[index].copyWith(
+          replies: [...tickets[index].replies, reply],
+          lastUpdate: DateTime.now(),
+        );
+        selectedTicket = tickets[index];
+      }
       _replyController.clear();
-      final detail = await _supportApi.getTicketDetail(ticketId);
-      final mapped = _ticketFromApi(detail);
-      if (!mounted) return;
-      setState(() {
-        selectedTicket = mapped;
-        final index = tickets.indexWhere((t) => t.id == mapped.id);
-        if (index >= 0) {
-          tickets[index] = mapped;
-        } else {
-          tickets.insert(0, mapped);
-        }
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال الرد')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر إرسال الرد')),
-      );
-    }
+    });
   }
 
   @override
@@ -569,25 +311,7 @@ class _ContactScreenState extends State<ContactScreen> {
           const SizedBox(height: 16),
           
           // عرض البطاقات
-          if (_isLoadingTickets)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (tickets.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'لا توجد تذاكر حالياً.',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 13,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-            )
-          else
-            ...tickets.map((ticket) => _buildTicketCard(ticket, theme, isDark)),
+          ...tickets.map((ticket) => _buildTicketCard(ticket, theme, isDark)),
         ],
       ),
     );
@@ -901,18 +625,6 @@ class _ContactScreenState extends State<ContactScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _isFeatureActionInProgress ? null : _sendCurrentLocation,
-                    icon: const Icon(Icons.my_location),
-                    label: const Text(
-                      'إرسال موقعي الحالي',
-                      style: TextStyle(fontFamily: 'Cairo'),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),

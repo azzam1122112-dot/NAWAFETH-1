@@ -1,8 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import '../services/content_api.dart';
 
 class TermsScreen extends StatefulWidget {
   const TermsScreen({super.key});
@@ -12,117 +8,42 @@ class TermsScreen extends StatefulWidget {
 }
 
 class _TermsScreenState extends State<TermsScreen> {
-  late List<bool> _expanded;
-  bool _isLoadingRemote = false;
+  final List<bool> _expanded = [false, false, false, false];
 
-  late List<Map<String, dynamic>> _terms;
-
-  List<Map<String, dynamic>> _defaultTerms() => [
+  final List<Map<String, dynamic>> _terms = [
     {
-      "docType": "terms",
       "title": "اتفاقية الاستخدام",
       "lastUpdate": "آخر تحديث: 10-08-2025",
       "content":
           "باستخدامك للمنصة، فإنك تقر وتوافق على الالتزام بجميع الشروط والأحكام. "
           "يجب استخدام المنصة بما يتوافق مع الأنظمة واللوائح المعمول بها في المملكة العربية السعودية.",
       "icon": Icons.article_outlined,
-      "fileUrl": "",
-      "version": "",
     },
     {
-      "docType": "privacy",
       "title": "سياسة الخصوصية",
       "lastUpdate": "آخر تحديث: 05-08-2025",
       "content":
           "تحرص المنصة على حماية بيانات مستخدميها. يتم جمع البيانات الأساسية فقط لأغراض تحسين الخدمات "
           "ولا تتم مشاركتها مع أي طرف ثالث دون إذن المستخدم إلا بموجب الأنظمة السعودية.",
       "icon": Icons.privacy_tip_outlined,
-      "fileUrl": "",
-      "version": "",
     },
     {
-      "docType": "regulations",
       "title": "الأنظمة والتشريعات المتبعة",
       "lastUpdate": "آخر تحديث: 01-08-2025",
       "content":
           "تخضع المنصة للأنظمة والتشريعات المعمول بها في المملكة العربية السعودية. "
           "يتعين على جميع المستخدمين الالتزام بجميع القوانين ذات العلاقة عند استخدام المنصة.",
       "icon": Icons.gavel_outlined,
-      "fileUrl": "",
-      "version": "",
     },
     {
-      "docType": "prohibited_services",
       "title": "الخدمات الممنوعة",
       "lastUpdate": "آخر تحديث: 20-07-2025",
       "content":
           "يُمنع عرض أو طلب أي خدمات مخالفة للأنظمة أو الآداب العامة أو تتعارض مع التشريعات المعمول بها. "
           "وأي مخالفة قد تؤدي إلى إيقاف الحساب بشكل نهائي.",
       "icon": Icons.block_outlined,
-      "fileUrl": "",
-      "version": "",
     },
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _terms = _defaultTerms();
-    _expanded = List<bool>.filled(_terms.length, false);
-    _loadDashboardDocuments();
-  }
-
-  Future<void> _loadDashboardDocuments() async {
-    setState(() => _isLoadingRemote = true);
-    final payload = await ContentApi().getPublicContent();
-    if (!mounted) return;
-
-    final docs = payload.documents;
-    if (docs.isNotEmpty) {
-      final next = _defaultTerms().map((item) {
-        final docType = (item['docType'] ?? '').toString();
-        final doc = docs[docType];
-        if (doc == null) return item;
-        final published = doc.publishedAt;
-        final publishedLabel = published == null
-            ? (item['lastUpdate'] ?? '').toString()
-            : 'آخر تحديث: ${DateFormat('dd-MM-yyyy', 'ar').format(published)}';
-        final fallbackContent = (item['content'] ?? '').toString();
-        final remoteHint = doc.fileUrl.isEmpty
-            ? fallbackContent
-            : 'تم تحديث هذا المستند من لوحة التحكم. يمكنك فتح الملف الرسمي للاطلاع على النسخة الكاملة.';
-        return {
-          ...item,
-          'lastUpdate': publishedLabel,
-          'fileUrl': doc.fileUrl,
-          'version': doc.version,
-          'content': remoteHint,
-        };
-      }).toList();
-
-      setState(() {
-        _terms = next;
-        _expanded = List<bool>.filled(_terms.length, false);
-        _isLoadingRemote = false;
-      });
-      return;
-    }
-
-    setState(() => _isLoadingRemote = false);
-  }
-
-  Future<void> _openDocUrl(String url) async {
-    final value = url.trim();
-    if (value.isEmpty) return;
-    final uri = Uri.tryParse(value);
-    if (uri == null) return;
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تعذر فتح المستند حالياً')));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -215,95 +136,25 @@ class _TermsScreenState extends State<TermsScreen> {
                       ],
                     ),
 
-                    if (_isLoadingRemote && index == 0) ...[
-                      const SizedBox(height: 8),
-                      const LinearProgressIndicator(minHeight: 2),
-                    ],
-
                     // ✅ النص التفصيلي عند التوسع
                     AnimatedCrossFade(
                       firstChild: const SizedBox.shrink(),
                       secondChild: Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item["content"],
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 14,
-                                height: 1.5,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            if ((item["version"] ?? '')
-                                .toString()
-                                .trim()
-                                .isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.deepPurple.withValues(
-                                    alpha: 0.06,
-                                  ),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: Colors.deepPurple.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  'الإصدار: ${(item["version"] ?? '').toString()}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.deepPurple,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if ((item["fileUrl"] ?? '')
-                                .toString()
-                                .trim()
-                                .isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _openDocUrl(
-                                    (item["fileUrl"] ?? '').toString(),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.deepPurple,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  icon: const Icon(
-                                    Icons.open_in_new_rounded,
-                                    size: 18,
-                                  ),
-                                  label: const Text(
-                                    'فتح المستند الرسمي',
-                                    style: TextStyle(fontFamily: 'Cairo'),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        child: Text(
+                          item["content"],
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 14,
+                            height: 1.5,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
-                      crossFadeState: expanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
+                      crossFadeState:
+                          expanded
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
                       duration: const Duration(milliseconds: 300),
                     ),
                   ],

@@ -1,5 +1,4 @@
 class Ticket {
-  final int? backendId;
   final String id;
   final DateTime createdAt;
   final String status; // "جديد", "تحت المعالجة", "مغلق"
@@ -11,7 +10,6 @@ class Ticket {
   final DateTime? lastUpdate;
 
   Ticket({
-    this.backendId,
     required this.id,
     required this.createdAt,
     required this.status,
@@ -24,7 +22,6 @@ class Ticket {
   });
 
   Ticket copyWith({
-    int? backendId,
     String? id,
     DateTime? createdAt,
     String? status,
@@ -36,7 +33,6 @@ class Ticket {
     DateTime? lastUpdate,
   }) {
     return Ticket(
-      backendId: backendId ?? this.backendId,
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,

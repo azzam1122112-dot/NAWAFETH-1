@@ -1,11 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../utils/user_scoped_prefs.dart';
-import '../../../services/providers_api.dart';
-import '../../../widgets/profile_wizard_shell.dart';
 
 class AdditionalDetailsStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -22,190 +15,24 @@ class AdditionalDetailsStep extends StatefulWidget {
 }
 
 class _AdditionalDetailsStepState extends State<AdditionalDetailsStep> {
-  static const String _draftKey = 'provider_additional_details_draft_v1';
-
   // نبذة عامة عن المزود وخدماته
-  final TextEditingController aboutController = TextEditingController();
-
-  // سنوات الخبرة
-  final TextEditingController yearsExperienceController = TextEditingController();
+  final TextEditingController aboutController = TextEditingController(
+    text:
+        "مزود خدمات متخصص في تقديم حلول رقمية مخصصة، مع التركيز على الجودة والالتزام بمواعيد التسليم.",
+  );
 
   // قوائم ديناميكية للمؤهلات والخبرات
-  final List<String> qualifications = [];
+  final List<String> qualifications = ["بكالوريوس في علوم الحاسب"];
 
-  final List<String> experiences = [];
+  final List<String> experiences = [
+    "أكثر من 3 سنوات في تطوير الأنظمة والمنصات الخدمية.",
+  ];
 
   final TextEditingController _dialogController = TextEditingController();
 
-  Timer? _draftTimer;
-  bool _loadingFromBackend = false;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDraft();
-    _loadFromBackendBestEffort();
-    aboutController.addListener(() {
-      _scheduleDraftSave();
-      _updateSectionDone();
-    });
-
-    yearsExperienceController.addListener(() {
-      _scheduleDraftSave();
-      _updateSectionDone();
-    });
-  }
-
-  Future<void> _loadFromBackendBestEffort() async {
-    if (_loadingFromBackend) return;
-    setState(() => _loadingFromBackend = true);
-    try {
-      final profile = await ProvidersApi().getMyProviderProfile();
-      if (profile == null) return;
-
-      List<String> asList(dynamic v) {
-        if (v is! List) return <String>[];
-        return v
-            .map((e) => (e ?? '').toString().trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
-      }
-
-      final about = (profile['about_details'] ?? '').toString().trim();
-      final yearsExpRaw = (profile['years_experience'] ?? '').toString().trim();
-      final qs = asList(profile['qualifications']);
-      final ex = asList(profile['experiences']);
-
-      if (!mounted) return;
-      setState(() {
-        if (aboutController.text.trim().isEmpty && about.isNotEmpty) {
-          aboutController.text = about;
-        }
-
-        if (yearsExperienceController.text.trim().isEmpty && yearsExpRaw.isNotEmpty) {
-          yearsExperienceController.text = yearsExpRaw;
-        }
-
-        if (qualifications.isEmpty && qs.isNotEmpty) {
-          qualifications.addAll(qs);
-        }
-        if (experiences.isEmpty && ex.isNotEmpty) {
-          experiences.addAll(ex);
-        }
-      });
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-    } finally {
-      if (mounted) {
-        setState(() => _loadingFromBackend = false);
-      } else {
-        _loadingFromBackend = false;
-      }
-    }
-  }
-
-  Future<void> _loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _draftKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) return;
-      final data = jsonDecode(raw);
-      if (data is! Map) return;
-
-      String asString(dynamic v) => (v ?? '').toString();
-      List<String> asStringList(dynamic v) {
-        if (v is! List) return <String>[];
-        return v.map((e) => (e ?? '').toString()).where((s) => s.trim().isNotEmpty).toList();
-      }
-
-      if (aboutController.text.trim().isEmpty) {
-        aboutController.text = asString(data['about']);
-      }
-
-      if (yearsExperienceController.text.trim().isEmpty) {
-        yearsExperienceController.text = asString(data['years_experience']);
-      }
-
-      final qs = asStringList(data['qualifications']);
-      final ex = asStringList(data['experiences']);
-      if (mounted) {
-        setState(() {
-          if (qualifications.isEmpty && qs.isNotEmpty) {
-            qualifications.addAll(qs);
-          }
-          if (experiences.isEmpty && ex.isNotEmpty) {
-            experiences.addAll(ex);
-          }
-        });
-      }
-
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-    }
-  }
-
-  void _scheduleDraftSave() {
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = await UserScopedPrefs.readUserId();
-        final data = <String, dynamic>{
-          'about': aboutController.text.trim(),
-          'years_experience': yearsExperienceController.text.trim(),
-          'qualifications': qualifications,
-          'experiences': experiences,
-        };
-        await UserScopedPrefs.setStringScoped(
-          prefs,
-          _draftKey,
-          jsonEncode(data),
-          userId: userId,
-        );
-      } catch (_) {
-        // ignore
-      }
-    });
-  }
-
-  void _updateSectionDone() {
-    final years = int.tryParse(yearsExperienceController.text.trim()) ?? 0;
-    final done =
-        aboutController.text.trim().isNotEmpty ||
-        years > 0 ||
-        qualifications.isNotEmpty ||
-        experiences.isNotEmpty;
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.setBoolScoped(
-        prefs,
-        'provider_section_done_additional',
-        done,
-        userId: userId,
-      );
-    }).catchError((_) {});
-  }
-
-  void _clearDraft() {
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.removeScoped(prefs, _draftKey, userId: userId);
-    }).catchError((_) {});
-  }
-
   @override
   void dispose() {
-    _draftTimer?.cancel();
     aboutController.dispose();
-    yearsExperienceController.dispose();
     _dialogController.dispose();
     super.dispose();
   }
@@ -276,8 +103,6 @@ class _AdditionalDetailsStepState extends State<AdditionalDetailsStep> {
       hint: "مثال: شهادة مهنية، دورة معتمدة، أو درجة علمية",
       onConfirm: (value) {
         setState(() => qualifications.add(value));
-        _scheduleDraftSave();
-        _updateSectionDone();
       },
     );
   }
@@ -288,96 +113,109 @@ class _AdditionalDetailsStepState extends State<AdditionalDetailsStep> {
       hint: "مثال: تنفيذ نظام متكامل لقطاع معين، أو مشاريع معينة",
       onConfirm: (value) {
         setState(() => experiences.add(value));
-        _scheduleDraftSave();
-        _updateSectionDone();
       },
     );
   }
 
   void _removeQualification(int index) {
     setState(() => qualifications.removeAt(index));
-    _scheduleDraftSave();
-    _updateSectionDone();
   }
 
   void _removeExperience(int index) {
     setState(() => experiences.removeAt(index));
-    _scheduleDraftSave();
-    _updateSectionDone();
   }
 
-  Future<bool> _saveToBackend() async {
-    if (_saving) return false;
-    setState(() => _saving = true);
-    try {
-      final yearsParsed = int.tryParse(yearsExperienceController.text.trim());
-      final years = (yearsParsed == null || yearsParsed < 0) ? 0 : yearsParsed;
-      final payload = <String, dynamic>{
-        'years_experience': years,
-        'about_details': aboutController.text.trim(),
-        'qualifications': qualifications,
-        'experiences': experiences,
-      };
-      final updated = await ProvidersApi().updateMyProviderProfile(payload);
-      if (updated == null) {
-        if (!mounted) return false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر حفظ التفاصيل الإضافية حالياً.')),
-        );
-        return false;
-      }
-      return true;
-    } catch (_) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ التفاصيل الإضافية حالياً.')),
-      );
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      } else {
-        _saving = false;
-      }
-    }
-  }
-
-  Future<void> _handleNext() async {
-    final ok = await _saveToBackend();
-    if (!ok) return;
-    _updateSectionDone();
-    _clearDraft();
+  void _handleNext() {
+    // كلها اختيارية، لكن لو حاب تضيف تحقق بسيط ممكن هنا
     widget.onNext();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ProfileWizardShell(
-      title: 'تفاصيل إضافية عنك',
-      subtitle: 'عرّف العملاء بخبرتك ومؤهلاتك لتعزيز الثقة قبل طلب الخدمة.',
-      showTopLoader: _loadingFromBackend,
-      onBack: widget.onBack,
-      onNext: _handleNext,
-      nextBusy: _saving,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 18),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 700),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoCard(),
-                const SizedBox(height: 18),
-                _buildYearsExperienceCard(),
-                const SizedBox(height: 16),
-                _buildAboutCard(),
-                const SizedBox(height: 16),
-                _buildQualificationsCard(),
-                const SizedBox(height: 16),
-                _buildExperiencesCard(),
-              ],
-            ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 14),
+              _buildInfoCard(),
+              const SizedBox(height: 18),
+
+              // نبذة تفصيلية عامة عن المزود وخدماته
+              _buildAboutCard(),
+              const SizedBox(height: 16),
+
+              // كرت المؤهلات
+              _buildQualificationsCard(),
+              const SizedBox(height: 16),
+
+              // كرت الخبرات العملية
+              _buildExperiencesCard(),
+              const SizedBox(height: 26),
+
+              // أزرار الانتقال
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: widget.onBack,
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 16,
+                        color: Colors.deepPurple,
+                      ),
+                      label: const Text(
+                        "السابق",
+                        style: TextStyle(
+                          fontFamily: "Cairo",
+                          color: Colors.deepPurple,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        side: BorderSide(
+                          color: Colors.deepPurple.withOpacity(0.7),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _handleNext,
+                      icon: const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        "التالي",
+                        style: TextStyle(
+                          fontFamily: "Cairo",
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -385,6 +223,32 @@ class _AdditionalDetailsStepState extends State<AdditionalDetailsStep> {
   }
 
   // ================= UI Helpers =================
+
+  Widget _buildHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Text(
+          "تفاصيل عنك كمقدم خدمة",
+          style: TextStyle(
+            fontFamily: "Cairo",
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.deepPurple,
+          ),
+        ),
+        SizedBox(height: 6),
+        Text(
+          "عرّف عملاءك على مؤهلاتك وخبراتك ونبذة تفصيلية عنك وعن أسلوب عملك.",
+          style: TextStyle(
+            fontFamily: "Cairo",
+            fontSize: 13,
+            color: Colors.black54,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildInfoCard() {
     return Container(
@@ -483,78 +347,6 @@ class _AdditionalDetailsStepState extends State<AdditionalDetailsStep> {
             "حاول أن تذكر طريقة تعاملك مع العميل، أسلوب تنفيذك للمشاريع، وما يميّزك عن غيرك.",
             style: TextStyle(
               fontFamily: "Cairo",
-              fontSize: 11.5,
-              color: Colors.black54,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildYearsExperienceCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        border: Border.all(color: Colors.deepPurple.withOpacity(0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle(
-            icon: Icons.work_outline,
-            title: 'سنوات الخبرة',
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: yearsExperienceController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 13.5),
-            decoration: InputDecoration(
-              hintText: 'مثال: 5',
-              hintStyle: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 13,
-                color: Colors.grey,
-              ),
-              filled: true,
-              fillColor: const Color(0xFFF9F7FF),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: Colors.deepPurple.withOpacity(0.35),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(
-                  color: Colors.deepPurple.withOpacity(0.25),
-                ),
-              ),
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(14)),
-                borderSide: BorderSide(color: Colors.deepPurple, width: 1.4),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'اكتب عدد سنوات خبرتك في مجالك (اختياري).',
-            style: TextStyle(
-              fontFamily: 'Cairo',
               fontSize: 11.5,
               color: Colors.black54,
             ),

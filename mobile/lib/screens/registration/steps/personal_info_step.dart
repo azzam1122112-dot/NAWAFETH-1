@@ -4,21 +4,10 @@ class PersonalInfoStep extends StatefulWidget {
   final VoidCallback onNext;
   final Function(double)? onValidationChanged;
 
-  final TextEditingController? displayNameController;
-  final TextEditingController? engNameController;
-  final TextEditingController? bioController;
-  final String? initialAccountType;
-  final ValueChanged<String>? onAccountTypeChanged;
-
   const PersonalInfoStep({
     super.key,
     required this.onNext,
     this.onValidationChanged,
-    this.displayNameController,
-    this.engNameController,
-    this.bioController,
-    this.initialAccountType,
-    this.onAccountTypeChanged,
   });
 
   @override
@@ -26,13 +15,9 @@ class PersonalInfoStep extends StatefulWidget {
 }
 
 class _PersonalInfoStepState extends State<PersonalInfoStep> {
-  late final TextEditingController nameController;
-  late final TextEditingController engNameController;
-  late final TextEditingController bioController;
-
-  late final bool _ownsName;
-  late final bool _ownsEngName;
-  late final bool _ownsBio;
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController engNameController = TextEditingController();
+  final TextEditingController bioController = TextEditingController();
 
   String accountType = "فرد";
 
@@ -67,16 +52,6 @@ class _PersonalInfoStepState extends State<PersonalInfoStep> {
   @override
   void initState() {
     super.initState();
-    _ownsName = widget.displayNameController == null;
-    _ownsEngName = widget.engNameController == null;
-    _ownsBio = widget.bioController == null;
-
-    nameController = widget.displayNameController ?? TextEditingController();
-    engNameController = widget.engNameController ?? TextEditingController();
-    bioController = widget.bioController ?? TextEditingController();
-
-    accountType = (widget.initialAccountType ?? 'فرد');
-
     nameController.addListener(_validateForm);
     engNameController.addListener(_validateForm);
     bioController.addListener(_validateForm);
@@ -110,15 +85,9 @@ class _PersonalInfoStepState extends State<PersonalInfoStep> {
 
   @override
   void dispose() {
-    if (_ownsName) {
-      nameController.dispose();
-    }
-    if (_ownsEngName) {
-      engNameController.dispose();
-    }
-    if (_ownsBio) {
-      bioController.dispose();
-    }
+    nameController.dispose();
+    engNameController.dispose();
+    bioController.dispose();
     super.dispose();
   }
 
@@ -161,8 +130,6 @@ class _PersonalInfoStepState extends State<PersonalInfoStep> {
                   onChanged: (val) {
                     if (val != null) {
                       setState(() => accountType = val);
-                      widget.onAccountTypeChanged?.call(val);
-                      _validateForm();
                     }
                   },
                   contentPadding: EdgeInsets.zero,
@@ -179,8 +146,6 @@ class _PersonalInfoStepState extends State<PersonalInfoStep> {
                   onChanged: (val) {
                     if (val != null) {
                       setState(() => accountType = val);
-                      widget.onAccountTypeChanged?.call(val);
-                      _validateForm();
                     }
                   },
                   contentPadding: EdgeInsets.zero,

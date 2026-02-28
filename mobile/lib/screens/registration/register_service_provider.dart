@@ -1,25 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
-
-import '../../utils/user_scoped_prefs.dart';
 
 // استيراد الخطوات
 import 'steps/personal_info_step.dart';
 import 'steps/service_classification_step.dart';
 import 'steps/contact_info_step.dart';
 
-import '../../services/providers_api.dart';
-import '../../services/account_api.dart';
-import '../../services/role_controller.dart';
-import '../../services/role_sync.dart';
-import '../../services/session_storage.dart';
-import '../../utils/auth_guard.dart';
-import '../../core/api/api_error.dart';
-
-import '../signup_screen.dart';
+// لوحة المزود بعد التسجيل
+import '../provider_dashboard/provider_home_screen.dart';
 
 class RegisterServiceProviderPage extends StatefulWidget {
   const RegisterServiceProviderPage({super.key});
@@ -32,8 +21,6 @@ class RegisterServiceProviderPage extends StatefulWidget {
 class _RegisterServiceProviderPageState
     extends State<RegisterServiceProviderPage>
     with SingleTickerProviderStateMixin {
-  static const String _draftPrefsKey = 'provider_registration_draft_v1';
-
   final List<String> stepTitles = [
     'المعلومات الأساسية',
     'تصنيف الاختصاص',
@@ -45,19 +32,7 @@ class _RegisterServiceProviderPageState
   late AnimationController _animationController;
 
   bool _showSuccessOverlay = false;
-  bool _submitting = false;
-
-  // Registration draft (required by backend)
-  final TextEditingController _displayNameCtrl = TextEditingController();
-  final TextEditingController _bioCtrl = TextEditingController();
-  final TextEditingController _cityCtrl = TextEditingController();
-  final TextEditingController _phoneCtrl = TextEditingController();
-  final TextEditingController _whatsappCtrl = TextEditingController();
-
-  String _accountTypeAr = 'فرد';
-  bool _acceptsUrgent = false;
-  List<int> _selectedSubcategoryIds = [];
-
+  
   // تتبع نسبة إكمال كل صفحة (من 0.0 إلى 1.0)
   Map<int, double> _stepCompletion = {
     0: 0.0, // المعلومات الأساسية
@@ -73,27 +48,12 @@ class _RegisterServiceProviderPageState
       vsync: this,
       duration: const Duration(milliseconds: 300),
     )..forward();
-
-    _loadDraft();
-    _prefillFromAccount();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      final ok = await checkFullClient(context);
-      if (!ok && mounted) {
-        Navigator.of(context).maybePop();
-      }
-    });
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _animationController.dispose();
-    _displayNameCtrl.dispose();
-    _bioCtrl.dispose();
-    _cityCtrl.dispose();
-    _phoneCtrl.dispose();
-    _whatsappCtrl.dispose();
     super.dispose();
   }
 
@@ -105,161 +65,6 @@ class _RegisterServiceProviderPageState
       });
       _scrollToCurrentStep();
     }
-  }
-
-  Future<void> _saveDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final draft = <String, dynamic>{
-        'display_name': _displayNameCtrl.text,
-        'bio': _bioCtrl.text,
-        'city': _cityCtrl.text,
-        'phone': _phoneCtrl.text,
-        'whatsapp': _whatsappCtrl.text,
-        'account_type_ar': _accountTypeAr,
-        'accepts_urgent': _acceptsUrgent,
-        'step': _currentStep,
-      };
-      await UserScopedPrefs.setStringScoped(
-        prefs,
-        _draftPrefsKey,
-        jsonEncode(draft),
-        userId: userId,
-      );
-    } catch (_) {
-      // best-effort
-    }
-  }
-
-  Future<void> _loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _draftPrefsKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) return;
-
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
-
-      if (_displayNameCtrl.text.trim().isEmpty) {
-        _displayNameCtrl.text = (decoded['display_name'] ?? '').toString();
-      }
-      if (_bioCtrl.text.trim().isEmpty) {
-        _bioCtrl.text = (decoded['bio'] ?? '').toString();
-      }
-      if (_cityCtrl.text.trim().isEmpty) {
-        _cityCtrl.text = (decoded['city'] ?? '').toString();
-      }
-      if (_phoneCtrl.text.trim().isEmpty) {
-        _phoneCtrl.text = (decoded['phone'] ?? '').toString();
-      }
-      if (_whatsappCtrl.text.trim().isEmpty) {
-        _whatsappCtrl.text = (decoded['whatsapp'] ?? '').toString();
-      }
-      final at = (decoded['account_type_ar'] ?? '').toString().trim();
-      if (at.isNotEmpty) {
-        _accountTypeAr = at;
-      }
-      final au = decoded['accepts_urgent'];
-      if (au is bool) {
-        _acceptsUrgent = au;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        // Keep user on the same step only if it's within range
-        final s = decoded['step'];
-        final step = s is int ? s : int.tryParse((s ?? '').toString());
-        if (step != null && step >= 0 && step < stepTitles.length) {
-          _currentStep = step;
-        }
-      });
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  Future<void> _prefillFromAccount() async {
-    // Fast prefill from local storage (so fields are populated immediately).
-    try {
-      const storage = SessionStorage();
-      final localFull = (await storage.readFullName())?.trim();
-      final localPhone = (await storage.readPhone())?.trim();
-
-      if (_phoneCtrl.text.trim().isEmpty &&
-          localPhone != null &&
-          localPhone.isNotEmpty) {
-        _phoneCtrl.text = localPhone;
-      }
-      if (_displayNameCtrl.text.trim().isEmpty &&
-          localFull != null &&
-          localFull.isNotEmpty) {
-        _displayNameCtrl.text = localFull;
-      }
-    } catch (_) {
-      // ignore
-    }
-
-    try {
-      final me = await AccountApi().me();
-      final phone = (me['phone'] ?? '').toString().trim();
-      final first = (me['first_name'] ?? '').toString().trim();
-      final last = (me['last_name'] ?? '').toString().trim();
-      final fullName = ('$first $last').trim();
-
-      if (_phoneCtrl.text.trim().isEmpty && phone.isNotEmpty) {
-        _phoneCtrl.text = phone;
-      }
-      if (_displayNameCtrl.text.trim().isEmpty && fullName.isNotEmpty) {
-        _displayNameCtrl.text = fullName;
-      }
-
-      // Persist latest identity best-effort.
-      String? nonEmpty(dynamic v) {
-        final s = (v ?? '').toString().trim();
-        return s.isEmpty ? null : s;
-      }
-
-      await const SessionStorage().saveProfile(
-        username: nonEmpty(me['username']),
-        email: nonEmpty(me['email']),
-        firstName: nonEmpty(me['first_name']),
-        lastName: nonEmpty(me['last_name']),
-        phone: nonEmpty(me['phone']),
-      );
-      await _saveDraft();
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  void _onNextFromStep0() {
-    final displayName = _displayNameCtrl.text.trim();
-    final bio = _bioCtrl.text.trim();
-    if (displayName.isEmpty || bio.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'أكمل بيانات هذه الصفحة قبل المتابعة (الاسم الكامل + النبذة).',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
-      return;
-    }
-
-    _saveDraft();
-    _goToNextStep();
-  }
-
-  void _onNextFromStep1() {
-    _saveDraft();
-    _goToNextStep();
   }
 
   void _goToPreviousStep() {
@@ -296,103 +101,10 @@ class _RegisterServiceProviderPageState
     });
   }
 
-  String _providerTypeToBackend(String ar) {
-    final v = ar.trim();
-    if (v == 'منشأة') return 'company';
-    return 'individual';
-  }
-
-  Future<void> _submitProviderRegistration() async {
-    if (_submitting) return;
-
-    final displayName = _displayNameCtrl.text.trim();
-    final bio = _bioCtrl.text.trim();
-    final city = _cityCtrl.text.trim();
-    final phone = _phoneCtrl.text.trim();
-
-    // Required across the 3-step flow.
-    if (displayName.isEmpty || bio.isEmpty || city.isEmpty || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'أكمل البيانات المطلوبة: الاسم، النبذة، المدينة، رقم الهاتف.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    await _saveDraft();
-
+  void _completeRegistration() {
     setState(() {
-      _submitting = true;
+      _showSuccessOverlay = true;
     });
-
-    try {
-      // Ensure the primary phone is saved on the user account.
-      // Provider registration endpoint does not include phone in its payload.
-      await AccountApi().updateMe({'phone': phone});
-      AccountApi.invalidateMeCache();
-
-      await ProvidersApi().registerProvider(
-        providerType: _providerTypeToBackend(_accountTypeAr),
-        displayName: displayName,
-        bio: bio,
-        city: city,
-        acceptsUrgent: _acceptsUrgent,
-        subcategoryIds: _selectedSubcategoryIds.isNotEmpty
-            ? _selectedSubcategoryIds
-            : null,
-      );
-      AccountApi.invalidateMeCache();
-      try {
-        await RoleSync.sync();
-      } catch (_) {}
-      final whatsapp = _whatsappCtrl.text.trim();
-      if (whatsapp.isNotEmpty) {
-        await ProvidersApi().updateMyProviderProfile({'whatsapp': whatsapp});
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isProviderRegistered', true);
-      await RoleController.instance.setProviderMode(true);
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.removeScoped(prefs, _draftPrefsKey, userId: userId);
-
-      if (!mounted) return;
-      setState(() {
-        _showSuccessOverlay = true;
-      });
-    } on DioException catch (e) {
-      final apiErr = ApiError.fromDio(e);
-      String msg = apiErr.messageAr;
-
-      // Keep old behavior: if backend blocks by role, guide user to complete registration.
-      if ((e.response?.statusCode ?? 0) == 403) {
-        msg = 'يلزم إكمال تسجيل الحساب أولاً قبل التسجيل كمقدم خدمة.';
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-
-      // If backend still blocks by role, guide user to complete registration.
-      if ((e.response?.statusCode ?? 0) == 403) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SignUpScreen()),
-        );
-      }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('حدث خطأ غير متوقع أثناء التسجيل.')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-        });
-      }
-    }
   }
 
   double get _completionPercent {
@@ -408,12 +120,12 @@ class _RegisterServiceProviderPageState
 
     final Color activeColor = Colors.deepPurple;
     final Color completedColor = Colors.green;
-    final Color circleColor = isCompleted
-        ? completedColor
-        : (isActive ? activeColor : Colors.grey.shade300);
-    final Color iconColor = isActive || isCompleted
-        ? Colors.white
-        : Colors.black87;
+    final Color circleColor =
+        isCompleted
+            ? completedColor
+            : (isActive ? activeColor : Colors.grey.shade300);
+    final Color iconColor =
+        isActive || isCompleted ? Colors.white : Colors.black87;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -426,15 +138,16 @@ class _RegisterServiceProviderPageState
           decoration: BoxDecoration(
             color: circleColor,
             shape: BoxShape.circle,
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: activeColor.withOpacity(0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : [],
+            boxShadow:
+                isActive
+                    ? [
+                      BoxShadow(
+                        color: activeColor.withOpacity(0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                    : [],
           ),
           child: Center(
             child: Icon(
@@ -514,8 +227,9 @@ class _RegisterServiceProviderPageState
                   itemCount: stepTitles.length,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   separatorBuilder: (_, __) => const SizedBox(width: 16),
-                  itemBuilder: (context, index) =>
-                      _buildStepItem(stepTitles[index], index),
+                  itemBuilder:
+                      (context, index) =>
+                          _buildStepItem(stepTitles[index], index),
                 ),
               ),
             ),
@@ -576,36 +290,39 @@ class _RegisterServiceProviderPageState
   Widget _buildStepContent() {
     final steps = [
       PersonalInfoStep(
-        onNext: _onNextFromStep0,
+        onNext: _goToNextStep,
         onValidationChanged: (percent) => _updateStepCompletion(0, percent),
-        displayNameController: _displayNameCtrl,
-        bioController: _bioCtrl,
-        initialAccountType: _accountTypeAr,
-        onAccountTypeChanged: (v) => _accountTypeAr = v,
       ),
       ServiceClassificationStep(
-        onNext: _onNextFromStep1,
+        onNext: _goToNextStep,
         onBack: _goToPreviousStep,
         onValidationChanged: (percent) => _updateStepCompletion(1, percent),
-        onUrgentChanged: (v) => _acceptsUrgent = v,
-        onCategoriesChanged: (categoryId, subcategoryIds) {
-          _selectedSubcategoryIds = subcategoryIds;
-        },
       ),
       ContactInfoStep(
-        onNext: _submitProviderRegistration,
+        onNext: _completeRegistration,
         onBack: _goToPreviousStep,
         isInitialRegistration: true,
         isFinalStep: true,
         onValidationChanged: (percent) => _updateStepCompletion(2, percent),
-        phoneExternalController: _phoneCtrl,
-        whatsappExternalController: _whatsappCtrl,
-        cityExternalController: _cityCtrl,
       ),
     ];
 
-    // Keep step widgets mounted to avoid losing user input when navigating back.
-    return IndexedStack(index: _currentStep, children: steps);
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeIn,
+      switchOutCurve: Curves.easeOut,
+      transitionBuilder: (child, animation) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(0.05, 0),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offsetAnimation, child: child),
+        );
+      },
+      child: steps[_currentStep],
+    );
   }
 
   Widget _buildSuccessCard(BuildContext context) {
@@ -672,10 +389,7 @@ class _RegisterServiceProviderPageState
 
                 // نسبة إكمال الملف الشخصي (30% فقط بعد التسجيل)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(20),
@@ -754,14 +468,14 @@ class _RegisterServiceProviderPageState
                   onPressed: () async {
                     // ✅ حفظ نوع المستخدم كمقدم خدمة
                     final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('isProvider', true);
                     await prefs.setBool('isProviderRegistered', true);
-                    await RoleController.instance.setProviderMode(true);
-
-                    if (!context.mounted) return;
-                    Navigator.pushNamedAndRemoveUntil(
+                    
+                    Navigator.pushReplacement(
                       context,
-                      '/profile',
-                      (route) => false,
+                      MaterialPageRoute(
+                        builder: (_) => const ProviderHomeScreen(),
+                      ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -782,12 +496,10 @@ class _RegisterServiceProviderPageState
                   onPressed: () async {
                     // ✅ حفظ نوع المستخدم كمقدم خدمة حتى لو أغلق الآن
                     final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('isProvider', true);
                     await prefs.setBool('isProviderRegistered', true);
-                    await RoleController.instance.setProviderMode(true);
-
-                    if (!context.mounted) return;
-                    // الرجوع للصفحة الرئيسية
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    
+                    setState(() => _showSuccessOverlay = false);
                   },
                   child: const Text(
                     "إغلاق الآن (سأكمل لاحقًا)",
@@ -831,19 +543,6 @@ class _RegisterServiceProviderPageState
               ],
             ),
           ),
-
-          if (_submitting)
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: true,
-                child: Container(
-                  color: Colors.black.withOpacity(0.2),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Colors.deepPurple),
-                  ),
-                ),
-              ),
-            ),
 
           if (_showSuccessOverlay)
             Positioned.fill(

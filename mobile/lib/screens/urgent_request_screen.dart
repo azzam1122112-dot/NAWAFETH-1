@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:latlong2/latlong.dart';
+import '../widgets/app_bar.dart';
 import '../widgets/bottom_nav.dart';
-import '../core/permissions/permissions_service.dart';
-import '../services/providers_api.dart';
-import '../services/marketplace_api.dart';
-import '../models/category.dart';
-import '../utils/auth_guard.dart';
-import 'urgent_providers_map_screen.dart';
+import 'my_profile_screen.dart';
+import 'providers_map_screen.dart';
 
 class UrgentRequestScreen extends StatefulWidget {
   const UrgentRequestScreen({super.key});
@@ -16,286 +15,82 @@ class UrgentRequestScreen extends StatefulWidget {
 }
 
 class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
-  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-
-  Category? _selectedCategory;
-  SubCategory? _selectedSubCategory;
-  String? _selectedCity;
-  bool _submitting = false;
+  String? selectedMainCategory;
+  String? selectedSubCategory;
+  bool sendToAll = false;
+  bool searchNearest = true;
   bool showSuccessCard = false;
-  String _dispatchMode = 'all'; // all | nearest
-  bool _loadingNearestProvidersPreview = false;
-  String? _nearestProvidersPreviewMessage;
-  List<Map<String, dynamic>> _nearestProvidersPreview = const [];
-  int _nearestPreviewRequestId = 0;
 
-  List<Category> _categories = [];
+  static const LatLng _defaultMapCenter = LatLng(24.7136, 46.6753);
 
-  final List<String> _saudiCities = [
-    'الرياض',
-    'جدة',
-    'مكة المكرمة',
-    'المدينة المنورة',
-    'الدمام',
-    'الخبر',
-    'الظهران',
-    'الطائف',
-    'تبوك',
-    'بريدة',
-    'خميس مشيط',
-    'الأحساء',
-    'حفر الباطن',
-    'حائل',
-    'نجران',
-    'جازان',
-    'ينبع',
-    'الجبيل',
-    'الخرج',
-    'أبها',
+  final List<String> mainCategories = [
+    "صيانة المركبات",
+    "خدمات المنازل",
+    "استشارات قانونية",
   ];
 
-  Future<void> _submitRequest() async {
-    if (_submitting) return;
+  final Map<String, List<String>> subCategoriesMap = {
+    "صيانة المركبات": ["كهرباء", "ميكانيكا", "المساعدة على الطريق"],
+    "خدمات المنازل": ["سباكة", "نقل أثاث", "كهرباء"],
+    "استشارات قانونية": ["عامة", "صياغة عقود"],
+  };
 
-    final ok = await checkFullClient(context);
-    if (!ok) return;
+  List<String> get currentSubCategories =>
+      subCategoriesMap[selectedMainCategory] ?? [];
 
-    if (_selectedSubCategory == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('اختر التصنيف الفرعي')));
-      return;
-    }
-
-    final title = _titleController.text.trim();
-    final desc = _descriptionController.text.trim();
-    final city = (_selectedCity ?? '').trim();
-    final requiresCity = _dispatchMode != 'all';
-    if (title.isEmpty || desc.isEmpty || (requiresCity && city.isEmpty)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            requiresCity
-                ? 'أكمل العنوان والوصف والمدينة'
-                : 'أكمل العنوان والوصف',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-    final success = await MarketplaceApi().createRequest(
-      subcategoryId: _selectedSubCategory!.id,
-      title: title,
-      description: desc,
-      requestType: 'urgent',
-      city: city,
-      dispatchMode: _dispatchMode,
-    );
-
-    if (!mounted) return;
+  void _submitRequest() {
     setState(() {
-      _submitting = false;
-      showSuccessCard = success;
+      showSuccessCard = true;
     });
-
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر إرسال الطلب، حاول مرة أخرى')),
-      );
-    }
   }
 
-  void _goToOrders() {
-    Navigator.pushNamedAndRemoveUntil(context, '/orders', (r) => false);
+  void _goToMyProfile() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MyProfileScreen()),
+    );
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCategories();
-  }
-
-  Future<void> _loadCategories() async {
-    final cats = await ProvidersApi().getCategories();
-    if (!mounted) return;
-    setState(() {
-      _categories = cats;
-    });
-  }
-
-  Future<void> _refreshNearestProvidersPreview() async {
-    if (_dispatchMode != 'nearest') {
-      if (!mounted) return;
-      setState(() {
-        _loadingNearestProvidersPreview = false;
-        _nearestProvidersPreviewMessage = null;
-        _nearestProvidersPreview = const [];
-      });
+  Future<void> _openProvidersMap() async {
+    if (selectedMainCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر التصنيف الرئيسي أولاً')),
+      );
       return;
     }
 
-    if (_selectedSubCategory == null) {
-      if (!mounted) return;
-      setState(() {
-        _nearestProvidersPreview = const [];
-        _nearestProvidersPreviewMessage = 'اختر التصنيف الفرعي لعرض المزودين الأقرب.';
-      });
-      return;
-    }
-
-    final city = (_selectedCity ?? '').trim();
-    if (city.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _nearestProvidersPreview = const [];
-        _nearestProvidersPreviewMessage = 'اختر المدينة لعرض المزودين الأقرب.';
-      });
-      return;
-    }
-
-    final requestId = ++_nearestPreviewRequestId;
-    if (mounted) {
-      setState(() {
-        _loadingNearestProvidersPreview = true;
-        _nearestProvidersPreviewMessage = null;
-      });
-    }
-
-    try {
-      final permission = await PermissionsService.ensureLocationWhenInUse();
-      if (!permission.isGranted) {
-        if (!mounted || requestId != _nearestPreviewRequestId) return;
-        setState(() {
-          _loadingNearestProvidersPreview = false;
-          _nearestProvidersPreview = const [];
-          _nearestProvidersPreviewMessage =
-              'مطلوب تفعيل الموقع لعرض الأقرب (${permission.messageAr})';
-        });
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProvidersMapScreen(
+          category: selectedMainCategory!,
+          subCategory: selectedSubCategory,
+          requestDescription: _descriptionController.text.trim(),
+          attachments: [],
         ),
-      );
+      ),
+    );
 
-      final providers = await ProvidersApi().getProvidersForMap(
-        subcategoryId: _selectedSubCategory!.id,
-        city: city,
-        acceptsUrgentOnly: true,
-      );
+    if (!mounted) return;
 
-      final ranked = <Map<String, dynamic>>[];
-      for (final p in providers) {
-        final lat = p['lat'];
-        final lng = p['lng'];
-        if (lat is! num || lng is! num) continue;
-        final meters = Geolocator.distanceBetween(
-          position.latitude,
-          position.longitude,
-          lat.toDouble(),
-          lng.toDouble(),
-        );
-        ranked.add({
-          ...p,
-          'distance_meters': meters,
-          'distance_km': meters / 1000.0,
-        });
-      }
-
-      ranked.sort((a, b) {
-        final da = (a['distance_meters'] as num?)?.toDouble() ?? double.infinity;
-        final db = (b['distance_meters'] as num?)?.toDouble() ?? double.infinity;
-        return da.compareTo(db);
-      });
-
-      if (!mounted || requestId != _nearestPreviewRequestId) return;
-      setState(() {
-        _loadingNearestProvidersPreview = false;
-        _nearestProvidersPreview = ranked.take(6).toList();
-        _nearestProvidersPreviewMessage = _nearestProvidersPreview.isEmpty
-            ? 'لا يوجد مزودون قريبون متاحون حاليًا لهذا التصنيف في المدينة المختارة.'
-            : null;
-      });
-    } catch (_) {
-      if (!mounted || requestId != _nearestPreviewRequestId) return;
-      setState(() {
-        _loadingNearestProvidersPreview = false;
-        _nearestProvidersPreview = const [];
-        _nearestProvidersPreviewMessage = 'تعذر تحميل قائمة المزودين الأقرب حاليًا.';
-      });
+    if (result != null && result is Map) {
+      _submitRequest();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.grey[900] : const Color(0xFFF8F9FD),
-      appBar: AppBar(
-        backgroundColor: isDark ? Colors.grey[850] : Colors.white,
-        elevation: 2,
-        shadowColor: Colors.black12,
-        centerTitle: true,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.flash_on_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "طلب خدمة عاجلة",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                Text(
-                  "استجابة فورية من المزودين",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'Cairo',
-                    color: Colors.grey,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      appBar: const CustomAppBar(title: "طلب خدمة عاجلة"),
       bottomNavigationBar: const CustomBottomNav(currentIndex: 2),
       body: Stack(
         children: [
@@ -326,61 +121,40 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_circle,
-                          color: Colors.green,
-                          size: 50,
-                        ),
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 50,
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        "تم إرسال الطلب بنجاح! ✨",
+                        "تم إرسال الطلب بنجاح",
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Cairo',
                         ),
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        "ستصلك الردود في قسم طلباتي أو عبر الإشعارات المباشرة.",
+                        "ستصلك الردود في قسم نافذتي > الطلبات العاجلة أو عبر الإشعارات المباشرة.",
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontFamily: 'Cairo',
-                          height: 1.6,
-                        ),
+                        style: TextStyle(fontSize: 14, fontFamily: 'Cairo'),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       ElevatedButton.icon(
-                        onPressed: _goToOrders,
-                        icon: const Icon(Icons.arrow_forward_rounded),
-                        label: const Text(
-                          "اذهب إلى طلباتي",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
+                        onPressed: _goToMyProfile,
+                        icon: const Icon(Icons.arrow_forward),
+                        label: const Text("اذهب إلى نافذتي"),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.primaryColor,
-                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 14,
+                            horizontal: 24,
+                            vertical: 12,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 2,
                         ),
                       ),
                     ],
@@ -394,695 +168,280 @@ class _UrgentRequestScreenState extends State<UrgentRequestScreen> {
   }
 
   Widget _buildForm(ThemeData theme) {
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Header Card مع التدرج
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFF6B6B).withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.flash_on_rounded,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "خدمة عاجلة سريعة",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "احصل على عروض فورية من مزودي الخدمة القريبين منك",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        "سيتم إرسال طلبك حسب طريقة الإرسال التي تختارها",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'Cairo',
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Form Card
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[850] : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Category Selection
-              _buildSectionHeader("نوع الخدمة", Icons.category_rounded, isDark),
-              const SizedBox(height: 12),
-              _buildCategoryDropdown(theme, isDark),
-              const SizedBox(height: 16),
-
-              if (_selectedCategory != null &&
-                  _selectedCategory!.subcategories.isNotEmpty) ...[
-                _buildSubCategoryDropdown(theme, isDark),
-                const SizedBox(height: 24),
-              ],
-
-              // Request Details
-              _buildSectionHeader(
-                "تفاصيل الطلب",
-                Icons.description_rounded,
-                isDark,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                _titleController,
-                "مثال: إصلاح تسرب مياه عاجل",
-                Icons.title_rounded,
-                isDark: isDark,
-                maxLength: 50,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                _descriptionController,
-                "اكتب وصفاً تفصيلياً للخدمة المطلوبة...",
-                Icons.edit_note_rounded,
-                isDark: isDark,
-                maxLines: 4,
-                maxLength: 500,
-              ),
-              const SizedBox(height: 24),
-
-              _buildSectionHeader("طريقة الإرسال", Icons.send_rounded, isDark),
-              const SizedBox(height: 12),
-              _buildDispatchModeCard(isDark),
-              if (_dispatchMode == 'nearest') ...[
-                const SizedBox(height: 12),
-                _buildNearestProvidersPreviewCard(isDark),
-              ],
-              const SizedBox(height: 24),
-
-              // City Selection (placed below dispatch options)
-              _buildSectionHeader(
-                "المدينة",
-                Icons.location_city_rounded,
-                isDark,
-              ),
-              const SizedBox(height: 12),
-              _buildCityDropdown(isDark),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _openUrgentProvidersMap,
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text(
-                    'عرض مزودي العاجل على الخريطة',
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    side: BorderSide(
-                      color: isDark ? Colors.white24 : Colors.grey.shade300,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Action Buttons
-        _buildSubmitButton(isDark),
-      ],
-    );
-  }
-
-  Future<void> _openUrgentProvidersMap() async {
-    if (_selectedSubCategory == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر التصنيف الفرعي أولاً')),
-      );
-      return;
-    }
-    if ((_selectedCity ?? '').trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('اختر المدينة أولاً')));
-      return;
-    }
-
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => UrgentProvidersMapScreen(
-          subcategoryId: _selectedSubCategory!.id,
-          city: _selectedCity!,
-          subcategoryName: _selectedSubCategory!.name,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDispatchModeCard(bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white12 : Colors.grey.shade300,
-        ),
-      ),
-      child: Column(
-        children: [
-          RadioListTile<String>(
-            value: 'all',
-            groupValue: _dispatchMode,
-            onChanged: (v) {
-              setState(() => _dispatchMode = v ?? 'all');
-              _refreshNearestProvidersPreview();
-            },
-            title: const Text(
-              'إرسال لجميع مزودي الخدمة العاجلة',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
-            ),
-            subtitle: const Text(
-              'المدينة اختيارية في هذا الخيار',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 11.5),
-            ),
-          ),
-          RadioListTile<String>(
-            value: 'nearest',
-            groupValue: _dispatchMode,
-            onChanged: (v) {
-              setState(() => _dispatchMode = v ?? 'nearest');
-              _refreshNearestProvidersPreview();
-            },
-            title: const Text(
-              'إرسال للأقرب (حسب نظام المطابقة)',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNearestProvidersPreviewCard(bool isDark) {
-    final bg = isDark ? const Color(0xFF1F2430) : const Color(0xFFFFF7F2);
-    final border = isDark ? Colors.white12 : const Color(0xFFFFD9C8);
-    final titleColor = isDark ? Colors.white : const Color(0xFF3A2A22);
-
-    String formatDistance(dynamic rawKm) {
-      final km = rawKm is num ? rawKm.toDouble() : 0.0;
-      if (km < 1) {
-        final meters = (km * 1000).round();
-        return '$meters م';
-      }
-      return '${km.toStringAsFixed(km < 10 ? 1 : 0)} كم';
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
-        boxShadow: [
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.12 : 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8E53).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.near_me_rounded,
-                  size: 18,
-                  color: Color(0xFFFF8E53),
-                ),
+              const Icon(
+                FontAwesomeIcons.triangleExclamation,
+                color: Colors.red,
+                size: 18,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'المزودون الأقرب إليك',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: titleColor,
-                  ),
+              const SizedBox(width: 8),
+              Text(
+                "طلب خدمة عاجلة",
+                style: theme.textTheme.titleMedium!.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
                 ),
-              ),
-              IconButton(
-                tooltip: 'تحديث',
-                onPressed: _loadingNearestProvidersPreview
-                    ? null
-                    : _refreshNearestProvidersPreview,
-                icon: _loadingNearestProvidersPreview
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 20),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'معاينة تقديرية حسب موقعك الحالي والمدينة المختارة',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 11.5,
-              color: isDark ? Colors.white70 : Colors.black54,
-            ),
+          const SizedBox(height: 20),
+          _buildDropdown(
+            "التصنيف الرئيسي",
+            FontAwesomeIcons.layerGroup,
+            selectedMainCategory,
+            mainCategories,
+            (val) {
+              setState(() {
+                selectedMainCategory = val;
+                selectedSubCategory = null;
+              });
+            },
           ),
           const SizedBox(height: 12),
-          if ((_nearestProvidersPreviewMessage ?? '').isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white10 : Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
+          _buildDropdown(
+            "التصنيف الفرعي",
+            FontAwesomeIcons.sitemap,
+            selectedSubCategory,
+            currentSubCategories,
+            (val) => setState(() => selectedSubCategory = val),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 20,
+            runSpacing: 10,
+            children: [
+              _customCheckbox(
+                "إرسال للجميع",
+                sendToAll,
+                (val) {
+                  final newVal = val ?? false;
+                  setState(() {
+                    sendToAll = newVal;
+                    searchNearest = !newVal;
+                  });
+                },
               ),
-              child: Text(
-                _nearestProvidersPreviewMessage!,
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                  color: isDark ? Colors.white : Colors.black87,
+              _customCheckbox(
+                "البحث عن الأقرب",
+                searchNearest,
+                (val) {
+                  final newVal = val ?? false;
+                  setState(() {
+                    searchNearest = newVal;
+                    sendToAll = !newVal;
+                  });
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          if (sendToAll) ...[
+            TextFormField(
+              controller: _descriptionController,
+              maxLines: 4,
+              maxLength: 150,
+              decoration: _inputDecoration(
+                "وصف مختصر للخدمة",
+                FontAwesomeIcons.penToSquare,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _iconButton("مرفق", FontAwesomeIcons.paperclip, () {}),
+                _iconButton("صورة", FontAwesomeIcons.camera, () {}),
+                _iconButton("صوت", FontAwesomeIcons.microphone, () {}),
+              ],
+            ),
+          ] else if (searchNearest) ...[
+            GestureDetector(
+              onTap: _openProvidersMap,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 190,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      FlutterMap(
+                        options: const MapOptions(
+                          initialCenter: _defaultMapCenter,
+                          initialZoom: 12,
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.nawafeth.app',
+                          ),
+                          MarkerLayer(
+                            markers: const [
+                              Marker(
+                                point: _defaultMapCenter,
+                                width: 40,
+                                height: 40,
+                                child: Icon(
+                                  Icons.location_on,
+                                  color: Colors.red,
+                                  size: 34,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          color: Colors.black.withValues(alpha: 0.35),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.map, color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'اضغط لعرض الأقرب على الخريطة',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (selectedMainCategory == null)
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            color: Colors.black.withValues(alpha: 0.35),
+                            child: const Text(
+                              'اختر التصنيف الرئيسي لبدء البحث',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          if (_nearestProvidersPreview.isNotEmpty)
-            ..._nearestProvidersPreview.map((provider) {
-              final name = (provider['display_name'] ?? 'مزود خدمة').toString();
-              final city = (provider['city'] ?? '').toString().trim();
-              final distance = formatDistance(provider['distance_km']);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white10 : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+          ],
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: _submitRequest,
+                icon: const Icon(FontAwesomeIcons.paperPlane, size: 14),
+                label: const Text("إرسال"),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 12,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B6B).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.person_pin_circle_outlined,
-                        color: Color(0xFFFF6B6B),
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          if (city.isNotEmpty)
-                            Text(
-                              city,
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 11.5,
-                                color: isDark ? Colors.white70 : Colors.black54,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF7E57C2).withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        distance,
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF7E57C2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+              ),
+              const SizedBox(width: 16),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(FontAwesomeIcons.xmark, size: 14),
+                label: const Text("إلغاء"),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
+  Widget _buildDropdown(
+    String label,
+    IconData icon,
+    String? selectedValue,
+    List<String> items,
+    Function(String?) onChanged,
+  ) {
+    return DropdownButtonFormField<String>(
+      decoration: _inputDecoration(label, icon),
+      initialValue: selectedValue,
+      isDense: true,
+      items:
+          items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _customCheckbox(String text, bool value, Function(bool?) onChanged) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: Colors.white, size: 18),
+        Checkbox(
+          value: value,
+          visualDensity: VisualDensity.compact,
+          onChanged: onChanged,
         ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
+        Text(text, style: const TextStyle(fontSize: 13)),
       ],
     );
   }
 
-  Widget _buildTextField(
-    TextEditingController controller,
-    String hint,
-    IconData icon, {
-    bool isDark = false,
-    int maxLines = 1,
-    int? maxLength,
-  }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      maxLength: maxLength,
-      style: const TextStyle(fontSize: 15, fontFamily: 'Cairo'),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(fontSize: 14, fontFamily: 'Cairo'),
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-        isDense: true,
-      ),
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 18),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      isDense: true,
     );
   }
 
-  Widget _buildCityDropdown(bool isDark) {
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
-      value: _selectedCity,
-      decoration: InputDecoration(
-        hintText: _dispatchMode == 'all'
-            ? 'اختياري: اختر المدينة (فارغة مقبولة)'
-            : 'اختر المدينة',
-        hintStyle: const TextStyle(fontSize: 14, fontFamily: 'Cairo'),
-        prefixIcon: const Icon(Icons.location_city),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-        isDense: true,
+  Widget _iconButton(String text, IconData icon, VoidCallback onPressed) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(text, style: const TextStyle(fontSize: 12)),
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        backgroundColor: Colors.grey.shade100,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      dropdownColor: isDark ? Colors.grey[850] : Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      items: _saudiCities.map((city) {
-        return DropdownMenuItem<String>(
-          value: city,
-          alignment: AlignmentDirectional.centerEnd,
-          child: Text(
-            city,
-            style: const TextStyle(fontSize: 15, fontFamily: 'Cairo'),
-          ),
-        );
-      }).toList(),
-      onChanged: (value) {
-        setState(() {
-          _selectedCity = value;
-        });
-        _refreshNearestProvidersPreview();
-      },
-    );
-  }
-
-  Widget _buildSubmitButton(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: _submitting
-            ? null
-            : const LinearGradient(
-                colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-              ),
-        color: _submitting ? Colors.grey[400] : null,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: !_submitting
-            ? [
-                BoxShadow(
-                  color: const Color(0xFFFF6B6B).withOpacity(0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : [],
-      ),
-      child: ElevatedButton.icon(
-        onPressed: _submitting ? null : _submitRequest,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        icon: _submitting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : const Icon(Icons.send_rounded, size: 22),
-        label: Text(
-          _submitting
-              ? "جاري الإرسال..."
-              : (_dispatchMode == 'all'
-                    ? "إرسال لجميع المزودين العاجلين"
-                    : "إرسال للأقرب في المدينة"),
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryDropdown(ThemeData theme, bool isDark) {
-    return DropdownButtonFormField<Category>(
-      value: _selectedCategory,
-      decoration: InputDecoration(
-        hintText: 'اختر التصنيف الرئيسي',
-        hintStyle: const TextStyle(fontSize: 14, fontFamily: 'Cairo'),
-        prefixIcon: const Icon(Icons.category),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-        isDense: true,
-      ),
-      dropdownColor: isDark ? Colors.grey[850] : Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      items: _categories
-          .map(
-            (c) => DropdownMenuItem<Category>(
-              value: c,
-              alignment: AlignmentDirectional.centerEnd,
-              child: Text(
-                c.name,
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
-              ),
-            ),
-          )
-          .toList(),
-      onChanged: (val) {
-        setState(() {
-          _selectedCategory = val;
-          _selectedSubCategory = null;
-        });
-      },
-    );
-  }
-
-  Widget _buildSubCategoryDropdown(ThemeData theme, bool isDark) {
-    final subs = _selectedCategory?.subcategories ?? const <SubCategory>[];
-
-    if (subs.isEmpty) return const SizedBox.shrink();
-
-    return DropdownButtonFormField<SubCategory>(
-      value: _selectedSubCategory,
-      decoration: InputDecoration(
-        hintText: 'اختر التصنيف الفرعي',
-        hintStyle: const TextStyle(fontSize: 14, fontFamily: 'Cairo'),
-        prefixIcon: const Icon(Icons.subdirectory_arrow_right),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-        isDense: true,
-      ),
-      dropdownColor: isDark ? Colors.grey[850] : Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      items: subs
-          .map(
-            (s) => DropdownMenuItem<SubCategory>(
-              value: s,
-              alignment: AlignmentDirectional.centerEnd,
-              child: Text(
-                s.name,
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
-              ),
-            ),
-          )
-          .toList(),
-      onChanged: (val) {
-        setState(() => _selectedSubCategory = val);
-        _refreshNearestProvidersPreview();
-      },
     );
   }
 }

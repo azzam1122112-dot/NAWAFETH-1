@@ -2,7 +2,10 @@ class ClientOrderAttachment {
   final String name;
   final String type; // e.g. PDF, DOCX, IMG
 
-  const ClientOrderAttachment({required this.name, required this.type});
+  const ClientOrderAttachment({
+    required this.name,
+    required this.type,
+  });
 }
 
 class ClientOrder {
@@ -10,10 +13,6 @@ class ClientOrder {
   final String serviceCode; // e.g. @111222
   final DateTime createdAt;
   final String status; // جديد، تحت التنفيذ، مكتمل، ملغي
-
-  final String requestType; // normal | urgent | competitive
-  final String city;
-  final String? providerName;
 
   final String title;
   final String details;
@@ -24,19 +23,12 @@ class ClientOrder {
   final double? serviceAmountSR;
   final double? receivedAmountSR;
   final double? remainingAmountSR;
-  final bool? providerInputsApproved;
-  final DateTime? providerInputsDecidedAt;
-  final String? providerInputsDecisionNote;
-  final String? latestStatusNote;
-  final DateTime? latestStatusAt;
 
   // Completed order fields
   final DateTime? deliveredAt;
   final double? actualServiceAmountSR;
 
   // Service rating (for completed orders)
-  final int? reviewId;
-  final double? reviewRating;
   final double? ratingResponseSpeed;
   final double? ratingCostValue;
   final double? ratingQuality;
@@ -53,9 +45,6 @@ class ClientOrder {
     required this.serviceCode,
     required this.createdAt,
     required this.status,
-    this.requestType = 'normal',
-    this.city = '',
-    this.providerName,
     required this.title,
     required this.details,
     this.attachments = const [],
@@ -63,15 +52,8 @@ class ClientOrder {
     this.serviceAmountSR,
     this.receivedAmountSR,
     this.remainingAmountSR,
-    this.providerInputsApproved,
-    this.providerInputsDecidedAt,
-    this.providerInputsDecisionNote,
-    this.latestStatusNote,
-    this.latestStatusAt,
     this.deliveredAt,
     this.actualServiceAmountSR,
-    this.reviewId,
-    this.reviewRating,
     this.ratingResponseSpeed,
     this.ratingCostValue,
     this.ratingQuality,
@@ -83,122 +65,11 @@ class ClientOrder {
     this.cancelReason,
   });
 
-  factory ClientOrder.fromJson(Map<String, dynamic> json) {
-    String mapStatus(String status) {
-      switch ((status).toString().trim().toLowerCase()) {
-        case 'open':
-        case 'pending':
-        case 'new':
-        case 'sent':
-          return 'جديد';
-        case 'accepted':
-          return 'بانتظار اعتماد العميل';
-        case 'in_progress':
-          return 'تحت التنفيذ';
-        case 'completed':
-          return 'مكتمل';
-        case 'cancelled':
-        case 'canceled':
-        case 'expired':
-          return 'ملغي';
-        default:
-          return 'جديد';
-      }
-    }
-
-    final statusLabel = (json['status_label'] ?? '').toString().trim();
-    String? latestStatusNote;
-    DateTime? latestStatusAt;
-    final logs = json['status_logs'];
-    if (logs is List) {
-      for (final raw in logs.reversed) {
-        if (raw is! Map) continue;
-        final item = Map<String, dynamic>.from(raw);
-        final note = (item['note'] ?? '').toString().trim();
-        if (note.isEmpty) continue;
-        latestStatusNote = note;
-        latestStatusAt = DateTime.tryParse((item['created_at'] ?? '').toString());
-        break;
-      }
-    }
-
-    return ClientOrder(
-      id: json['id'].toString(),
-      serviceCode: json['subcategory_name'] ?? 'General',
-      // If date comes as string, parse it.
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      status: statusLabel.isNotEmpty
-          ? statusLabel
-          : mapStatus(json['status'] ?? 'open'),
-      requestType: (json['request_type'] ?? 'normal').toString(),
-      city: (json['city'] ?? '').toString(),
-      providerName: (json['provider_name'] ?? '').toString().trim().isEmpty
-          ? null
-          : (json['provider_name'] ?? '').toString(),
-      title: json['title'] ?? '',
-      details: json['description'] ?? '',
-      expectedDeliveryAt: DateTime.tryParse(
-        (json['expected_delivery_at'] ?? '').toString(),
-      ),
-      serviceAmountSR: double.tryParse(
-        (json['estimated_service_amount'] ?? '').toString(),
-      ),
-      receivedAmountSR: double.tryParse(
-        (json['received_amount'] ?? '').toString(),
-      ),
-      remainingAmountSR: double.tryParse(
-        (json['remaining_amount'] ?? '').toString(),
-      ),
-      providerInputsApproved: json['provider_inputs_approved'] is bool
-          ? json['provider_inputs_approved'] as bool
-          : null,
-      providerInputsDecidedAt: DateTime.tryParse(
-        (json['provider_inputs_decided_at'] ?? '').toString(),
-      ),
-      providerInputsDecisionNote:
-          (json['provider_inputs_decision_note'] ?? '')
-              .toString()
-              .trim()
-              .isEmpty
-          ? null
-          : (json['provider_inputs_decision_note'] ?? '').toString(),
-      latestStatusNote: latestStatusNote,
-      latestStatusAt: latestStatusAt,
-      deliveredAt: DateTime.tryParse((json['delivered_at'] ?? '').toString()),
-      actualServiceAmountSR: double.tryParse(
-        (json['actual_service_amount'] ?? '').toString(),
-      ),
-      reviewId: int.tryParse((json['review_id'] ?? '').toString()),
-      reviewRating: double.tryParse((json['review_rating'] ?? '').toString()),
-      ratingResponseSpeed: double.tryParse(
-        (json['review_response_speed'] ?? '').toString(),
-      ),
-      ratingCostValue: double.tryParse(
-        (json['review_cost_value'] ?? '').toString(),
-      ),
-      ratingQuality: double.tryParse((json['review_quality'] ?? '').toString()),
-      ratingCredibility: double.tryParse(
-        (json['review_credibility'] ?? '').toString(),
-      ),
-      ratingOnTime: double.tryParse((json['review_on_time'] ?? '').toString()),
-      ratingComment: (json['review_comment'] ?? '').toString().trim().isEmpty
-          ? null
-          : (json['review_comment'] ?? '').toString(),
-      canceledAt: DateTime.tryParse((json['canceled_at'] ?? '').toString()),
-      cancelReason: (json['cancel_reason'] ?? '').toString().trim().isEmpty
-          ? null
-          : (json['cancel_reason'] ?? '').toString(),
-    );
-  }
-
   ClientOrder copyWith({
     String? id,
     String? serviceCode,
     DateTime? createdAt,
     String? status,
-    String? requestType,
-    String? city,
-    String? providerName,
     String? title,
     String? details,
     List<ClientOrderAttachment>? attachments,
@@ -206,15 +77,8 @@ class ClientOrder {
     double? serviceAmountSR,
     double? receivedAmountSR,
     double? remainingAmountSR,
-    bool? providerInputsApproved,
-    DateTime? providerInputsDecidedAt,
-    String? providerInputsDecisionNote,
-    String? latestStatusNote,
-    DateTime? latestStatusAt,
     DateTime? deliveredAt,
     double? actualServiceAmountSR,
-    int? reviewId,
-    double? reviewRating,
     double? ratingResponseSpeed,
     double? ratingCostValue,
     double? ratingQuality,
@@ -230,9 +94,6 @@ class ClientOrder {
       serviceCode: serviceCode ?? this.serviceCode,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
-      requestType: requestType ?? this.requestType,
-      city: city ?? this.city,
-      providerName: providerName ?? this.providerName,
       title: title ?? this.title,
       details: details ?? this.details,
       attachments: attachments ?? this.attachments,
@@ -240,19 +101,8 @@ class ClientOrder {
       serviceAmountSR: serviceAmountSR ?? this.serviceAmountSR,
       receivedAmountSR: receivedAmountSR ?? this.receivedAmountSR,
       remainingAmountSR: remainingAmountSR ?? this.remainingAmountSR,
-      providerInputsApproved:
-          providerInputsApproved ?? this.providerInputsApproved,
-      providerInputsDecidedAt:
-          providerInputsDecidedAt ?? this.providerInputsDecidedAt,
-      providerInputsDecisionNote:
-          providerInputsDecisionNote ?? this.providerInputsDecisionNote,
-      latestStatusNote: latestStatusNote ?? this.latestStatusNote,
-      latestStatusAt: latestStatusAt ?? this.latestStatusAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
-      actualServiceAmountSR:
-          actualServiceAmountSR ?? this.actualServiceAmountSR,
-      reviewId: reviewId ?? this.reviewId,
-      reviewRating: reviewRating ?? this.reviewRating,
+      actualServiceAmountSR: actualServiceAmountSR ?? this.actualServiceAmountSR,
       ratingResponseSpeed: ratingResponseSpeed ?? this.ratingResponseSpeed,
       ratingCostValue: ratingCostValue ?? this.ratingCostValue,
       ratingQuality: ratingQuality ?? this.ratingQuality,

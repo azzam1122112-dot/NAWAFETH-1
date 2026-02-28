@@ -1,14 +1,7 @@
 import 'dart:io';
-import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../utils/user_scoped_prefs.dart';
-import '../../../services/providers_api.dart';
-import '../../../widgets/profile_wizard_shell.dart';
 
 class ContentStep extends StatefulWidget {
   final VoidCallback onNext;
@@ -21,187 +14,20 @@ class ContentStep extends StatefulWidget {
 }
 
 class _ContentStepState extends State<ContentStep> {
-  static const String _draftKey = 'provider_content_draft_v1';
-
   final ScrollController _scrollController = ScrollController();
 
-  final List<SectionContent> sections = [];
+  final List<SectionContent> sections = [
+    SectionContent(
+      title: 'فيديو تعريفي لخدمة إدارة الاشتراكات',
+      description:
+          'فيديو يشرح آلية إدارة الاشتراكات للعملاء من التسجيل وحتى التجديد بطريقة مبسطة.',
+      mainImage: null,
+      contentVideos: [],
+    ),
+  ];
 
   bool _isAddingNew = false;
   int? _editingIndex;
-
-  Timer? _draftTimer;
-  bool _loadingFromBackend = false;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDraft();
-    _loadFromBackendBestEffort();
-  }
-
-  Future<void> _loadFromBackendBestEffort() async {
-    if (_loadingFromBackend) return;
-    setState(() => _loadingFromBackend = true);
-    try {
-      final profile = await ProvidersApi().getMyProviderProfile();
-      if (profile == null) return;
-      final raw = profile['content_sections'];
-      if (raw is! List || raw.isEmpty) return;
-      if (!mounted) return;
-      if (sections.isNotEmpty) return;
-
-      final restored = <SectionContent>[];
-      for (final item in raw) {
-        if (item is! Map) continue;
-        restored.add(
-          SectionContent(
-            title: (item['title'] ?? '').toString(),
-            description: (item['description'] ?? '').toString(),
-            contentVideos: <XFile>[],
-            contentImages: <XFile>[],
-          ),
-        );
-      }
-      setState(() {
-        sections
-          ..clear()
-          ..addAll(restored);
-      });
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-    } finally {
-      if (mounted) {
-        setState(() => _loadingFromBackend = false);
-      } else {
-        _loadingFromBackend = false;
-      }
-    }
-  }
-
-  Future<void> _loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _draftKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) {
-        _updateSectionDone();
-        return;
-      }
-
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        _updateSectionDone();
-        return;
-      }
-
-      final restored = <SectionContent>[];
-      for (final item in decoded) {
-        if (item is! Map) continue;
-        final title = (item['title'] ?? '').toString();
-        final description = (item['description'] ?? '').toString();
-        final mainPath = (item['main_image_path'] ?? '').toString();
-        final videoPaths = (item['video_paths'] is List)
-            ? (item['video_paths'] as List)
-                .map((e) => (e ?? '').toString())
-                .where((s) => s.trim().isNotEmpty)
-                .toList()
-            : <String>[];
-        final imagePaths = (item['image_paths'] is List)
-            ? (item['image_paths'] as List)
-                .map((e) => (e ?? '').toString())
-                .where((s) => s.trim().isNotEmpty)
-                .toList()
-            : <String>[];
-
-        XFile? mainImage;
-        if (mainPath.trim().isNotEmpty && File(mainPath).existsSync()) {
-          mainImage = XFile(mainPath);
-        }
-
-        final videos = <XFile>[];
-        for (final p in videoPaths) {
-          if (p.trim().isEmpty) continue;
-          if (File(p).existsSync()) videos.add(XFile(p));
-        }
-
-        final images = <XFile>[];
-        for (final p in imagePaths) {
-          if (p.trim().isEmpty) continue;
-          if (File(p).existsSync()) images.add(XFile(p));
-        }
-
-        restored.add(
-          SectionContent(
-            title: title,
-            description: description,
-            mainImage: mainImage,
-            contentVideos: videos,
-            contentImages: images,
-          ),
-        );
-      }
-
-      if (!mounted) return;
-      setState(() {
-        sections
-          ..clear()
-          ..addAll(restored);
-      });
-      _updateSectionDone();
-    } catch (_) {
-      // Best-effort.
-      _updateSectionDone();
-    }
-  }
-
-  void _scheduleDraftSave() {
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = await UserScopedPrefs.readUserId();
-        final list = sections
-            .map(
-              (s) => {
-                'title': s.title,
-                'description': s.description,
-                'main_image_path': s.mainImage?.path,
-                'video_paths': s.contentVideos.map((v) => v.path).toList(),
-                'image_paths': s.contentImages.map((i) => i.path).toList(),
-              },
-            )
-            .toList(growable: false);
-        await UserScopedPrefs.setStringScoped(
-          prefs,
-          _draftKey,
-          jsonEncode(list),
-          userId: userId,
-        );
-      } catch (_) {
-        // ignore
-      }
-    });
-  }
-
-  void _updateSectionDone() {
-    final done = sections.isNotEmpty;
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.setBoolScoped(
-        prefs,
-        'provider_section_done_content',
-        done,
-        userId: userId,
-      );
-    }).catchError((_) {});
-  }
 
   void _scrollToEditor() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -235,8 +61,6 @@ class _ContentStepState extends State<ContentStep> {
       _isAddingNew = false;
       _editingIndex = null;
     });
-    _scheduleDraftSave();
-    _updateSectionDone();
   }
 
   void _saveNewSection(SectionContent section) {
@@ -244,8 +68,6 @@ class _ContentStepState extends State<ContentStep> {
       sections.add(section);
       _isAddingNew = false;
     });
-    _scheduleDraftSave();
-    _updateSectionDone();
   }
 
   void _saveEditedSection(SectionContent section) {
@@ -256,8 +78,6 @@ class _ContentStepState extends State<ContentStep> {
       sections[index] = section;
       _editingIndex = null;
     });
-    _scheduleDraftSave();
-    _updateSectionDone();
   }
 
   Future<void> _confirmDeleteSection(int index) async {
@@ -303,135 +123,167 @@ class _ContentStepState extends State<ContentStep> {
   }
 
   void _deleteSection(int index) {
-    setState(() {
-      sections.removeAt(index);
-    });
-    _scheduleDraftSave();
-    _updateSectionDone();
-  }
-
-  void _saveAndContinue() {
-    if (sections.isEmpty) {
+    if (sections.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أضف قسمًا واحدًا على الأقل قبل المتابعة.')),
+        const SnackBar(content: Text("يجب أن يبقى قسم واحد على الأقل.")),
       );
       return;
     }
-
-    _saveToBackendAndContinue();
+    setState(() {
+      sections.removeAt(index);
+    });
   }
 
-  Future<void> _saveToBackendAndContinue() async {
-    if (_saving) return;
-    setState(() => _saving = true);
-    try {
-      final payloadSections = sections
-          .map(
-            (s) => {
-              'title': s.title.trim(),
-              'description': s.description.trim(),
-              'media_count': s.contentVideos.length + s.contentImages.length + (s.mainImage != null ? 1 : 0),
-            },
-          )
-          .toList(growable: false);
-
-      final updated = await ProvidersApi().updateMyProviderProfile({
-        'content_sections': payloadSections,
-      });
-      if (updated == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر حفظ محتوى الخدمات حالياً.')),
-        );
-        return;
-      }
-      _scheduleDraftSave();
-      _updateSectionDone();
-      if (!mounted) return;
-      widget.onNext();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ محتوى الخدمات حالياً.')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      } else {
-        _saving = false;
-      }
-    }
+  void _saveAndContinue() {
+    // لاحقًا: جمع البيانات وإرسالها للباكند
+    widget.onNext();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ProfileWizardShell(
-      title: 'محتوى خدماتك',
-      subtitle: 'نظّم أعمالك في أقسام واضحة تساعد العميل يفهم خبرتك بسرعة.',
-      showTopLoader: _loadingFromBackend,
-      onBack: widget.onBack,
-      onNext: _saveAndContinue,
-      nextBusy: _saving,
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoTip(),
-                const SizedBox(height: 18),
-                for (int i = 0; i < sections.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _SectionSummaryCard(
-                      index: i,
-                      section: sections[i],
-                      onTap: () => _startEditSection(i),
-                      onDelete: () => _confirmDeleteSection(i),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        (_isAddingNew || _editingIndex != null)
-                            ? null
-                            : _startAddSection,
-                    icon: const Icon(Icons.add),
-                    label: const Text(
-                      "إضافة قسم جديد",
-                      style: TextStyle(fontFamily: "Cairo"),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F4C81),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F4FC),
+        bottomNavigationBar: BottomAppBar(
+          elevation: 10,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back, color: Colors.deepPurple),
+                label: const Text(
+                  "السابق",
+                  style: TextStyle(
+                    color: Colors.deepPurple,
+                    fontFamily: "Cairo",
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (_isAddingNew || _editingIndex != null)
-                  NewSectionEditor(
-                    initialSection:
-                        _editingIndex != null
-                            ? sections[_editingIndex!]
-                            : null,
-                    onCancel: _cancelAddSection,
-                    onSave:
-                        _editingIndex != null
-                            ? _saveEditedSection
-                            : _saveNewSection,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.deepPurple),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
                   ),
-              ],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _saveAndContinue,
+                icon: const Icon(Icons.check, color: Colors.white),
+                label: const Text(
+                  "التالي",
+                  style: TextStyle(color: Colors.white, fontFamily: "Cairo"),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 28, 16, 130),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🎬 محتوى خدماتك',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple,
+                        fontFamily: "Cairo",
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'اعرض أعمالك السابقة بطريقة منظمة: كل قسم يمثل مشروعًا أو خدمة مع صورة رئيسية وفيديوهات مرتبطة.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontFamily: "Cairo",
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _infoTip(),
+                    const SizedBox(height: 18),
+
+                    // الكروت المختصرة للأقسام
+                    for (int i = 0; i < sections.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _SectionSummaryCard(
+                          index: i,
+                          section: sections[i],
+                          onTap: () => _startEditSection(i),
+                          onDelete: () => _confirmDeleteSection(i),
+                        ),
+                      ),
+
+                    const SizedBox(height: 12),
+
+                    // زر إضافة قسم جديد
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            (_isAddingNew || _editingIndex != null)
+                                ? null
+                                : _startAddSection,
+                        icon: const Icon(Icons.add),
+                        label: const Text(
+                          "إضافة قسم جديد",
+                          style: TextStyle(fontFamily: "Cairo"),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // محرر القسم الجديد
+                    if (_isAddingNew || _editingIndex != null)
+                      NewSectionEditor(
+                        initialSection:
+                            _editingIndex != null
+                                ? sections[_editingIndex!]
+                                : null,
+                        onCancel: _cancelAddSection,
+                        onSave:
+                            _editingIndex != null
+                                ? _saveEditedSection
+                                : _saveNewSection,
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -470,7 +322,6 @@ class _ContentStepState extends State<ContentStep> {
 
   @override
   void dispose() {
-    _draftTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -673,16 +524,12 @@ class NewSectionEditor extends StatefulWidget {
 }
 
 class _NewSectionEditorState extends State<NewSectionEditor> {
-  static const String _editorDraftKey = 'provider_content_editor_draft_v1';
-
   final picker = ImagePicker();
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
   XFile? _mainImage;
   final List<XFile> _videos = [];
   final List<XFile> _images = [];
-
-  Timer? _draftTimer;
 
   bool get _isEditing => widget.initialSection != null;
 
@@ -691,153 +538,48 @@ class _NewSectionEditorState extends State<NewSectionEditor> {
     super.initState();
     final initial = widget.initialSection;
     _titleController = TextEditingController(
-      text: initial?.title.isNotEmpty == true ? initial!.title : '',
+      text: initial?.title.isNotEmpty == true
+          ? initial!.title
+          : "فيديو تعريفي لخدمة الاستشارات التقنية",
     );
     _descController = TextEditingController(
-      text: initial?.description.isNotEmpty == true ? initial!.description : '',
+      text: initial?.description.isNotEmpty == true
+          ? initial!.description
+          : "فيديو يشرح طريقة طلب الاستشارة، وكيف يتم التواصل مع العميل وتقديم الحلول.",
     );
     _mainImage = initial?.mainImage;
     if (initial != null) {
       _videos.addAll(initial.contentVideos);
       _images.addAll(initial.contentImages);
     }
-
-    _loadEditorDraftIfNeeded();
-    void onChange() {
-      _scheduleEditorDraftSave();
-    }
-
-    _titleController.addListener(onChange);
-    _descController.addListener(onChange);
-  }
-
-  Future<void> _loadEditorDraftIfNeeded() async {
-    // Only restore draft when creating a new section (not editing an existing one).
-    if (_isEditing) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = await UserScopedPrefs.readUserId();
-      final raw = await UserScopedPrefs.getStringScoped(
-        prefs,
-        _editorDraftKey,
-        userId: userId,
-      );
-      if (raw == null || raw.trim().isEmpty) return;
-      final data = jsonDecode(raw);
-      if (data is! Map) return;
-
-      final title = (data['title'] ?? '').toString();
-      final desc = (data['description'] ?? '').toString();
-      final mainPath = (data['main_image_path'] ?? '').toString();
-      final videoPaths = (data['video_paths'] is List)
-          ? (data['video_paths'] as List)
-              .map((e) => (e ?? '').toString())
-              .where((s) => s.trim().isNotEmpty)
-              .toList()
-          : <String>[];
-      final imagePaths = (data['image_paths'] is List)
-          ? (data['image_paths'] as List)
-              .map((e) => (e ?? '').toString())
-              .where((s) => s.trim().isNotEmpty)
-              .toList()
-          : <String>[];
-
-      if (!mounted) return;
-      setState(() {
-        if (_titleController.text.trim().isEmpty && title.trim().isNotEmpty) {
-          _titleController.text = title;
-        }
-        if (_descController.text.trim().isEmpty && desc.trim().isNotEmpty) {
-          _descController.text = desc;
-        }
-
-        if (_mainImage == null && mainPath.trim().isNotEmpty) {
-          if (File(mainPath).existsSync()) {
-            _mainImage = XFile(mainPath);
-          }
-        }
-
-        if (_videos.isEmpty) {
-          for (final p in videoPaths) {
-            if (File(p).existsSync()) _videos.add(XFile(p));
-          }
-        }
-        if (_images.isEmpty) {
-          for (final p in imagePaths) {
-            if (File(p).existsSync()) _images.add(XFile(p));
-          }
-        }
-      });
-    } catch (_) {
-      // Best-effort.
-    }
-  }
-
-  void _scheduleEditorDraftSave() {
-    if (_isEditing) return;
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = await UserScopedPrefs.readUserId();
-        final data = <String, dynamic>{
-          'title': _titleController.text.trim(),
-          'description': _descController.text.trim(),
-          'main_image_path': _mainImage?.path,
-          'video_paths': _videos.map((v) => v.path).toList(),
-          'image_paths': _images.map((i) => i.path).toList(),
-        };
-        await UserScopedPrefs.setStringScoped(
-          prefs,
-          _editorDraftKey,
-          jsonEncode(data),
-          userId: userId,
-        );
-      } catch (_) {
-        // ignore
-      }
-    });
-  }
-
-  void _clearEditorDraft() {
-    SharedPreferences.getInstance().then((prefs) async {
-      final userId = await UserScopedPrefs.readUserId();
-      await UserScopedPrefs.removeScoped(prefs, _editorDraftKey, userId: userId);
-    }).catchError((_) {});
   }
 
   Future<void> _pickMainImage() async {
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       setState(() => _mainImage = picked);
-      _scheduleEditorDraftSave();
     }
   }
 
   void _removeMainImage() {
     if (_mainImage == null) return;
     setState(() => _mainImage = null);
-    _scheduleEditorDraftSave();
   }
 
   void _removeVideoAt(int index) {
     if (index < 0 || index >= _videos.length) return;
     setState(() => _videos.removeAt(index));
-    _scheduleEditorDraftSave();
   }
 
   void _removeImageAt(int index) {
     if (index < 0 || index >= _images.length) return;
     setState(() => _images.removeAt(index));
-    _scheduleEditorDraftSave();
   }
 
   Future<void> _pickVideo({ImageSource source = ImageSource.gallery}) async {
     final picked = await picker.pickVideo(source: source);
     if (picked != null) {
       setState(() => _videos.add(picked));
-      _scheduleEditorDraftSave();
     }
   }
 
@@ -845,7 +587,6 @@ class _NewSectionEditorState extends State<NewSectionEditor> {
     final picked = await picker.pickImage(source: source);
     if (picked != null) {
       setState(() => _images.add(picked));
-      _scheduleEditorDraftSave();
     }
   }
 
@@ -933,13 +674,11 @@ class _NewSectionEditorState extends State<NewSectionEditor> {
       contentVideos: List<XFile>.from(_videos),
       contentImages: List<XFile>.from(_images),
     );
-    _clearEditorDraft();
     widget.onSave(section);
   }
 
   @override
   void dispose() {
-    _draftTimer?.cancel();
     _titleController.dispose();
     _descController.dispose();
     super.dispose();

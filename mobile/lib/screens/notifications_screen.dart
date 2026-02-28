@@ -1,13 +1,5 @@
 import 'package:flutter/material.dart';
 import 'notification_settings_screen.dart'; // ✅ صفحة الإعدادات
-import '../utils/auth_guard.dart';
-import '../models/app_notification.dart';
-import '../services/notifications_api.dart';
-import '../services/notifications_badge_controller.dart';
-import '../services/notification_link_handler.dart';
-import '../services/role_controller.dart';
-import '../services/session_storage.dart';
-import 'notification_details_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -17,629 +9,210 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final _api = NotificationsApi();
-  final _scroll = ScrollController();
-  final _session = const SessionStorage();
+  // ✅ بيانات الإشعارات
+  List<Map<String, dynamic>> notifications = [
+    {
+      "icon": Icons.warning_amber_rounded,
+      "title": "لديك طلب عاجل",
+      "subtitle": "عميل: محمد الغامدي • منذ 5 دقائق",
+      "color": Colors.red,
+      "urgent": true,
+      "important": false,
+      "pinned": false,
+    },
+    {
+      "icon": Icons.person_add_alt,
+      "title": "قام @111222 بمتابعة منصتك",
+      "subtitle": "16:35 • 01/01/2024",
+      "color": Colors.deepPurple,
+      "urgent": false,
+      "important": false,
+      "pinned": false,
+    },
+    {
+      "icon": Icons.hourglass_bottom, // ⏳ للباقة
+      "title": "قرب انتهاء فترة الباقة",
+      "subtitle":
+          "تنبيه: ستنتهي باقتك الحالية بعد 3 أيام. يُوصى بتجديد الاشتراك للاستمرار بالخدمات.",
+      "color": Colors.orange,
+      "urgent": false,
+      "important": false,
+      "pinned": false,
+    },
+    {
+      "icon": Icons.campaign,
+      "title": "عرض خاص لليوم الوطني 🇸🇦",
+      "subtitle":
+          "كود الخصم: SAUDIA95 — احصل على 20% خصم على الترويج الإعلاني بمناسبة اليوم الوطني.",
+      "color": Colors.green,
+      "urgent": false,
+      "important": false,
+      "pinned": false,
+    },
+  ];
 
-  final List<AppNotification> _items = [];
-  bool _loading = false;
-  bool _loadingMore = false;
-  bool _hasMore = true;
-  int _offset = 0;
-  String? _error;
-  bool _loginRequired = false;
-  int? _lastUnreadCount;
-  bool _showNewNotificationsBanner = false;
-
-  static const int _limit = 20;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      final loggedIn = await _session.isLoggedIn();
-      if (!loggedIn) {
-        setState(() {
-          _loading = false;
-          _error = 'تسجيل الدخول مطلوب';
-          _loginRequired = true;
-        });
-        return;
-      }
-      await _loadInitial();
+  // ✅ تحديث الترتيب
+  void _reorderNotifications() {
+    // العاجلة دائمًا بالأعلى
+    notifications.sort((a, b) {
+      if (a["urgent"] == true && b["urgent"] != true) return -1;
+      if (b["urgent"] == true && a["urgent"] != true) return 1;
+      if (a["pinned"] == true && b["pinned"] != true) return -1;
+      if (b["pinned"] == true && a["pinned"] != true) return 1;
+      return 0;
     });
-    _scroll.addListener(_onScroll);
-    RoleController.instance.notifier.addListener(_onRoleChanged);
-    NotificationsBadgeController.instance.unreadNotifier.addListener(_onUnreadChanged);
-    _lastUnreadCount = NotificationsBadgeController.instance.unreadNotifier.value;
   }
 
-  @override
-  void dispose() {
-    RoleController.instance.notifier.removeListener(_onRoleChanged);
-    NotificationsBadgeController.instance.unreadNotifier.removeListener(_onUnreadChanged);
-    _scroll.dispose();
-    super.dispose();
-  }
+  // ✅ كارت الإشعار
+  Widget _notificationCard(
+    Map<String, dynamic> notification,
+    int index,
+    BuildContext context,
+  ) {
+    bool isUrgent = notification["urgent"] ?? false;
+    bool isImportant = notification["important"] ?? false;
+    bool isPinned = notification["pinned"] ?? false;
 
-  void _onRoleChanged() {
-    // Refresh list when switching client/provider.
-    _loadInitial();
-  }
-
-  void _onUnreadChanged() {
-    final current = NotificationsBadgeController.instance.unreadNotifier.value;
-    final previous = _lastUnreadCount;
-    _lastUnreadCount = current;
-    if (current == null) return;
-    if (previous == null) return;
-    if (current <= previous) return;
-    _refreshTopSilently();
-  }
-
-  void _onScroll() {
-    if (!_hasMore || _loadingMore || _loading) return;
-    if (!_scroll.hasClients) return;
-    final position = _scroll.position;
-    if (position.pixels >= position.maxScrollExtent - 240) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _loadInitial() async {
-    final loggedIn = await _session.isLoggedIn();
-    if (!loggedIn) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = 'تسجيل الدخول مطلوب';
-        _loginRequired = true;
-        _items.clear();
-        _offset = 0;
-        _hasMore = true;
-      });
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = null;
-      _loginRequired = false;
-      _items.clear();
-      _offset = 0;
-      _hasMore = true;
-    });
-
-    try {
-      final page = await _api.list(limit: _limit, offset: 0);
-      final results = (page['results'] as List?) ?? const [];
-      final items = results
-          .whereType<Map>()
-          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(items);
-        _offset = _items.length;
-        _hasMore = items.length >= _limit;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'تعذر تحميل الإشعارات';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (!_hasMore) return;
-    final loggedIn = await _session.isLoggedIn();
-    if (!loggedIn) return;
-    setState(() {
-      _loadingMore = true;
-    });
-
-    try {
-      final page = await _api.list(limit: _limit, offset: _offset);
-      final results = (page['results'] as List?) ?? const [];
-      final items = results
-          .whereType<Map>()
-          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(items);
-        _offset = _items.length;
-        _hasMore = items.length >= _limit;
-      });
-    } catch (_) {
-      // Ignore load-more errors; user can pull-to-refresh.
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingMore = false;
-        });
-      }
-    }
-  }
-
-  String _formatDate(DateTime dt) {
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '$hh:$mm • $y/$m/$d';
-  }
-
-  IconData _iconForKind(String kind) {
-    switch (kind.trim().toLowerCase()) {
-      case 'review_reply':
-        return Icons.rate_review_outlined;
-      case 'urgent_request':
-        return Icons.bolt_rounded;
-      case 'offer_created':
-        return Icons.local_offer_outlined;
-      case 'offer_selected':
-        return Icons.task_alt_rounded;
-      case 'request_status_change':
-        return Icons.sync_alt_rounded;
-      case 'report_status_change':
-        return Icons.support_agent_rounded;
-      case 'message_new':
-      case 'message':
-      case 'chat':
-      case 'chat_message':
-        return Icons.chat_bubble_outline;
-      case 'urgent':
-        return Icons.warning_amber_rounded;
-      case 'info':
-      default:
-        return Icons.notifications_none;
-    }
-  }
-
-  String? _kindLabel(String kind) {
-    switch (kind.trim().toLowerCase()) {
-      case 'review_reply':
-        return 'رد على مراجعتك';
-      case 'urgent_request':
-        return 'طلب عاجل';
-      case 'offer_created':
-        return 'عرض جديد';
-      case 'offer_selected':
-        return 'تم اختيار عرضك';
-      case 'request_status_change':
-        return 'تحديث الطلب';
-      case 'report_status_change':
-        return 'تحديث البلاغ';
-      case 'message':
-      case 'message_new':
-      case 'chat':
-      case 'chat_message':
-        return 'رسالة';
-      case 'urgent':
-        return 'عاجل';
-      default:
-        return null;
-    }
-  }
-
-  Future<void> _refreshTopSilently() async {
-    if (_loading || _loadingMore) return;
-    try {
-      final previousTopId = _items.isNotEmpty ? _items.first.id : -1;
-      final page = await _api.list(limit: _limit, offset: 0);
-      final results = (page['results'] as List?) ?? const [];
-      final fresh = results
-          .whereType<Map>()
-          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      if (!mounted || fresh.isEmpty) return;
-
-      final merged = <AppNotification>[...fresh];
-      final existingIds = fresh.map((e) => e.id).toSet();
-      for (final old in _items) {
-        if (!existingIds.contains(old.id)) {
-          merged.add(old);
-        }
-      }
-
-      merged.sort((a, b) {
-        final ap = (a.isPinned ? 2 : 0) + (a.isUrgent ? 1 : 0);
-        final bp = (b.isPinned ? 2 : 0) + (b.isUrgent ? 1 : 0);
-        if (ap != bp) return bp.compareTo(ap);
-        return b.id.compareTo(a.id);
-      });
-
-      setState(() {
-        _items
-          ..clear()
-          ..addAll(merged);
-        _offset = _items.length;
-        _hasMore = fresh.length >= _limit;
-        if (_items.isNotEmpty && _items.first.id > previousTopId) {
-          _showNewNotificationsBanner = true;
-        }
-      });
-    } catch (_) {
-      // Best-effort live refresh.
-    }
-  }
-
-  Widget _newNotificationsBanner() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.deepPurple.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.deepPurple.withValues(alpha: 0.25)),
+        color:
+            isUrgent
+                ? Colors.red
+                : isImportant
+                ? const Color(0xFFFFF8E1) // ذهبي فاتح
+                : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border:
+            isImportant
+                ? Border.all(color: Colors.amber, width: 2)
+                : Border.all(color: Colors.transparent),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+        ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.notifications_active_rounded, size: 18, color: Colors.deepPurple),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'وصلت تنبيهات جديدة',
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontWeight: FontWeight.w800,
-                fontSize: 12.5,
-              ),
+          Icon(
+            notification["icon"],
+            color:
+                isUrgent
+                    ? Colors.white
+                    : isImportant
+                    ? Colors.amber.shade800
+                    : notification["color"],
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      notification["title"],
+                      style: TextStyle(
+                        fontFamily: "Cairo",
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color:
+                            isUrgent
+                                ? Colors.white
+                                : isImportant
+                                ? Colors.amber.shade900
+                                : Colors.black87,
+                      ),
+                    ),
+                    if (isPinned) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.push_pin,
+                        color: Colors.deepPurple,
+                        size: 18,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  notification["subtitle"],
+                  style: TextStyle(
+                    fontFamily: "Cairo",
+                    fontSize: 12,
+                    color:
+                        isUrgent
+                            ? Colors.white70
+                            : isImportant
+                            ? Colors.amber.shade700
+                            : Colors.black54,
+                  ),
+                ),
+              ],
             ),
           ),
-          TextButton(
-            onPressed: () async {
-              setState(() => _showNewNotificationsBanner = false);
-              if (_scroll.hasClients) {
-                await _scroll.animateTo(
-                  0,
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOut,
-                );
+
+          // ✅ قائمة الخيارات
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.black54),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            onSelected: (value) {
+              if (value == 'follow') {
+                setState(() {
+                  notification["important"] = !(notification["important"]);
+                });
+              } else if (value == 'pin') {
+                setState(() {
+                  notification["pinned"] = true;
+                  _reorderNotifications();
+                });
+              } else if (value == 'unpin') {
+                setState(() {
+                  notification["pinned"] = false;
+                  _reorderNotifications();
+                });
+              } else if (value == 'delete') {
+                setState(() {
+                  notifications.remove(notification);
+                });
               }
             },
-            child: const Text(
-              'عرض الآن',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: () => setState(() => _showNewNotificationsBanner = false),
-            icon: const Icon(Icons.close, size: 18),
+            itemBuilder: (context) {
+              return [
+                PopupMenuItem(
+                  value: 'follow',
+                  child: Text(
+                    (notification["important"] ?? false)
+                        ? "⭐ إزالة التمييز"
+                        : "⭐ تمييز مهم للمتابعة",
+                  ),
+                ),
+                if (notification["pinned"] == true)
+                  const PopupMenuItem(
+                    value: 'unpin',
+                    child: Text("❌ إلغاء التثبيت"),
+                  )
+                else
+                  const PopupMenuItem(
+                    value: 'pin',
+                    child: Text("📌 تثبيت بالأعلى"),
+                  ),
+                const PopupMenuItem(value: 'delete', child: Text("🗑 حذف")),
+              ];
+            },
           ),
         ],
       ),
     );
   }
 
-  Future<void> _togglePin(AppNotification notification) async {
-    await _api.togglePin(notification.id);
-    if (!mounted) return;
-    setState(() {
-      final idx = _items.indexWhere((n) => n.id == notification.id);
-      if (idx >= 0) {
-        final n = _items[idx];
-        _items[idx] = AppNotification(
-          id: n.id,
-          title: n.title,
-          body: n.body,
-          kind: n.kind,
-          url: n.url,
-          isRead: n.isRead,
-          isPinned: !n.isPinned,
-          isFollowUp: n.isFollowUp,
-          isUrgent: n.isUrgent,
-          createdAt: n.createdAt,
-        );
-      }
-    });
-    _items.sort((a, b) {
-      final ap = (a.isPinned ? 2 : 0) + (a.isUrgent ? 1 : 0);
-      final bp = (b.isPinned ? 2 : 0) + (b.isUrgent ? 1 : 0);
-      if (ap != bp) return bp.compareTo(ap);
-      return b.id.compareTo(a.id);
-    });
-  }
-
-  Future<void> _toggleFollowUp(AppNotification notification) async {
-    await _api.toggleFollowUp(notification.id);
-    if (!mounted) return;
-    setState(() {
-      final idx = _items.indexWhere((n) => n.id == notification.id);
-      if (idx >= 0) {
-        final n = _items[idx];
-        _items[idx] = AppNotification(
-          id: n.id,
-          title: n.title,
-          body: n.body,
-          kind: n.kind,
-          url: n.url,
-          isRead: n.isRead,
-          isPinned: n.isPinned,
-          isFollowUp: !n.isFollowUp,
-          isUrgent: n.isUrgent,
-          createdAt: n.createdAt,
-        );
-      }
-    });
-  }
-
-  Future<void> _deleteNotification(AppNotification notification) async {
-    await _api.deleteNotification(notification.id);
-    if (!mounted) return;
-    setState(() {
-      _items.removeWhere((n) => n.id == notification.id);
-    });
-  }
-
-  Future<void> _markAllRead() async {
-    final loggedIn = await _session.isLoggedIn();
-    if (!loggedIn) {
-      if (!mounted) return;
-      await checkAuth(context);
-      return;
-    }
-
-    try {
-      await _api.markAllRead();
-      if (!mounted) return;
-      setState(() {
-        for (var i = 0; i < _items.length; i++) {
-          final n = _items[i];
-          if (!n.isRead) {
-            _items[i] = AppNotification(
-              id: n.id,
-              title: n.title,
-              body: n.body,
-              kind: n.kind,
-              url: n.url,
-              isRead: true,
-              isPinned: n.isPinned,
-              isFollowUp: n.isFollowUp,
-              isUrgent: n.isUrgent,
-              createdAt: n.createdAt,
-            );
-          }
-        }
-      });
-      NotificationsBadgeController.instance.refresh();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر تعليم الكل كمقروء')),
-      );
-    }
-  }
-
-  Future<void> _markReadIfNeeded(AppNotification notification) async {
-    if (notification.isRead) return;
-    await _api.markRead(notification.id);
-    if (!mounted) return;
-    setState(() {
-      final idx = _items.indexWhere((n) => n.id == notification.id);
-      if (idx >= 0) {
-        final n = _items[idx];
-        _items[idx] = AppNotification(
-          id: n.id,
-          title: n.title,
-          body: n.body,
-          kind: n.kind,
-          url: n.url,
-          isRead: true,
-          isPinned: n.isPinned,
-          isFollowUp: n.isFollowUp,
-          isUrgent: n.isUrgent,
-          createdAt: n.createdAt,
-        );
-      }
-    });
-    NotificationsBadgeController.instance.refresh();
-  }
-
-  Widget _notificationCard(AppNotification notification) {
-    final isUnread = !notification.isRead;
-    final theme = Theme.of(context);
-    final bg = notification.isUrgent
-        ? theme.colorScheme.error.withValues(alpha: 0.06)
-        : theme.cardColor;
-
-    return InkWell(
-      onTap: () async {
-        try {
-          await _markReadIfNeeded(notification);
-          if (!mounted) return;
-
-          final opened = await NotificationLinkHandler.openFromNotification(
-            context,
-            notification,
-          );
-          if (!mounted) return;
-          if (!opened) {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => NotificationDetailsScreen(notification: notification),
-              ),
-            );
-          }
-        } catch (_) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تعذر تعليم الإشعار كمقروء')),
-          );
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isUnread
-                ? theme.colorScheme.primary.withValues(alpha: 0.35)
-                : Colors.transparent,
-            width: isUnread ? 1.2 : 1,
-          ),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _iconForKind(notification.kind),
-                color: theme.colorScheme.primary,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          notification.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          try {
-                            if (value == 'follow_up') {
-                              await _toggleFollowUp(notification);
-                            } else if (value == 'pin') {
-                              await _togglePin(notification);
-                            } else if (value == 'delete') {
-                              await _deleteNotification(notification);
-                            }
-                          } catch (_) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('تعذر تنفيذ الإجراء')),
-                            );
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'follow_up',
-                            child: Text(
-                              notification.isFollowUp ? 'إلغاء المتابعة' : 'تمييز للمتابعة',
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'pin',
-                            child: Text(
-                              notification.isPinned ? 'إلغاء التثبيت' : 'تثبيت بالأعلى',
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
-                          ),
-                        ],
-                      ),
-                      if (isUnread)
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  if (notification.isPinned || notification.isFollowUp || notification.isUrgent) ...[
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        if (notification.isUrgent)
-                          _flagChip('عاجل', theme.colorScheme.error),
-                        if (notification.isPinned)
-                          _flagChip('مثبّت', theme.colorScheme.primary),
-                        if (notification.isFollowUp)
-                          _flagChip('للمتابعة', Colors.orange),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  if ((_kindLabel(notification.kind) ?? '').isNotEmpty) ...[
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _flagChip(
-                          _kindLabel(notification.kind)!,
-                          theme.colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(
-                    notification.body,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 12.5,
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.85),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _formatDate(notification.createdAt.toLocal()),
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 11.5,
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.70),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    _reorderNotifications(); // ✅ تحديث الترتيب عند البناء
     final theme = Theme.of(context);
 
     return Directionality(
@@ -658,17 +231,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: 'تعليم الكل كمقروء',
-              icon: const Icon(Icons.done_all, color: Colors.white),
-              onPressed: () async {
-                await _markAllRead();
-              },
-            ),
-            IconButton(
               icon: const Icon(Icons.settings, color: Colors.white),
-              onPressed: () async {
-                if (!await checkFullClient(context)) return;
-                if (!context.mounted) return;
+              onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -679,84 +243,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ],
         ),
-        body: RefreshIndicator(
-          onRefresh: _loadInitial,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : (_error != null)
-                  ? ListView(
-                      children: [
-                        const SizedBox(height: 140),
-                        Center(
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(fontFamily: 'Cairo'),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: ElevatedButton(
-                            onPressed: _loginRequired
-                                ? () => checkAuth(context)
-                                : _loadInitial,
-                            child: Text(
-                              _loginRequired ? 'دخول' : 'إعادة المحاولة',
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : (_items.isEmpty)
-                      ? ListView(
-                          children: const [
-                            SizedBox(height: 140),
-                            Center(
-                              child: Text(
-                                'لا توجد إشعارات حالياً',
-                                style: TextStyle(fontFamily: 'Cairo'),
-                              ),
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _items.length + (_loadingMore ? 1 : 0) + (_showNewNotificationsBanner ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (_showNewNotificationsBanner && index == 0) {
-                              return _newNotificationsBanner();
-                            }
-                            final adjustedIndex = index - (_showNewNotificationsBanner ? 1 : 0);
-                            if (adjustedIndex >= _items.length) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                child: Center(child: CircularProgressIndicator()),
-                              );
-                            }
-                            return _notificationCard(_items[adjustedIndex]);
-                          },
-                        ),
-        ),
-      ),
-    );
-  }
-
-  Widget _flagChip(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Cairo',
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-          color: color,
+        body: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: notifications.length,
+          itemBuilder: (context, index) {
+            return _notificationCard(notifications[index], index, context);
+          },
         ),
       ),
     );

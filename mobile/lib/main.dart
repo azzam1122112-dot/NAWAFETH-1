@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:firebase_core/firebase_core.dart';
 
 // 🟣 الشاشات الرئيسية
 import 'screens/home_screen.dart';
 import 'screens/my_chats_screen.dart';
-import 'screens/chat_detail_screen.dart';
 import 'screens/interactive_screen.dart';
 import 'screens/my_profile_screen.dart';
 import 'screens/add_service_screen.dart';
-import 'screens/notifications_screen.dart';
-import 'screens/provider_dashboard/provider_home_screen.dart';
 
 // 🟢 الشاشات الجديدة
 import 'screens/login_screen.dart';
@@ -21,24 +17,32 @@ import 'screens/orders_hub_screen.dart';
 
 // 🆕 شاشة الترحيب (Onboarding)
 import 'screens/onboarding_screen.dart';
-import 'screens/entry_screen.dart';
 
-import 'services/app_snackbar.dart';
-import 'services/app_navigation.dart';
-import 'services/fcm_notification_service.dart';
-import 'services/notifications_badge_controller.dart';
-import 'services/role_controller.dart';
-import 'services/theme_controller.dart';
-import 'theme/app_theme.dart';
+/// 🌙 وحدة تحكم للثيم واللغة
+class MyThemeController extends InheritedWidget {
+  final void Function(ThemeMode) changeTheme;
+  final void Function(Locale) changeLanguage;
+  final ThemeMode themeMode;
+  final Locale locale;
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp();
-  } catch (_) {}
-  await RoleController.instance.initialize();
-  await FcmNotificationService.instance.initialize();
-  NotificationsBadgeController.instance.initialize();
+  const MyThemeController({
+    super.key,
+    required this.changeTheme,
+    required this.themeMode,
+    required this.changeLanguage,
+    required this.locale,
+    required super.child,
+  });
+
+  static MyThemeController? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<MyThemeController>();
+
+  @override
+  bool updateShouldNotify(MyThemeController oldWidget) =>
+      oldWidget.themeMode != themeMode || oldWidget.locale != locale;
+}
+
+void main() {
   runApp(const NawafethApp());
 }
 
@@ -50,7 +54,7 @@ class NawafethApp extends StatefulWidget {
 }
 
 class _NawafethAppState extends State<NawafethApp> {
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('ar', 'SA'); // ✅ اللغة الافتراضية العربية
 
   /// 🔄 تبديل الثيم
@@ -77,15 +81,34 @@ class _NawafethAppState extends State<NawafethApp> {
       child: MaterialApp(
         title: 'Nawafeth App',
         debugShowCheckedModeBanner: false,
-        navigatorKey: rootNavigatorKey,
-        scaffoldMessengerKey: rootScaffoldMessengerKey,
 
         // ✅ إعدادات الثيم
         themeMode: _themeMode,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeAnimationDuration: const Duration(milliseconds: 220),
-        themeAnimationCurve: Curves.easeOutCubic,
+        theme: ThemeData(
+          brightness: Brightness.light,
+          fontFamily: 'Cairo',
+          scaffoldBackgroundColor: Colors.white,
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+          ),
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+          fontFamily: 'Cairo',
+          scaffoldBackgroundColor: const Color(0xFF121212),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.black87,
+            foregroundColor: Colors.white,
+          ),
+        ),
 
         // ✅ دعم تعدد اللغات
         locale: _locale,
@@ -96,65 +119,16 @@ class _NawafethAppState extends State<NawafethApp> {
           GlobalCupertinoLocalizations.delegate,
         ],
 
-        onGenerateRoute: (settings) {
-          if (settings.name == '/chats') {
-            final args = settings.arguments;
-            if (args is Map) {
-              final requestId = _asInt(args['requestId']);
-              final threadId = _asInt(args['threadId']);
-              final name = (args['name'] ?? '').toString().trim();
-              final isOnline = args['isOnline'] == true;
-              final requestCode = (args['requestCode'] ?? '').toString().trim();
-              final requestTitle = (args['requestTitle'] ?? '')
-                  .toString()
-                  .trim();
-              final isDirect = args['isDirect'] == true;
-              final peerId = (args['peerId'] ?? '').toString().trim();
-              final peerName = (args['peerName'] ?? '').toString().trim();
-              if (requestId != null || threadId != null) {
-                return MaterialPageRoute(
-                  builder: (_) => ChatDetailScreen(
-                    name: name.isEmpty ? (isDirect ? 'محادثة مباشرة' : 'محادثة الطلب') : name,
-                    isOnline: isOnline,
-                    requestId: requestId,
-                    threadId: threadId,
-                    requestCode: requestCode.isEmpty ? null : requestCode,
-                    requestTitle: requestTitle.isEmpty ? null : requestTitle,
-                    isDirect: isDirect,
-                    peerId: peerId.isEmpty ? null : peerId,
-                    peerName: peerName.isEmpty ? null : peerName,
-                  ),
-                );
-              }
-            }
-            return MaterialPageRoute(builder: (_) => const MyChatsScreen());
-          }
-          return null;
-        },
-
         // ✅ المسارات
-        initialRoute: '/home', // بدء التطبيق مباشرة من الصفحة الرئيسية
+        initialRoute: '/onboarding', // شاشة البداية عند أول تشغيل
         routes: {
-          '/entry': (context) => const EntryScreen(),
           '/onboarding': (context) => const OnboardingScreen(),
           '/home': (context) => const HomeScreen(),
+          '/chats': (context) => const MyChatsScreen(),
           '/orders': (context) => const OrdersHubScreen(),
-          '/interactive': (context) => ValueListenableBuilder<RoleState>(
-            valueListenable: RoleController.instance.notifier,
-            builder: (context, role, _) {
-              return InteractiveScreen(
-                mode: role.isProvider
-                    ? InteractiveMode.provider
-                    : InteractiveMode.client,
-              );
-            },
-          ),
+          '/interactive': (context) => const InteractiveScreen(),
           '/profile': (context) => const MyProfileScreen(),
-          '/notifications': (context) => const NotificationsScreen(),
           '/add_service': (context) => const AddServiceScreen(),
-
-          // Provider dashboard (separate from bottom-nav core screens)
-          '/provider_dashboard': (context) => const ProviderHomeScreen(),
 
           // ✅ الشاشات الجديدة
           '/login': (context) => const LoginScreen(),
@@ -164,10 +138,5 @@ class _NawafethAppState extends State<NawafethApp> {
         },
       ),
     );
-  }
-
-  int? _asInt(dynamic value) {
-    if (value is int) return value;
-    return int.tryParse((value ?? '').toString());
   }
 }

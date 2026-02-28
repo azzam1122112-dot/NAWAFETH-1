@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:animate_do/animate_do.dart';
 import '../constants/colors.dart';
-import '../services/content_api.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -22,10 +21,11 @@ class OnboardItem {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  late List<OnboardItem> onboardingData;
 
-  List<OnboardItem> _defaultOnboardingData() => [
+  // ✅ الصفحات الثلاثة
+  final List<OnboardItem> onboardingData = [
     OnboardItem(
+      // شعار التطبيق ✅
       const Icon(Icons.widgets, size: 80, color: AppColors.deepPurple),
       "مرحبا بك في نوافذ",
       "منصتك الأولى لربط العملاء بمقدمي الخدمات.",
@@ -50,49 +50,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    onboardingData = _defaultOnboardingData();
-    _loadDashboardContent();
-  }
-
-  Future<void> _loadDashboardContent() async {
-    final payload = await ContentApi().getPublicContent();
-    if (!mounted) return;
-
-    final first = payload.blocks['onboarding_first_time'];
-    final intro = payload.blocks['onboarding_intro'];
-    if (first == null && intro == null) return;
-
-    final next = _defaultOnboardingData();
-    if (first != null) {
-      final title = first.titleAr.trim();
-      final body = first.bodyAr.trim();
-      next[0] = OnboardItem(
-        next[0].icon,
-        title.isEmpty ? next[0].title : title,
-        body.isEmpty ? next[0].desc : body,
-      );
-    }
-    if (intro != null) {
-      final title = intro.titleAr.trim();
-      final body = intro.bodyAr.trim();
-      next[1] = OnboardItem(
-        next[1].icon,
-        title.isEmpty ? next[1].title : title,
-        body.isEmpty ? next[1].desc : body,
-      );
-    }
-
-    setState(() {
-      onboardingData = next;
-      if (_currentPage >= onboardingData.length) {
-        _currentPage = onboardingData.length - 1;
-      }
-    });
-  }
-
   void _nextPage() {
     if (_currentPage < onboardingData.length - 1) {
       _pageController.nextPage(
@@ -107,7 +64,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _skip() => _finishOnboarding();
 
   void _finishOnboarding() {
-    Navigator.pushReplacementNamed(context, '/entry');
+    Navigator.pushReplacementNamed(context, '/home');
   }
 
   @override
@@ -212,19 +169,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: _currentPage == index ? 26 : 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: _currentPage == index
-                      ? Colors.deepPurple
-                      : Colors.grey.shade300,
+                  color:
+                      _currentPage == index
+                          ? Colors.deepPurple
+                          : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: _currentPage == index
-                      ? [
-                          BoxShadow(
-                            color: Colors.deepPurple.withOpacity(0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : [],
+                  boxShadow:
+                      _currentPage == index
+                          ? [
+                            BoxShadow(
+                              color: Colors.deepPurple.withOpacity(0.4),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                          : [],
                 ),
               ),
             ),

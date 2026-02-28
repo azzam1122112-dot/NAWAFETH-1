@@ -1,15 +1,6 @@
-export 'profile_tab_impl.dart';
-
-/*
 import 'package:flutter/material.dart';
-import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-import '../../services/providers_api.dart';
-import 'google_map_location_picker_screen.dart';
+import 'package:nawafeth/screens/registration/steps/content_step.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -18,493 +9,219 @@ class ProfileTab extends StatefulWidget {
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
+class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
   final Color mainColor = Colors.deepPurple;
+  late TabController _tabController;
 
-  static const double _cityLockKm = 35; // Keep the map focused around the city.
-
-  static const Map<String, LatLng> _knownSaudiCityCenters = {
-    'المدينة المنورة': LatLng(24.5246542, 39.5691841),
-    'المدينة المنوره': LatLng(24.5246542, 39.5691841),
-    'المدينة': LatLng(24.5246542, 39.5691841),
-    'مكة المكرمة': LatLng(21.3890824, 39.8579118),
-    'مكة': LatLng(21.3890824, 39.8579118),
-    'مكه': LatLng(21.3890824, 39.8579118),
-    'الرياض': LatLng(24.7135517, 46.6752957),
-    'جدة': LatLng(21.543333, 39.172778),
-    'الدمام': LatLng(26.4206828, 50.0887943),
-    'الخبر': LatLng(26.2172, 50.1971),
-    'الطائف': LatLng(21.27028, 40.41583),
+  final Map<String, String> data = {
+    "fullName": "عبدالله محمد",
+    "englishName": "Abdullah Mohammed",
+    "accountType": "مؤسسة",
+    "about": "نقدم خدمات برمجية احترافية للمؤسسات.",
+    "specialization": "تطوير برمجيات",
+    "experience": "5 سنوات",
+    "languages": "العربية، الإنجليزية",
+    "location": "الرياض",
+    "map": "https://maps.google.com",
+    "details": "نوفر حلول برمجية متقدمة ومتكاملة",
+    "qualification": "بكالوريوس علوم حاسب",
+    "website": "https://example.com",
+    "social": "@example",
+    "phone": "0551234567",
+    "keywords": "برمجة، تطبيقات، مواقع",
   };
 
-      final center = (_lat != null && _lng != null)
-          ? LatLng(_lat!, _lng!)
-          : (_cityCenter ?? const LatLng(24.7136, 46.6753));
-      final bounds = _cityBounds;
+  final Map<String, bool> isEditing = {};
+  final Map<String, TextEditingController> controllers = {};
 
-      return _sectionCard(
-        title: 'الموقع الجغرافي',
-        icon: Icons.location_on_outlined,
-        subtitle:
-            'حدد موقعك الجغرافي الدقيق على خريطة Google. سيتم محاولة تحديد موقعك تلقائياً (GPS) عند فتح الخريطة، ويمكنك تحريك الدبوس ثم حفظه.',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: SizedBox(
-                height: 190,
-                child: Stack(
-                  children: [
-                    GoogleMap(
-                      initialCameraPosition:
-                          CameraPosition(target: center, zoom: 12.8),
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      compassEnabled: false,
-                      mapToolbarEnabled: false,
-                      buildingsEnabled: true,
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('center'),
-                          position: center,
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            BitmapDescriptor.hueViolet,
-                          ),
-                        ),
-                      },
-                      cameraTargetBounds: bounds != null
-                          ? CameraTargetBounds(bounds)
-                          : CameraTargetBounds.unbounded,
-                      onTap: (_) {
-                        // Preview only
-                      },
-                    ),
-                    if (_resolvingCity)
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              )
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                              SizedBox(width: 10),
-                              Text(
-                                'جارٍ تحديد المدينة…',
-                                style: TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _pickGeoLocationOnMap,
-                    icon: const Icon(Icons.map_outlined),
-                    label: const Text(
-                      'تحديد الموقع على الخريطة',
-                      style: TextStyle(fontFamily: 'Cairo'),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: mainColor,
-                      side: BorderSide(color: mainColor.withAlpha(128)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              (_lat != null && _lng != null)
-                  ? 'الإحداثيات: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}'
-                  : 'لم يتم تحديد موقع بعد.',
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12,
-                color: Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget _field({
-      required String label,
-      required TextEditingController controller,
-      int maxLines = 1,
-      TextInputType? keyboardType,
-    }) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: controller,
-              maxLines: maxLines,
-              keyboardType: keyboardType,
-              decoration: _inputDecoration(label),
-              style: const TextStyle(fontFamily: 'Cairo'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    @override
-    Widget build(BuildContext context) {
-      return Directionality(
-        textDirection: TextDirection.rtl,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFF3F4FC),
-          appBar: AppBar(
-            backgroundColor: mainColor,
-            iconTheme: const IconThemeData(color: Colors.white),
-            title: const Text(
-              'الملف الشخصي',
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ البيانات بنجاح')),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      filled: true,
-      fillColor: Colors.grey[100],
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    );
-  }
-
-  Future<void> _pickGeoLocationOnMap() async {
-    final city = _cityController.text.trim();
-    final LatLng? initialCenter =
-        (_lat != null && _lng != null) ? LatLng(_lat!, _lng!) : null;
-
-    final res = await Navigator.push<Map<String, dynamic>>(
+  void _openPortfolio() {
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder:
-            (_) => GoogleMapLocationPickerScreen(
-              city: city.isEmpty ? null : city,
-              initialCenter: initialCenter,
+            (_) => ContentStep(
+              onBack: () => Navigator.pop(context),
+              onNext: () => Navigator.pop(context),
             ),
       ),
     );
+  }
 
-    if (res == null || !mounted) return;
-    final lat = res['lat'];
-    final lng = res['lng'];
-
-    setState(() {
-      if (lat is num) _lat = lat.toDouble();
-      if (lng is num) _lng = lng.toDouble();
-      if (_lat != null && _lng != null) {
-        final c = LatLng(_lat!, _lng!);
-        _cityCenter = c;
-        _cityBounds = _boundsAroundKm(c, _cityLockKm);
-      }
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    data.forEach((key, value) {
+      controllers[key] = TextEditingController(text: value);
+      isEditing[key] = false;
     });
   }
 
-  Widget _sectionCard({
-    required String title,
-    String? subtitle,
-    required Widget child,
-    IconData? icon,
+  Widget buildField(
+    String key,
+    String label,
+    IconData icon, {
+    int maxLines = 1,
   }) {
+    final editing = isEditing[key]!;
     return Container(
-      padding: const EdgeInsets.all(14),
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 4)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: mainColor),
-                const SizedBox(width: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: mainColor.withAlpha(25),
+                  child: Icon(icon, color: mainColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    editing ? Icons.check_circle : Icons.edit,
+                    color: editing ? Colors.green : mainColor,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (editing) data[key] = controllers[key]!.text;
+                      isEditing[key] = !editing;
+                    });
+                  },
+                ),
               ],
-              Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12,
-                color: Colors.black54,
-                height: 1.4,
-              ),
             ),
-          ],
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _geoLocationCard() {
-    final center = (_lat != null && _lng != null)
-        ? LatLng(_lat!, _lng!)
-        : (_cityCenter ?? const LatLng(24.7136, 46.6753));
-    final bounds = _cityBounds;
-
-    return _sectionCard(
-      title: 'الموقع الجغرافي',
-      icon: Icons.location_on_outlined,
-      subtitle:
-          'حدد موقعك الجغرافي الدقيق على خريطة Google. سيتم محاولة تحديد موقعك تلقائياً (GPS) عند فتح الخريطة، ويمكنك تحريك الدبوس ثم حفظه.',
-      child: Column(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: SizedBox(
-              height: 190,
-              child: Stack(
-                children: [
-                  GoogleMap(
-                    initialCameraPosition:
-                        CameraPosition(target: center, zoom: 12.8),
-                    myLocationButtonEnabled: false,
-                    zoomControlsEnabled: false,
-                    compassEnabled: false,
-                    mapToolbarEnabled: false,
-                    buildingsEnabled: true,
-                    markers: {
-                      Marker(
-                        markerId: const MarkerId('center'),
-                        position: center,
-                        icon: BitmapDescriptor.defaultMarkerWithHue(
-                          BitmapDescriptor.hueViolet,
-                        ),
-                      ),
-                    },
-                    circles: {
-                      Circle(
-                        circleId: const CircleId('coverage'),
-                        center: center,
-                        radius: _coverageRadiusKm * 1000.0,
-                        fillColor: mainColor.withAlpha(36),
-                        strokeColor: mainColor.withAlpha(230),
-                        strokeWidth: 2,
-                      )
-                    },
-                    cameraTargetBounds: bounds != null
-                        ? CameraTargetBounds(bounds)
-                        : CameraTargetBounds.unbounded,
-                    onTap: (_) {
-                      // Preview only
-                    },
-                  ),
-                  if (_resolvingCity)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 10,
-                              offset: Offset(0, 4),
-                            )
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            SizedBox(width: 10),
-                            Text(
-                              'جارٍ تحديد المدينة…',
-                              style:
-                                  TextStyle(fontFamily: 'Cairo', fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
+            const SizedBox(height: 12),
+            editing
+                ? TextField(
+                  controller: controllers[key],
+                  maxLines: maxLines,
+                  style: const TextStyle(fontFamily: 'Cairo'),
+                  decoration: InputDecoration(
+                    hintText: 'أدخل $label',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: mainColor),
                     ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-                    foregroundColor: mainColor,
-                    side: BorderSide(color: mainColor.withAlpha(128)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    isDense: true,
+                    contentPadding: const EdgeInsets.all(12),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: mainColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: mainColor.withAlpha(51)),
-                ),
-                child: Text(
-                  '$_coverageRadiusKm كم',
+                )
+                : Text(
+                  controllers[key]!.text,
                   style: const TextStyle(
                     fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                    fontSize: 14,
+                    color: Colors.black87,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_lat != null && _lng != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'المركز: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}',
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _field({
-    required String label,
-    required TextEditingController controller,
-                    const Positioned(
-                      top: 10,
-                      right: 10,
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+  Widget buildSection(List<Map<String, dynamic>> fields) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        InkWell(
+          onTap: _openPortfolio,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 6,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: mainColor.withAlpha(25),
+                  child: Icon(Icons.photo_library_outlined, color: mainColor),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'معرض الأعمال',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
-                    ),
-            label,
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
+                      SizedBox(height: 4),
+                      Text(
+                        'تحكم بمحتوى المعرض الذي يظهر للعملاء',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12.5,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_left, color: mainColor),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          TextField(
-                  onPressed: _pickGeoLocationOnMap,
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('تحديد الموقع على الخريطة', style: TextStyle(fontFamily: 'Cairo')),
-            decoration: _inputDecoration(label),
-            style: const TextStyle(fontFamily: 'Cairo'),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        ...fields
+            .map(
+              (field) => buildField(
+                field['key'],
+                field['label'],
+                field['icon'],
+                maxLines: field['multiline'] == true ? 3 : 1,
+              ),
+            )
+            .toList(),
+      ],
     );
   }
-              Icon(Icons.location_on, size: 16, color: mainColor.withAlpha(210)),
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
-                  'الإحداثيات: ${center.latitude.toStringAsFixed(5)}, ${center.longitude.toStringAsFixed(5)}',
+      textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF3F4FC),
         appBar: AppBar(
+          iconTheme: IconThemeData(color: Colors.white),
           backgroundColor: mainColor,
-          iconTheme: const IconThemeData(color: Colors.white),
           title: const Text(
-            'الملف الشخصي',
+            "الملف الشخصي",
             style: TextStyle(
               fontFamily: 'Cairo',
               color: Colors.white,
@@ -514,112 +231,120 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
           actions: [
             IconButton(
-              tooltip: 'حفظ',
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child:
-                          CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.save, color: Colors.white),
+              tooltip: 'معرض الأعمال',
+              onPressed: _openPortfolio,
+              icon: const Icon(Icons.photo_library_outlined, color: Colors.white),
             ),
           ],
+          bottom: TabBar(
+            indicatorColor: Colors.white,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            labelStyle: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+            controller: _tabController,
+            tabs: [
+              Tab(text: "معلومات الحساب"),
+              Tab(text: "معلومات عامة"),
+              Tab(text: "معلومات إضافية"),
+            ],
+          ),
         ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _sectionCard(
-                    title: 'بيانات المزود',
-                    icon: Icons.badge_outlined,
-                    subtitle: 'عدّل بيانات صفحتك بشكل بسيط وواضح.',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        DropdownButtonFormField<String>(
-                          initialValue: _providerType,
-                          decoration: _inputDecoration('نوع الحساب'),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'individual',
-                              child:
-                                  Text('فرد', style: TextStyle(fontFamily: 'Cairo')),
-                            ),
-                            DropdownMenuItem(
-                              value: 'company',
-                              child:
-                                  Text('منشأة', style: TextStyle(fontFamily: 'Cairo')),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            if (v == null) return;
-                            setState(() => _providerType = v);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _field(label: 'اسم الصفحة', controller: _displayNameController),
-                        _field(
-                          label: 'نبذة مختصرة',
-                          controller: _bioController,
-                          maxLines: 3,
-                        ),
-                        _field(label: 'المدينة', controller: _cityController),
-                        _field(
-                          label: 'سنوات الخبرة',
-                          controller: _yearsExperienceController,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 6),
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          value: _acceptsUrgent,
-                          onChanged: (v) => setState(() => _acceptsUrgent = v),
-                          title: const Text(
-                            'يدعم الطلبات المستعجلة',
-                            style: TextStyle(fontFamily: 'Cairo'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _geoLocationCard(),
-                  const SizedBox(height: 4),
-                  ElevatedButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.save, color: Colors.white),
-                    label: const Text(
-                      'حفظ التغييرات',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: mainColor,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+        backgroundColor: const Color(0xFFF4F4F4),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            buildSection([
+              {
+                "key": "fullName",
+                "label": "الاسم الكامل",
+                "icon": Icons.person,
+              },
+              {
+                "key": "englishName",
+                "label": "الاسم بالإنجليزية",
+                "icon": Icons.translate,
+              },
+              {
+                "key": "accountType",
+                "label": "صفة الحساب",
+                "icon": Icons.badge_outlined,
+              },
+              {
+                "key": "about",
+                "label": "نبذة عنك",
+                "icon": Icons.info_outline,
+                "multiline": true,
+              },
+              {
+                "key": "specialization",
+                "label": "التخصص",
+                "icon": Icons.category,
+              },
+            ]),
+            buildSection([
+              {
+                "key": "experience",
+                "label": "سنوات الخبرة",
+                "icon": Icons.work_history,
+              },
+              {
+                "key": "languages",
+                "label": "لغات التواصل",
+                "icon": Icons.language,
+              },
+              {
+                "key": "location",
+                "label": "النطاق الجغرافي",
+                "icon": Icons.location_on_outlined,
+              },
+              {
+                "key": "map",
+                "label": "الموقع على الخريطة",
+                "icon": Icons.map_outlined,
+              },
+            ]),
+            buildSection([
+              {
+                "key": "details",
+                "label": "شرح تفصيلي",
+                "icon": Icons.notes,
+                "multiline": true,
+              },
+              {
+                "key": "qualification",
+                "label": "المؤهلات",
+                "icon": Icons.school,
+              },
+              {
+                "key": "website",
+                "label": "الموقع الإلكتروني",
+                "icon": Icons.link,
+              },
+              {
+                "key": "social",
+                "label": "روابط التواصل",
+                "icon": Icons.share_outlined,
+              },
+              {
+                "key": "phone",
+                "label": "رقم الجوال",
+                "icon": Icons.phone_android,
+              },
+              {
+                "key": "keywords",
+                "label": "الكلمات المفتاحية",
+                "icon": Icons.label_outline,
+                "multiline": true,
+              },
+            ]),
+          ],
+        ),
       ),
     );
   }
 }
-
-*/
