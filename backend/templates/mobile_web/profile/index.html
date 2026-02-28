@@ -1,0 +1,58 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نافذتي | نوافذ{% endblock %}
+{% block page_id %}profile-index{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/profile.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-container nw-profile-shell">
+    <div id="profile-login-required" class="nw-profile-login" hidden>
+      <p>يجب تسجيل الدخول أولاً.</p>
+      <a class="nw-primary-btn" href="{% url 'mobile_web:login' %}">تسجيل الدخول</a>
+    </div>
+
+    <div id="profile-content" hidden>
+      <header class="nw-profile-header">
+        <div class="nw-profile-avatar" id="profile-avatar"></div>
+        <div>
+          <h1 id="profile-display-name">-</h1>
+          <p id="profile-username">@---</p>
+          <p id="profile-contact"></p>
+        </div>
+      </header>
+
+      <section class="nw-profile-stats">
+        <article class="nw-profile-stat"><span>أتابع</span><strong id="stat-following">0</strong></article>
+        <article class="nw-profile-stat"><span>إعجابات</span><strong id="stat-likes">0</strong></article>
+        <article class="nw-profile-stat"><span>مفضلتي</span><strong id="stat-favorites">0</strong></article>
+      </section>
+
+      <section class="nw-profile-mode">
+        <div>
+          <h2>وضع الحساب</h2>
+          <p id="profile-mode-hint">وضع العميل</p>
+        </div>
+        <button type="button" id="profile-mode-btn" class="nw-secondary-btn">تبديل الوضع</button>
+      </section>
+
+      <section class="nw-profile-actions">
+        <a href="{% url 'mobile_web:orders' %}" class="nw-profile-action">طلباتي</a>
+        <a href="{% url 'mobile_web:interactive' %}" class="nw-profile-action">تفاعلي</a>
+        <a href="{% url 'mobile_web:provider_dashboard' %}" class="nw-profile-action">لوحة المزود</a>
+        <a href="{% url 'mobile_web:home' %}" class="nw-profile-action">الرئيسية</a>
+      </section>
+
+      <p id="profile-error" class="nw-form-error" hidden></p>
+      <button type="button" id="profile-logout-btn" class="nw-link-btn">تسجيل الخروج</button>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/profile.js' %}"></script>
+{% endblock %}
+

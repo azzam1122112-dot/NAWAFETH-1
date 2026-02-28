@@ -11,7 +11,6 @@ import '../models/user_profile.dart';
 import 'registration/register_service_provider.dart';
 import 'provider_dashboard/provider_home_screen.dart';
 import 'login_settings_screen.dart';
-import 'plans_screen.dart';
 import 'notifications_screen.dart';
 import 'my_chats_screen.dart';
 import 'orders_hub_screen.dart';
@@ -127,9 +126,16 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             // -- Header with Cover + Avatar --
             SliverToBoxAdapter(child: _buildHeader(profile, isDark, purple)),
 
+            // -- Account Mode Toggle --
+            if (isProviderRegistered)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                sliver: SliverToBoxAdapter(child: _buildModeToggle(isDark, purple)),
+              ),
+
             // -- Quick Actions Grid --
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
               sliver: SliverToBoxAdapter(child: _buildQuickActions(isDark, purple)),
             ),
 
@@ -142,11 +148,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             // -- Register as Provider CTA --
             if (!isProviderRegistered)
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 sliver: SliverToBoxAdapter(child: _buildProviderCTA(isDark, purple)),
               ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ),
       ),
@@ -156,20 +162,20 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   // -- HEADER --
   Widget _buildHeader(UserProfile profile, bool isDark, Color purple) {
     return SizedBox(
-      height: 268,
+      height: 320,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           // Cover
           Container(
-            height: 140,
+            height: 150,
             width: double.infinity,
             decoration: BoxDecoration(
               gradient: _coverImage == null
                   ? LinearGradient(
                       colors: isDark
-                          ? [Colors.deepPurple.shade900, Colors.deepPurple.shade800.withValues(alpha: 0.6)]
-                          : [Colors.deepPurple.shade600, Colors.deepPurple.shade400],
+                          ? [Colors.deepPurple.shade900, Colors.deepPurple.shade700.withValues(alpha: 0.7)]
+                          : [Colors.deepPurple.shade700, Colors.deepPurple.shade400],
                       begin: Alignment.topRight,
                       end: Alignment.bottomLeft,
                     )
@@ -181,13 +187,25 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             child: SafeArea(
               bottom: false,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _miniIconBtn(Icons.camera_alt_outlined, () => _pickImage(isCover: true)),
-                    if (isProviderRegistered) _switchModeChip(purple),
+                    // Left: Camera + Message + Notifications
+                    Row(
+                      children: [
+                        _miniIconBtn(Icons.camera_alt_outlined, () => _pickImage(isCover: true)),
+                        const SizedBox(width: 8),
+                        _miniIconBtn(Icons.chat_bubble_outline_rounded, () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyChatsScreen()));
+                        }),
+                        const SizedBox(width: 8),
+                        _miniIconBtn(Icons.notifications_none_rounded, () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                        }),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -196,7 +214,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
           // Avatar + Info
           Positioned(
-            top: 100,
+            top: 110,
             left: 0,
             right: 0,
             child: Column(
@@ -206,32 +224,33 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: isDark ? const Color(0xFF121212) : const Color(0xFFF5F5FA),
-                      width: 3,
+                      width: 3.5,
                     ),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 2)),
+                      BoxShadow(color: purple.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4)),
                     ],
                   ),
                   child: GestureDetector(
                     onTap: () => _pickImage(isCover: false),
                     child: CircleAvatar(
-                      radius: 36,
+                      radius: 40,
                       backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                       backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
                       child: _profileImage == null
-                          ? Icon(Icons.person, size: 32, color: isDark ? Colors.white54 : Colors.grey)
+                          ? Icon(Icons.person, size: 36, color: isDark ? Colors.white54 : Colors.grey)
                           : null,
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   profile.displayName,
                   style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
+                    fontSize: 16, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
+                const SizedBox(height: 1),
                 Text(
                   profile.usernameDisplay,
                   style: TextStyle(
@@ -253,50 +272,104 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
+          color: Colors.white.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
         ),
-        child: Icon(icon, color: Colors.white, size: 16),
+        child: Icon(icon, color: Colors.white, size: 18),
       ),
     );
   }
 
-  Widget _switchModeChip(Color purple) {
-    return GestureDetector(
-      onTap: () async {
-        await AccountModeService.setProviderMode(true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('تم التبديل إلى حساب مقدم الخدمة',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  // -- ACCOUNT MODE TOGGLE --
+  Widget _buildModeToggle(bool isDark, Color purple) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // Client side (active)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                color: isDark ? purple.withValues(alpha: 0.9) : Colors.white,
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: [
+                  BoxShadow(
+                    color: purple.withValues(alpha: isDark ? 0.3 : 0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_rounded, size: 16, color: isDark ? Colors.white : purple),
+                  const SizedBox(width: 5),
+                  Text(
+                    'عميل',
+                    style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
+                      color: isDark ? Colors.white : purple,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-          setState(() => _isLoading = true);
-          await _loadProfile();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6)],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.swap_horiz_rounded, size: 14, color: purple),
-            const SizedBox(width: 4),
-            Text('مقدم خدمة', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: purple, fontFamily: 'Cairo')),
-          ],
-        ),
+          ),
+          const SizedBox(width: 2),
+          // Provider side (tappable)
+          Expanded(
+            child: GestureDetector(
+              onTap: () async {
+                await AccountModeService.setProviderMode(true);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('تم التبديل إلى حساب مقدم الخدمة',
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  );
+                  setState(() => _isLoading = true);
+                  await _loadProfile();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.work_outline_rounded, size: 16, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
+                    const SizedBox(width: 5),
+                    Text(
+                      'مقدم خدمة',
+                      style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'Cairo',
+                        color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -367,7 +440,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       children: actions.map((a) {
         return Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             child: _quickActionCard(a, isDark, purple),
           ),
         );
@@ -379,30 +452,30 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     return GestureDetector(
       onTap: action.onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: isDark
               ? null
-              : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
+              : [BoxShadow(color: purple.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: purple.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(action.icon, size: 18, color: purple),
+              child: Icon(action.icon, size: 20, color: purple),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               action.label,
               style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, fontFamily: 'Cairo',
+                fontSize: 10.5, fontWeight: FontWeight.w600, fontFamily: 'Cairo',
                 color: isDark ? Colors.white70 : Colors.black87,
               ),
             ),
@@ -431,14 +504,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             isDark: isDark,
             purple: purple,
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginSettingsScreen())),
-          ),
-          _menuDivider(isDark),
-          _menuTile(
-            icon: Icons.workspace_premium_outlined,
-            label: 'الباقات والاشتراكات',
-            isDark: isDark,
-            purple: purple,
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlansScreen())),
           ),
           _menuDivider(isDark),
           _menuTile(
@@ -481,18 +546,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(7),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: purple.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, size: 16, color: purple),
+                child: Icon(icon, size: 18, color: purple),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

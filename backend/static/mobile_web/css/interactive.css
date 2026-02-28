@@ -1,0 +1,143 @@
+.nw-interactive-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.nw-interactive-header {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.nw-interactive-header h1 {
+  margin: 0;
+  font-size: 1.22rem;
+  color: #1d2939;
+}
+
+.nw-interactive-header p {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 0.9rem;
+}
+
+.nw-interactive-login {
+  border-radius: 14px;
+  border: 1px dashed #d0d5dd;
+  background: #fff;
+  padding: 24px;
+  text-align: center;
+  display: grid;
+  gap: 10px;
+}
+
+.nw-interactive-login p {
+  margin: 0;
+  color: #475467;
+}
+
+.nw-interactive-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nw-interactive-tab {
+  border-radius: 999px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.nw-interactive-tab.is-active {
+  border-color: #b8a5de;
+  background: #f1ecff;
+  color: var(--nw-primary);
+}
+
+.nw-interactive-panel {
+  display: none;
+  margin-top: 10px;
+}
+
+.nw-interactive-panel.is-active {
+  display: grid;
+  gap: 8px;
+}
+
+.nw-interactive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.nw-interactive-card {
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.nw-interactive-cover {
+  height: 88px;
+  background: linear-gradient(135deg, #ccb9e8, #ebdefa);
+  background-size: cover;
+  background-position: center;
+}
+
+.nw-interactive-body {
+  padding: 9px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.nw-interactive-title {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #101828;
+}
+
+.nw-interactive-meta {
+  margin: 0;
+  color: #667085;
+  font-size: 0.8rem;
+}
+
+.nw-interactive-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nw-interactive-actions button {
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #fff;
+  cursor: pointer;
+}
+
+.nw-interactive-actions button.danger {
+  border-color: #fda29b;
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.nw-interactive-empty {
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+  background: #fff;
+  padding: 16px;
+  color: #667085;
+  font-size: 0.88rem;
+  text-align: center;
+}
+

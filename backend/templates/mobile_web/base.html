@@ -17,6 +17,9 @@
       <a class="nw-brand" href="{% url 'mobile_web:home' %}">نوافذ</a>
       <nav class="nw-nav">
         <a href="{% url 'mobile_web:home' %}">الرئيسية</a>
+        <a href="{% url 'mobile_web:orders' %}">الطلبات</a>
+        <a href="{% url 'mobile_web:interactive' %}">تفاعلي</a>
+        <a href="{% url 'mobile_web:profile' %}">نافذتي</a>
         <a href="{% url 'mobile_web:provider_dashboard' %}">لوحة المزود</a>
         <a href="{% url 'mobile_web:login' %}" id="nav-auth-link">تسجيل الدخول</a>
         <button id="nav-logout-btn" class="nw-link-btn" type="button" hidden>تسجيل الخروج</button>
@@ -36,6 +39,9 @@
         login: "{% url 'mobile_web:login' %}",
         otp: "{% url 'mobile_web:otp' %}",
         signup: "{% url 'mobile_web:signup' %}",
+        orders: "{% url 'mobile_web:orders' %}",
+        interactive: "{% url 'mobile_web:interactive' %}",
+        profile: "{% url 'mobile_web:profile' %}",
         providerDashboard: "{% url 'mobile_web:provider_dashboard' %}"
       }
     };
@@ -44,4 +50,3 @@
   {% block scripts %}{% endblock %}
 </body>
 </html>
-

@@ -5,6 +5,7 @@
   const KEY_REFRESH = "nawafeth_refresh_token";
   const KEY_USER_ID = "nawafeth_user_id";
   const KEY_ROLE_STATE = "nawafeth_role_state";
+  const KEY_PROVIDER_MODE = "nawafeth_is_provider_mode";
 
   const config = window.NAWAFETH_WEB_CONFIG || {};
   const urls = config.urls || {};
@@ -57,11 +58,33 @@
     localStorage.removeItem(KEY_REFRESH);
     localStorage.removeItem(KEY_USER_ID);
     localStorage.removeItem(KEY_ROLE_STATE);
+    localStorage.removeItem(KEY_PROVIDER_MODE);
     syncTopbarAuthState();
   }
 
   function isAuthenticated() {
     return Boolean(localStorage.getItem(KEY_ACCESS));
+  }
+
+  function isProviderMode() {
+    return localStorage.getItem(KEY_PROVIDER_MODE) === "1";
+  }
+
+  function setProviderMode(enabled) {
+    localStorage.setItem(KEY_PROVIDER_MODE, enabled ? "1" : "0");
+  }
+
+  function ensureProviderModeFromProfile(mePayload) {
+    const canProvider = Boolean(
+      mePayload &&
+      (mePayload.is_provider === true || mePayload.has_provider_profile === true)
+    );
+
+    if (!canProvider) {
+      setProviderMode(false);
+      return false;
+    }
+    return isProviderMode();
   }
 
   function getErrorMessage(payload, fallback) {
@@ -230,6 +253,9 @@
     getSession: getSession,
     clearSession: clearSession,
     isAuthenticated: isAuthenticated,
+    isProviderMode: isProviderMode,
+    setProviderMode: setProviderMode,
+    ensureProviderModeFromProfile: ensureProviderModeFromProfile,
     getErrorMessage: getErrorMessage,
     urls: urls,
   });
@@ -240,4 +266,3 @@
     toIsoFromLocalInput: toIsoFromLocalInput,
   });
 })();
-

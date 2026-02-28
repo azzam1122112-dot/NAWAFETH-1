@@ -1,0 +1,61 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}الطلبات | نوافذ{% endblock %}
+{% block page_id %}orders-hub{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/orders.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-container nw-orders-shell">
+    <header class="nw-orders-header">
+      <div>
+        <h1 id="orders-title">طلباتي</h1>
+        <p id="orders-subtitle">عرض وإدارة الطلبات بنفس منطق تطبيق الموبايل.</p>
+      </div>
+      <div class="nw-mode-toggle" role="group" aria-label="mode-toggle">
+        <button type="button" id="mode-client-btn" class="nw-mode-btn is-active">عميل</button>
+        <button type="button" id="mode-provider-btn" class="nw-mode-btn">مزود</button>
+      </div>
+    </header>
+
+    <section class="nw-orders-controls">
+      <label class="nw-orders-search">
+        <input id="orders-search-input" type="search" placeholder="بحث بالعنوان أو الوصف">
+      </label>
+      <div class="nw-status-filters" id="orders-status-filters">
+        <button type="button" class="nw-status-chip is-active" data-status="">الكل</button>
+        <button type="button" class="nw-status-chip" data-status="new">جديد</button>
+        <button type="button" class="nw-status-chip" data-status="in_progress">تحت التنفيذ</button>
+        <button type="button" class="nw-status-chip" data-status="completed">مكتمل</button>
+        <button type="button" class="nw-status-chip" data-status="cancelled">ملغي</button>
+      </div>
+    </section>
+
+    <p id="orders-error" class="nw-form-error" hidden></p>
+
+    <div class="nw-orders-layout">
+      <div id="orders-list" class="nw-orders-list"></div>
+      <aside class="nw-order-detail" id="order-detail-panel">
+        <div class="nw-order-detail-empty" id="order-detail-empty">اختر طلبًا لعرض التفاصيل.</div>
+        <div id="order-detail-content" hidden>
+          <h3 id="order-detail-title"></h3>
+          <div id="order-detail-meta" class="nw-order-detail-meta"></div>
+          <div id="order-detail-description" class="nw-order-detail-description"></div>
+          <div id="order-detail-finance" class="nw-order-detail-finance"></div>
+          <div id="order-detail-actions" class="nw-order-detail-actions"></div>
+          <div id="order-detail-attachments" class="nw-order-detail-attachments"></div>
+          <div id="order-detail-logs" class="nw-order-detail-logs"></div>
+          <div id="order-detail-offers" class="nw-order-detail-offers"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/orders.js' %}"></script>
+{% endblock %}
+
