@@ -67,7 +67,7 @@ const LoginPage = (() => {
 
     const res = await ApiClient.request('/api/accounts/otp/send/', {
       method: 'POST',
-      body: { phone_number: phone },
+      body: { phone: phone },
     });
 
     _setLoading('send-otp', false);
@@ -97,8 +97,8 @@ const LoginPage = (() => {
     const code = otpInput.value.trim();
     const errEl = document.getElementById('otp-error');
 
-    if (!/^\d{4,6}$/.test(code)) {
-      _showError(errEl, 'أدخل رمز التحقق المكون من 4-6 أرقام');
+    if (!/^\d{4}$/.test(code)) {
+      _showError(errEl, 'أدخل رمز التحقق المكون من 4 أرقام');
       return;
     }
     _hideError(errEl);
@@ -107,7 +107,7 @@ const LoginPage = (() => {
 
     const res = await ApiClient.request('/api/accounts/otp/verify/', {
       method: 'POST',
-      body: { phone_number: _phone, code: code },
+      body: { phone: _phone, code: code },
     });
 
     _setLoading('verify-otp', false);
