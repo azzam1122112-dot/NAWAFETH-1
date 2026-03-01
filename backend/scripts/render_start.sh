@@ -3,9 +3,10 @@ set -euo pipefail
 
 python manage.py migrate --noinput
 
-# collectstatic already runs during Render build. Keep startup fast to avoid
-# boot-time port scan timeouts; allow opt-in override when needed.
-if [ "${RUN_COLLECTSTATIC_ON_START:-0}" = "1" ]; then
+# Ensure static manifest exists. You can force collectstatic on boot with:
+# RUN_COLLECTSTATIC_ON_START=1
+if [ "${RUN_COLLECTSTATIC_ON_START:-0}" = "1" ] || [ ! -d "staticfiles" ] || [ ! -f "staticfiles/staticfiles.json" ]; then
+	echo "[start] staticfiles manifest missing (or forced) — running collectstatic..."
 	python manage.py collectstatic --noinput
 fi
 
