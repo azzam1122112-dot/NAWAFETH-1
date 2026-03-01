@@ -131,3 +131,25 @@ def register_provider_page(request):
 
 def extras_page(request):
     return render(request, "mobile_web/extras/index.html")
+
+
+# ── Session 4 — Final 5 pages ──
+
+def client_order_detail_page(request, order_id):
+    return render(request, "mobile_web/orders/client-detail.html")
+
+
+def provider_order_detail_page(request, order_id):
+    return render(request, "mobile_web/orders/provider-detail.html")
+
+
+def request_quote_page(request):
+    return render(request, "mobile_web/services/quote.html")
+
+
+def urgent_request_page(request):
+    return render(request, "mobile_web/services/urgent.html")
+
+
+def complete_profile_page(request):
+    return render(request, "mobile_web/provider/complete-profile.html")

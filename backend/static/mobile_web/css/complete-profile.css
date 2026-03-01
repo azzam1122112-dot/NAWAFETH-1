@@ -1,0 +1,46 @@
+/* ── Complete Profile ── */
+.nw-cp{padding-bottom:24px;min-height:100vh;background:#F3F4FC}
+
+.nw-cp-topbar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:transparent}
+.nw-cp-topbar h1{flex:1;font-size:15px;font-weight:700;color:#333}
+.nw-cp-back{background:none;border:none;cursor:pointer;color:#333;display:flex;align-items:center}
+.nw-cp-loading{text-align:center;padding:60px 0}
+.nw-cp-error{text-align:center;padding:40px 16px}
+.nw-cp-error .material-icons-round{font-size:64px;color:#ccc}
+.nw-cp-error p{color:#666;margin:16px 0}
+.nw-cp-body{padding:0 16px}
+
+/* Cards */
+.nw-card{background:#fff;border-radius:18px;padding:14px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+
+/* Progress */
+.nw-cp-progress h3{font-size:14px;font-weight:700;margin:0 0 6px}
+.nw-progress-bar{height:7px;background:#e0e0e0;border-radius:40px;overflow:hidden;margin-bottom:6px}
+.nw-progress-fill{height:100%;background:#663d90;border-radius:40px;transition:width .4s}
+.nw-progress-meta{display:flex;align-items:flex-start;gap:6px;font-size:11px;color:#666}
+.nw-progress-meta b{font-size:13px;color:#333;white-space:nowrap}
+
+/* Section tiles */
+.nw-cp-section{cursor:pointer;transition:border-color .2s}
+.nw-cp-section:hover{border-color:rgba(102,61,144,.25)}
+.nw-cp-section-row{display:flex;align-items:center;gap:12px}
+.nw-cp-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.nw-cp-avatar .material-icons-round{font-size:20px}
+.nw-cp-section-info{flex:1}
+.nw-cp-section-info h4{font-size:14px;font-weight:600;margin:0 0 2px}
+.nw-cp-section-info p{font-size:11.5px;color:#666;margin:0;line-height:1.4}
+.nw-cp-extra{font-size:10.5px;color:#888}
+.nw-cp-arrow{color:#999;font-size:22px}
+.nw-cp-check{color:#4caf50;font-size:22px}
+
+/* Done state */
+.nw-cp-section.is-done{border:1.4px solid rgba(76,175,80,.4)}
+.nw-cp-section.is-done .nw-cp-arrow{display:none}
+
+/* Basic highlight */
+.nw-cp-basic{background:#EEF2FF;border:1.4px solid rgba(102,61,144,.4)}
+
+/* Button */
+.nw-btn-primary{padding:10px 24px;border:none;border-radius:12px;background:#663d90;color:#fff;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif}
+.nw-spinner{width:36px;height:36px;border:3px solid #e0e0e0;border-top-color:#663d90;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}

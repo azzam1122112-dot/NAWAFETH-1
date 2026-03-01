@@ -1,0 +1,143 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}تفاصيل الطلب | نوافذ{% endblock %}
+{% block page_id %}client-order-detail{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/client-order-detail.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-cod">
+    <!-- Top bar -->
+    <div class="nw-cod-topbar">
+      <button class="nw-cod-back" onclick="history.back()">
+        <span class="material-icons-round">arrow_forward</span>
+      </button>
+      <h1>تفاصيل الطلب</h1>
+      <button class="nw-cod-chat" id="btn-open-chat" title="فتح محادثة">
+        <span class="material-icons-round">chat_bubble_outline</span>
+      </button>
+    </div>
+
+    <!-- Loading / error states -->
+    <div class="nw-cod-loading" id="cod-loading">
+      <div class="nw-spinner"></div>
+    </div>
+    <div class="nw-cod-error" id="cod-error" style="display:none">
+      <span class="material-icons-round">error_outline</span>
+      <p id="cod-error-msg">تعذّر تحميل تفاصيل الطلب</p>
+      <button class="nw-btn-primary" id="btn-retry">إعادة المحاولة</button>
+    </div>
+
+    <!-- Content -->
+    <div class="nw-cod-body" id="cod-body" style="display:none">
+
+      <!-- Header card -->
+      <div class="nw-card nw-cod-header">
+        <div class="nw-cod-header-top">
+          <div class="nw-cod-id-row">
+            <span class="nw-cod-id" id="cod-display-id"></span>
+            <span class="nw-badge nw-badge-type" id="cod-type-badge" style="display:none"></span>
+          </div>
+          <span class="nw-pill" id="cod-status-pill"></span>
+        </div>
+        <p class="nw-cod-title" id="cod-title-text"></p>
+        <p class="nw-cod-category" id="cod-category"></p>
+        <p class="nw-cod-date" id="cod-created-at"></p>
+        <div class="nw-cod-provider-row" id="cod-provider-row" style="display:none">
+          <span class="material-icons-round">person_outline</span>
+          <span id="cod-provider-name"></span>
+          <span class="material-icons-round nw-cod-phone-icon" id="cod-phone-icon" style="display:none">phone</span>
+          <span id="cod-provider-phone"></span>
+        </div>
+      </div>
+
+      <!-- Status-specific card (completed / in_progress / cancelled) -->
+      <div class="nw-card nw-cod-status-card" id="cod-completed-card" style="display:none">
+        <div class="nw-form-group">
+          <label>موعد التسليم الفعلي</label>
+          <div class="nw-info-box" id="cod-delivered-at"></div>
+        </div>
+        <div class="nw-form-group">
+          <label>قيمة الخدمة الفعلية (SR)</label>
+          <div class="nw-info-box" id="cod-actual-amount"></div>
+        </div>
+        <button class="nw-btn-outline-primary nw-w-full" id="btn-toggle-rating">تقييم الخدمة</button>
+        <div class="nw-cod-rating-form" id="cod-rating-form" style="display:none">
+          <div class="nw-rating-row"><span>سرعة الاستجابة</span><div class="nw-stars" data-field="response_speed"></div></div>
+          <div class="nw-rating-row"><span>التكلفة مقابل الخدمة</span><div class="nw-stars" data-field="cost_value"></div></div>
+          <div class="nw-rating-row"><span>جودة الخدمة</span><div class="nw-stars" data-field="quality"></div></div>
+          <div class="nw-rating-row"><span>المصداقية</span><div class="nw-stars" data-field="credibility"></div></div>
+          <div class="nw-rating-row"><span>وقت الإنجاز</span><div class="nw-stars" data-field="on_time"></div></div>
+          <label class="nw-mt-12">تعليق على الخدمة المقدمة (300 حرف)</label>
+          <textarea id="cod-rating-comment" maxlength="300" rows="3"></textarea>
+          <button class="nw-btn-primary nw-w-full nw-mt-12" id="btn-submit-rating">إرسال التقييم</button>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cod-status-card" id="cod-inprogress-card" style="display:none">
+        <div class="nw-form-group"><label>موعد التسليم المتوقع</label><div class="nw-info-box" id="cod-expected-delivery"></div></div>
+        <div class="nw-form-group"><label>قيمة الخدمة المقدرة (SR)</label><div class="nw-info-box" id="cod-estimated-amount"></div></div>
+        <div class="nw-form-group"><label>المبلغ المستلم (SR)</label><div class="nw-info-box" id="cod-received-amt"></div></div>
+        <div class="nw-form-group"><label>المبلغ المتبقي (SR)</label><div class="nw-info-box" id="cod-remaining-amt"></div></div>
+      </div>
+
+      <div class="nw-card nw-cod-status-card" id="cod-cancelled-card" style="display:none">
+        <div class="nw-form-group"><label>تاريخ الإلغاء</label><div class="nw-info-box" id="cod-cancel-date"></div></div>
+        <div class="nw-form-group"><label>سبب الإلغاء</label><div class="nw-info-box" id="cod-cancel-reason"></div></div>
+      </div>
+
+      <!-- Editable: title -->
+      <div class="nw-card">
+        <div class="nw-section-hdr">
+          <span>عنوان الطلب</span>
+          <button class="nw-edit-toggle" id="btn-edit-title" style="display:none">تعديل</button>
+        </div>
+        <input type="text" class="nw-input" id="cod-edit-title" disabled>
+      </div>
+
+      <!-- Editable: details -->
+      <div class="nw-card">
+        <div class="nw-section-hdr">
+          <span>تفاصيل الطلب</span>
+          <button class="nw-edit-toggle" id="btn-edit-details" style="display:none">تعديل</button>
+        </div>
+        <textarea class="nw-input" id="cod-edit-details" rows="5" disabled></textarea>
+        <p class="nw-note" id="cod-edit-note" style="display:none">تنبيه: سيتم إشعار مقدم الخدمة بأي تعديل في بيانات الطلب.</p>
+      </div>
+
+      <!-- Attachments -->
+      <div class="nw-card">
+        <h3>المرفقات</h3>
+        <div id="cod-attachments" class="nw-cod-attachments"><p class="nw-muted">لا يوجد مرفقات</p></div>
+      </div>
+
+      <!-- Status log -->
+      <div class="nw-card" id="cod-statuslog-card" style="display:none">
+        <h3>سجل تغيير الحالة</h3>
+        <div id="cod-status-logs" class="nw-timeline"></div>
+      </div>
+
+      <!-- Reminder -->
+      <div class="nw-card">
+        <div class="nw-section-hdr-icon">
+          <span class="material-icons-round">notifications_none</span>
+          <span>ارسال تنبيه وتذكير للمختص</span>
+        </div>
+        <textarea id="cod-reminder" class="nw-input" rows="5" placeholder="اكتب رسالتك هنا..."></textarea>
+      </div>
+
+      <!-- Bottom buttons -->
+      <div class="nw-cod-actions">
+        <button class="nw-btn-outline" onclick="history.back()">رجوع</button>
+        <button class="nw-btn-primary" id="btn-save" style="display:none">حفظ</button>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/client-order-detail.js' %}"></script>
+{% endblock %}

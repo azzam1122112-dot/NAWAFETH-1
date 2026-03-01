@@ -1,0 +1,136 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}إكمال الملف التعريفي | نوافذ{% endblock %}
+{% block page_id %}complete-profile{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/complete-profile.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-cp">
+    <!-- Top bar -->
+    <div class="nw-cp-topbar">
+      <button class="nw-cp-back" onclick="history.back()"><span class="material-icons-round">arrow_forward</span></button>
+      <h1>إكمال الملف التعريفي</h1>
+    </div>
+
+    <!-- Loading -->
+    <div class="nw-cp-loading" id="cp-loading"><div class="nw-spinner"></div></div>
+
+    <!-- Error -->
+    <div class="nw-cp-error" id="cp-error" style="display:none">
+      <span class="material-icons-round">cloud_off</span>
+      <p id="cp-error-msg">تعذر جلب بيانات الملف</p>
+      <button class="nw-btn-primary" id="btn-cp-retry">إعادة المحاولة</button>
+    </div>
+
+    <!-- Body -->
+    <div class="nw-cp-body" id="cp-body" style="display:none">
+
+      <!-- Progress card -->
+      <div class="nw-card nw-cp-progress">
+        <h3>نسبة اكتمال الملف</h3>
+        <div class="nw-progress-bar">
+          <div class="nw-progress-fill" id="cp-progress-fill" style="width:30%"></div>
+        </div>
+        <div class="nw-progress-meta">
+          <b id="cp-percent">30%</b>
+          <span>30٪ من التسجيل الأساسي، والباقي من إكمال الأقسام أدناه.</span>
+        </div>
+      </div>
+
+      <!-- Basic info (always complete) -->
+      <div class="nw-card nw-cp-section nw-cp-basic" onclick="NawafethUi.toast('هذه البيانات تم إدخالها أثناء التسجيل الأولي','info')">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(102,61,144,.08)">
+            <span class="material-icons-round" style="color:#663d90">person_pin_circle</span>
+          </div>
+          <div class="nw-cp-section-info">
+            <h4>بيانات التسجيل الأساسية</h4>
+            <p>المعلومات الأساسية + تصنيف الاختصاص + بيانات التواصل الأساسية.<br>تمت تعبئتها أثناء التسجيل.</p>
+          </div>
+          <span class="material-icons-round nw-cp-check">check_circle</span>
+        </div>
+      </div>
+
+      <!-- Dynamic sections -->
+      <div class="nw-card nw-cp-section" data-section="service_details">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(63,81,181,.08)"><span class="material-icons-round" style="color:#3f51b5">home_repair_service</span></div>
+          <div class="nw-cp-section-info">
+            <h4>تفاصيل الخدمة</h4>
+            <p>اسم الخدمة ووصف مختصر.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cp-section" data-section="additional">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(0,150,136,.08)"><span class="material-icons-round" style="color:#009688">notes</span></div>
+          <div class="nw-cp-section-info">
+            <h4>معلومات إضافية عنك وخدماتك</h4>
+            <p>تفاصيل موسّعة عن خدماتك ومؤهلاتك وخبراتك.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cp-section" data-section="contact_full">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(33,150,243,.08)"><span class="material-icons-round" style="color:#2196f3">call</span></div>
+          <div class="nw-cp-section-info">
+            <h4>معلومات التواصل الكاملة</h4>
+            <p>روابط التواصل الاجتماعي، واتساب، موقع إلكتروني.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cp-section" data-section="lang_loc">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(255,152,0,.08)"><span class="material-icons-round" style="color:#ff9800">language</span></div>
+          <div class="nw-cp-section-info">
+            <h4>اللغة ونطاق الخدمة</h4>
+            <p>اللغات التي تجيدها ونطاق تقديم خدماتك.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cp-section" data-section="content">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(156,39,176,.08)"><span class="material-icons-round" style="color:#9c27b0">image</span></div>
+          <div class="nw-cp-section-info">
+            <h4>محتوى أعمالك (Portfolio)</h4>
+            <p>أضف صوراً أو نماذج من أعمالك السابقة.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+
+      <div class="nw-card nw-cp-section" data-section="seo">
+        <div class="nw-cp-section-row">
+          <div class="nw-cp-avatar" style="background:rgba(96,125,139,.08)"><span class="material-icons-round" style="color:#607d8b">search</span></div>
+          <div class="nw-cp-section-info">
+            <h4>SEO والكلمات المفتاحية</h4>
+            <p>تعريف محركات البحث بنوعية خدمتك.</p>
+            <span class="nw-cp-extra"></span>
+          </div>
+          <span class="material-icons-round nw-cp-arrow">chevron_left</span>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/complete-profile.js' %}"></script>
+{% endblock %}

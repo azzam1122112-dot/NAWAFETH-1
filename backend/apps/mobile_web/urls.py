@@ -39,4 +39,10 @@ urlpatterns = [
     path("settings/notifications/", views.notification_settings_page, name="notification_settings"),
     path("register-provider/", views.register_provider_page, name="register_provider"),
     path("extras/", views.extras_page, name="extras"),
+    # ── Session 4 — Final 5 pages ──
+    path("orders/client/<int:order_id>/", views.client_order_detail_page, name="client_order_detail"),
+    path("orders/provider/<int:order_id>/", views.provider_order_detail_page, name="provider_order_detail"),
+    path("services/quote/", views.request_quote_page, name="request_quote"),
+    path("services/urgent/", views.urgent_request_page, name="urgent_request"),
+    path("provider/complete-profile/", views.complete_profile_page, name="complete_profile"),
 ]

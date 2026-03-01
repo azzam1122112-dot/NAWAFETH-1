@@ -1,0 +1,78 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}طلب عروض أسعار | نوافذ{% endblock %}
+{% block page_id %}request-quote{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/request-quote.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-rq">
+    <!-- Header -->
+    <div class="nw-rq-header">
+      <button class="nw-rq-back" onclick="history.back()"><span class="material-icons-round">arrow_forward_ios</span></button>
+      <h1>طلب عروض أسعار</h1>
+      <span class="material-icons-round nw-rq-icon">request_quote</span>
+    </div>
+
+    <!-- Loading -->
+    <div class="nw-rq-loading" id="rq-loading"><div class="nw-spinner"></div></div>
+
+    <!-- Form -->
+    <form class="nw-rq-form" id="rq-form" style="display:none">
+      <div class="nw-form-group">
+        <label>التصنيف الرئيسي</label>
+        <select id="rq-category" required><option value="">اختر التصنيف</option></select>
+      </div>
+      <div class="nw-form-group">
+        <label>التصنيف الفرعي</label>
+        <select id="rq-subcategory" required><option value="">اختر الفرعي</option></select>
+      </div>
+      <div class="nw-form-group">
+        <label>عنوان الطلب</label>
+        <input type="text" class="nw-input" id="rq-title" maxlength="80" placeholder="أدخل عنوان الطلب" required>
+      </div>
+      <div class="nw-form-group">
+        <label>تفاصيل الطلب</label>
+        <textarea class="nw-input" id="rq-details" rows="4" maxlength="500" placeholder="اشرح ما تحتاجه بالتفصيل..." required></textarea>
+        <span class="nw-counter"><span id="rq-details-count">0</span>/500</span>
+      </div>
+      <div class="nw-form-group">
+        <label>المرفقات (اختياري)</label>
+        <div class="nw-attach-row">
+          <label class="nw-attach-btn" for="rq-file-img"><span class="material-icons-round">camera_alt</span> صورة</label>
+          <label class="nw-attach-btn" for="rq-file-doc"><span class="material-icons-round">attach_file</span> ملف</label>
+          <input type="file" id="rq-file-img" accept="image/*" multiple hidden>
+          <input type="file" id="rq-file-doc" multiple hidden>
+        </div>
+        <div class="nw-attach-preview" id="rq-previews"></div>
+      </div>
+      <div class="nw-form-group">
+        <label>آخر موعد لاستلام العروض</label>
+        <input type="date" class="nw-input" id="rq-deadline">
+      </div>
+      <div class="nw-rq-btns">
+        <button type="button" class="nw-btn-outline" onclick="history.back()">إلغاء</button>
+        <button type="submit" class="nw-btn-primary nw-flex-2" id="rq-submit">
+          <span class="material-icons-round">send</span> تقديم الطلب
+        </button>
+      </div>
+    </form>
+
+    <!-- Success overlay -->
+    <div class="nw-rq-success" id="rq-success" style="display:none">
+      <div class="nw-rq-success-inner">
+        <span class="material-icons-round nw-success-icon">check_circle</span>
+        <h2>تم إرسال الطلب بنجاح!</h2>
+        <p>ستتلقى العروض قريبًا في قسم طلباتي.</p>
+        <button class="nw-btn-primary" onclick="history.back()">العودة</button>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/request-quote.js' %}"></script>
+{% endblock %}
