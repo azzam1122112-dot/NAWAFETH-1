@@ -156,6 +156,9 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# عدم إلقاء خطأ 500 عند فقدان ملف من manifest (يُرجع المسار بدون hash بدلاً من الانهيار)
+WHITENOISE_MANIFEST_STRICT = False
+
 # Cloudflare R2 / S3-compatible media storage (optional)
 USE_R2_MEDIA = env_bool("USE_R2_MEDIA", False)
 
