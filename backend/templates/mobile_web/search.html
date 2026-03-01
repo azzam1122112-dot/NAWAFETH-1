@@ -1,0 +1,56 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — بحث مقدمي الخدمة{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <!-- Search Hero -->
+  <section class="search-hero">
+    <div class="container">
+      <div class="search-input-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" class="search-input" placeholder="ابحث عن مقدم خدمة..." autocomplete="off">
+        <button class="search-clear hidden" id="search-clear">✕</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="container">
+    <!-- Category Filters -->
+    <div class="filter-row" id="filter-row">
+      <button class="filter-chip active" data-cat-id="">الكل</button>
+      <!-- populated by JS -->
+    </div>
+
+    <!-- Sort -->
+    <div class="sort-row">
+      <label class="sort-label">ترتيب:</label>
+      <select id="sort-select" class="sort-select">
+        <option value="">الافتراضي</option>
+        <option value="rating">الأعلى تقييماً</option>
+        <option value="followers">الأكثر متابعة</option>
+      </select>
+      <span class="results-count" id="results-count"></span>
+    </div>
+
+    <!-- Providers Grid -->
+    <div class="providers-grid" id="providers-list">
+      <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
+      <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
+      <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
+      <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state hidden" id="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc"><circle cx="11" cy="11" r="8" fill="none" stroke="#ccc" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#ccc" stroke-width="2"/></svg>
+      <p>لا توجد نتائج</p>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/searchPage.js' %}"></script>
+{% endblock %}

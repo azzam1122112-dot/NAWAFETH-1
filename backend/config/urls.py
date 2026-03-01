@@ -21,7 +21,15 @@ from django.conf.urls.static import static
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.health import HealthCheckView, HealthLiveView, HealthReadyView, healthz
-from apps.mobile_web.views import MobileWebHomeView
+from apps.mobile_web.views import (
+    MobileWebHomeView,
+    MobileWebLoginView,
+    MobileWebSearchView,
+    MobileWebOrdersView,
+    MobileWebInteractiveView,
+    MobileWebProfileView,
+    MobileWebProviderDetailView,
+)
 
 admin.site.site_header = _("إدارة منصة نوافذ")
 admin.site.site_title = _("لوحة إدارة نوافذ")
@@ -70,6 +78,12 @@ urlpatterns = [
 
     # Root — serve responsive home page at /
     path("", MobileWebHomeView.as_view(), name="home"),
+    path("login/", MobileWebLoginView.as_view(), name="login"),
+    path("search/", MobileWebSearchView.as_view(), name="search"),
+    path("orders/", MobileWebOrdersView.as_view(), name="orders"),
+    path("interactive/", MobileWebInteractiveView.as_view(), name="interactive"),
+    path("profile/", MobileWebProfileView.as_view(), name="profile"),
+    path("provider/<int:provider_id>/", MobileWebProviderDetailView.as_view(), name="provider_detail"),
 ]
 
 if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):

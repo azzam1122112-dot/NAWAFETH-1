@@ -1,0 +1,74 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — مقدم خدمة{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <!-- Provider header -->
+    <div class="prov-detail-hero">
+      <div class="prov-cover" id="prov-cover"><div class="prov-cover-placeholder shimmer"></div></div>
+      <div class="prov-detail-info">
+        <div class="prov-avatar" id="prov-avatar"></div>
+        <div class="prov-meta">
+          <div class="prov-name-row">
+            <h1 class="prov-name" id="prov-name"></h1>
+            <span id="prov-badge"></span>
+          </div>
+          <p class="prov-city" id="prov-city"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="prov-stats-bar" id="prov-stats">
+      <div class="stat-item"><span class="stat-value" id="stat-rating">-</span><span class="stat-label">التقييم</span></div>
+      <div class="stat-item"><span class="stat-value" id="stat-followers">0</span><span class="stat-label">متابع</span></div>
+      <div class="stat-item"><span class="stat-value" id="stat-likes">0</span><span class="stat-label">إعجاب</span></div>
+      <div class="stat-item"><span class="stat-value" id="stat-completed">0</span><span class="stat-label">مكتمل</span></div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="prov-actions" id="prov-actions">
+      <button class="btn-primary" id="btn-follow">متابعة</button>
+      <button class="btn-secondary" id="btn-message">مراسلة</button>
+      <button class="btn-secondary" id="btn-request">طلب خدمة</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-row" id="prov-tabs">
+      <button class="tab-btn active" data-tab="services">الخدمات</button>
+      <button class="tab-btn" data-tab="portfolio">الأعمال</button>
+      <button class="tab-btn" data-tab="reviews">التقييمات</button>
+    </div>
+
+    <!-- Tab panels -->
+    <div id="tab-services" class="tab-panel">
+      <div class="services-list" id="services-list"></div>
+      <div class="empty-state hidden" id="services-empty">
+        <p>لم يتم إضافة خدمات بعد</p>
+      </div>
+    </div>
+
+    <div id="tab-portfolio" class="tab-panel hidden">
+      <div class="media-grid" id="portfolio-list"></div>
+      <div class="empty-state hidden" id="portfolio-empty">
+        <p>لم يتم إضافة أعمال بعد</p>
+      </div>
+    </div>
+
+    <div id="tab-reviews" class="tab-panel hidden">
+      <div class="reviews-summary" id="reviews-summary"></div>
+      <div class="reviews-list" id="reviews-list"></div>
+      <div class="empty-state hidden" id="reviews-empty">
+        <p>لا توجد تقييمات بعد</p>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/providerDetailPage.js' %}"></script>
+{% endblock %}

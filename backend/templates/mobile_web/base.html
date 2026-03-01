@@ -1,0 +1,160 @@
+{% load static %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#673AB7">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<title>{% block title %}نوافــذ{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'mobile_web/css/app.css' %}">
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- ====== TOP NAVBAR ====== -->
+<header id="top-navbar">
+  <div class="container navbar-inner">
+    <div class="navbar-right">
+      <button class="nav-icon-btn mobile-only" id="btn-menu" aria-label="القائمة">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <a href="/" class="navbar-brand">نوافــذ</a>
+    </div>
+    <nav class="navbar-links desktop-only">
+      <a href="/" class="nav-link {% block nav_home %}{% endblock %}">الرئيسية</a>
+      <a href="/orders/" class="nav-link {% block nav_orders %}{% endblock %}">طلباتي</a>
+      <a href="/interactive/" class="nav-link {% block nav_interactive %}{% endblock %}">تفاعلي</a>
+      <a href="/profile/" class="nav-link {% block nav_profile %}{% endblock %}">نافذتي</a>
+    </nav>
+    <div class="navbar-left">
+      <a href="/search/" class="nav-icon-btn" aria-label="بحث">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </a>
+      <button class="nav-icon-btn" id="btn-notifications" aria-label="الإشعارات">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="notif-badge hidden" id="notif-badge"></span>
+      </button>
+      <button class="nav-icon-btn" id="btn-chat" aria-label="المحادثات">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      </button>
+      <span id="user-avatar-nav" class="nav-avatar hidden"></span>
+    </div>
+  </div>
+</header>
+
+<!-- ====== MOBILE SIDEBAR ====== -->
+<div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+<aside id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="sidebar-avatar" id="sidebar-avatar"></div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-name" id="sidebar-name">زائر</div>
+        <div class="sidebar-role" id="sidebar-role">تصفح كضيف</div>
+      </div>
+    </div>
+    <button class="sidebar-close" id="sidebar-close">✕</button>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="sidebar-link {% block sidebar_home %}{% endblock %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      الرئيسية
+    </a>
+    <a href="/search/" class="sidebar-link">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2"/></svg>
+      بحث مقدمي الخدمة
+    </a>
+    <a href="/orders/" class="sidebar-link {% block sidebar_orders %}{% endblock %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/></svg>
+      طلباتي
+    </a>
+    <a href="/interactive/" class="sidebar-link {% block sidebar_interactive %}{% endblock %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      تفاعلي
+    </a>
+    <a href="/profile/" class="sidebar-link {% block sidebar_profile %}{% endblock %}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      نافذتي
+    </a>
+    <div class="sidebar-divider"></div>
+    <a href="/login/" class="sidebar-link" id="sidebar-login-link">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/></svg>
+      تسجيل الدخول
+    </a>
+    <button class="sidebar-link sidebar-logout hidden" id="sidebar-logout">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      تسجيل خروج
+    </button>
+  </nav>
+</aside>
+
+{% block content %}{% endblock %}
+
+<!-- ====== FOOTER ====== -->
+<footer id="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="footer-logo">نوافــذ</span>
+      <p class="footer-desc">منصة تربط طالبي الخدمات بمقدميها بسهولة وأمان</p>
+    </div>
+    <div class="footer-links">
+      <h4>روابط سريعة</h4>
+      <a href="/">الرئيسية</a>
+      <a href="/search/">بحث مقدمي الخدمة</a>
+      <a href="/orders/">طلباتي</a>
+      <a href="/interactive/">تفاعلي</a>
+    </div>
+    <div class="footer-links">
+      <h4>الدعم</h4>
+      <a href="#">تواصل معنا</a>
+      <a href="#">الأسئلة الشائعة</a>
+      <a href="#">سياسة الخصوصية</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="container">© 2026 نوافــذ — جميع الحقوق محفوظة</div>
+  </div>
+</footer>
+
+<!-- ====== MOBILE BOTTOM NAV ====== -->
+<nav id="bottom-nav" class="mobile-only" aria-label="التنقل الرئيسي">
+  <a href="/" class="bnav-item {% block bnav_home %}{% endblock %}" data-index="0">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    <span>الرئيسية</span>
+  </a>
+  <a href="/orders/" class="bnav-item {% block bnav_orders %}{% endblock %}" data-index="1">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/></svg>
+    <span>طلباتي</span>
+  </a>
+  <button class="bnav-fab" id="nav-fab" aria-label="إضافة خدمة">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+  </button>
+  <a href="/interactive/" class="bnav-item {% block bnav_interactive %}{% endblock %}" data-index="2">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+    <span>تفاعلي</span>
+  </a>
+  <a href="/profile/" class="bnav-item {% block bnav_profile %}{% endblock %}" data-index="3">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+    <span>نافذتي</span>
+  </a>
+</nav>
+
+<!-- ====== OFFLINE BANNER ====== -->
+<div id="offline-banner" class="offline-banner" style="display:none">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/><path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.56 9"/><path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+  <span>أنت غير متصل — يتم عرض آخر نسخة محفوظة</span>
+</div>
+
+<!-- ====== SHARED JS ====== -->
+<script src="{% static 'mobile_web/js/cache.js' %}"></script>
+<script src="{% static 'mobile_web/js/apiClient.js' %}"></script>
+<script src="{% static 'mobile_web/js/utils.js' %}"></script>
+<script src="{% static 'mobile_web/js/auth.js' %}"></script>
+<script src="{% static 'mobile_web/js/nav.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
