@@ -7,10 +7,12 @@ cd "${PROJECT_ROOT}"
 
 export DJANGO_ENV="${DJANGO_ENV:-prod}"
 
-# ── Migrations ──────────────────────────────────────────────
+# ── Migrations (run in background to avoid blocking startup) ────────
+# On Render free plan, cold starts must be fast to avoid Cloudflare 524.
+# Run migrations with a timeout to prevent hanging on DB connection issues.
 if [ "${RUN_MIGRATIONS_ON_START:-1}" = "1" ]; then
-	echo "[start] Running migrations..."
-	python manage.py migrate --noinput
+	echo "[start] Running migrations (timeout 30s)..."
+	timeout 30 python manage.py migrate --noinput 2>&1 || echo "[start] WARNING: migrate timed out or failed, continuing anyway."
 fi
 
 # ── Static files ────────────────────────────────────────────
@@ -19,8 +21,8 @@ fi
 # WHITENOISE_MANIFEST_STRICT=False (in settings) prevents 500 errors
 # even if something goes wrong here.
 if [ ! -f "staticfiles/staticfiles.json" ]; then
-	echo "[start] Static manifest missing — running collectstatic..."
-	python manage.py collectstatic --noinput || echo "[start] WARNING: collectstatic failed, continuing anyway."
+	echo "[start] Static manifest missing — running collectstatic (timeout 30s)..."
+	timeout 30 python manage.py collectstatic --noinput 2>&1 || echo "[start] WARNING: collectstatic failed, continuing anyway."
 else
 	echo "[start] Static manifest OK."
 fi

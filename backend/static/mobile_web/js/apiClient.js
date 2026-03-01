@@ -27,18 +27,26 @@ const ApiClient = (() => {
     const headers = { 'Accept': 'application/json' };
     const token = _getToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    if (opts.body) headers['Content-Type'] = 'application/json';
+
+    const isFormData = opts.formData === true || (opts.body instanceof FormData);
+    // Only set Content-Type for non-FormData bodies (browser sets multipart boundary automatically)
+    if (opts.body && !isFormData) headers['Content-Type'] = 'application/json';
 
     const controller = new AbortController();
     const timeoutId = opts.timeout
       ? setTimeout(() => controller.abort(), opts.timeout)
       : null;
 
+    let body = undefined;
+    if (opts.body) {
+      body = isFormData ? opts.body : (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body));
+    }
+
     try {
       const res = await fetch(url, {
         method: opts.method || 'GET',
         headers,
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        body,
         signal: controller.signal,
       });
       if (timeoutId) clearTimeout(timeoutId);

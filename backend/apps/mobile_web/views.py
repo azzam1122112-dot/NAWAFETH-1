@@ -31,3 +31,31 @@ class MobileWebProfileView(TemplateView):
 
 class MobileWebProviderDetailView(TemplateView):
     template_name = "mobile_web/provider_detail.html"
+
+
+class MobileWebNotificationsView(TemplateView):
+    template_name = "mobile_web/notifications.html"
+
+
+class MobileWebChatsView(TemplateView):
+    template_name = "mobile_web/chats.html"
+
+
+class MobileWebChatDetailView(TemplateView):
+    template_name = "mobile_web/chat_detail.html"
+
+
+class MobileWebAddServiceView(TemplateView):
+    template_name = "mobile_web/add_service.html"
+
+
+class MobileWebUrgentRequestView(TemplateView):
+    template_name = "mobile_web/urgent_request.html"
+
+
+class MobileWebRequestQuoteView(TemplateView):
+    template_name = "mobile_web/request_quote.html"
+
+
+class MobileWebSettingsView(TemplateView):
+    template_name = "mobile_web/settings.html"

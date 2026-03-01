@@ -1,0 +1,81 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — الإعدادات{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <!-- Auth gate -->
+    <div id="auth-gate" class="auth-gate hidden">
+      <div class="auth-gate-icon">⚙️</div>
+      <h2>سجّل دخولك</h2>
+      <p>يمكنك تعديل بياناتك بعد تسجيل الدخول</p>
+      <a href="/login/?next=/settings/" class="btn btn-primary">تسجيل الدخول</a>
+    </div>
+
+    <div id="settings-content" class="hidden">
+      <div class="page-header">
+        <h1>إعدادات الحساب</h1>
+      </div>
+
+      <!-- Profile Header -->
+      <div class="settings-profile-header">
+        <div class="settings-avatar" id="settings-avatar"></div>
+        <div class="settings-profile-info">
+          <div class="settings-username" id="settings-username"></div>
+          <div class="settings-email" id="settings-email"></div>
+        </div>
+      </div>
+
+      <!-- Account Info -->
+      <div class="form-card">
+        <h3 class="form-card-title">معلومات الحساب</h3>
+
+        <div class="form-group">
+          <label class="form-label">اسم العضوية</label>
+          <input type="text" class="form-input" id="inp-username" disabled>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">الاسم الأول</label>
+          <input type="text" class="form-input" id="inp-first-name" placeholder="الاسم الأول">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">الاسم الأخير</label>
+          <input type="text" class="form-input" id="inp-last-name" placeholder="الاسم الأخير">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">رقم الجوال</label>
+          <input type="tel" class="form-input" id="inp-phone" dir="ltr" disabled>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">البريد الإلكتروني</label>
+          <input type="email" class="form-input" id="inp-email" placeholder="example@mail.com" dir="ltr">
+        </div>
+
+        <button class="btn-primary" id="btn-save">
+          <span id="save-text">حفظ التغييرات</span>
+          <span class="spinner hidden" id="save-spinner"></span>
+        </button>
+        <div class="form-success hidden" id="save-success">تم حفظ التغييرات بنجاح ✓</div>
+        <div class="form-error hidden" id="save-error"></div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="form-card danger-zone">
+        <h3 class="form-card-title" style="color:#F44336">المنطقة الخطرة</h3>
+        <p class="form-hint">سيتم حذف حسابك وجميع بياناتك نهائيًا ولا يمكن التراجع عن هذا الإجراء</p>
+        <button class="btn-danger-outline" id="btn-delete-account">حذف الحساب نهائيًا</button>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/settingsPage.js' %}"></script>
+{% endblock %}

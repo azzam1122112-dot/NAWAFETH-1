@@ -1,0 +1,74 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — إضافة خدمة{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <div class="page-header" style="text-align:center;padding-top:12px">
+      <h1>مرحباً بك في نوافذ!</h1>
+      <p class="page-subtitle">اختر نوع الخدمة التي ترغب بطلبها</p>
+    </div>
+
+    <div class="service-actions-grid">
+      <!-- Search Provider -->
+      <a href="/search/" class="service-action-card">
+        <div class="sac-icon purple-bg">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#673AB7"><circle cx="11" cy="11" r="8" fill="none" stroke="#673AB7" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#673AB7" stroke-width="2"/></svg>
+        </div>
+        <div class="sac-body">
+          <h3>البحث عن مزود خدمة</h3>
+          <p>استعرض مزودي الخدمات حسب الموقع والتخصص</p>
+        </div>
+        <span class="sac-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#bbb"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </span>
+      </a>
+
+      <!-- Urgent Request -->
+      <a href="/urgent-request/" class="service-action-card">
+        <div class="sac-icon orange-bg">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#FF9800"><path d="M11 15h2v2h-2v-2zm0-8h2v6h-2V7zm1-5C6.47 2 2 6.5 2 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2z"/></svg>
+        </div>
+        <div class="sac-body">
+          <h3>طلب خدمة عاجلة</h3>
+          <p>أرسل طلبًا عاجلًا وسيتم إشعار المزودين فورًا</p>
+        </div>
+        <span class="sac-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#bbb"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </span>
+      </a>
+
+      <!-- Request Quote -->
+      <a href="/request-quote/" class="service-action-card">
+        <div class="sac-icon teal-bg">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#009688"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        </div>
+        <div class="sac-body">
+          <h3>طلب عروض أسعار</h3>
+          <p>صف خدمتك وانتظر عروضًا متعددة من المزودين</p>
+        </div>
+        <span class="sac-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#bbb"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </span>
+      </a>
+    </div>
+
+    <!-- Categories -->
+    <div class="section-block">
+      <div class="section-title">التصنيفات المتوفرة</div>
+      <div class="categories-grid" id="cats-grid">
+        <div class="cat-item shimmer skeleton-cat"><div class="cat-icon"></div><div class="cat-name"></div></div>
+        <div class="cat-item shimmer skeleton-cat"><div class="cat-icon"></div><div class="cat-name"></div></div>
+        <div class="cat-item shimmer skeleton-cat"><div class="cat-icon"></div><div class="cat-name"></div></div>
+        <div class="cat-item shimmer skeleton-cat"><div class="cat-icon"></div><div class="cat-name"></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/addServicePage.js' %}"></script>
+{% endblock %}

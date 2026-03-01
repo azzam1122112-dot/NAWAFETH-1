@@ -21,9 +21,10 @@ OTP_APP_BYPASS_ALLOWLIST = [
     if p.strip()
 ]
 
-# Render (and similar PaaS) hostnames
-if ".onrender.com" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
-	ALLOWED_HOSTS.append(".onrender.com")
+# Render (and similar PaaS) hostnames + custom domain
+for _host in (".onrender.com", ".nawafthportal.com", "nawafthportal.com", "www.nawafthportal.com"):
+	if _host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+		ALLOWED_HOSTS.append(_host)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
@@ -51,9 +52,12 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
 	"https://nawafeth.app",
 	"https://admin.nawafeth.app",
+	"https://nawafthportal.com",
+	"https://www.nawafthportal.com",
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
 	r"^https://[a-z0-9-]+\.onrender\.com$",
+	r"^https://([a-z0-9-]+\.)?nawafthportal\.com$",
 ]
 
 _cors_env = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").strip()
@@ -70,6 +74,9 @@ CSRF_TRUSTED_ORIGINS = [
 	"https://*.onrender.com",
 	"https://nawafeth.app",
 	"https://admin.nawafeth.app",
+	"https://nawafthportal.com",
+	"https://www.nawafthportal.com",
+	"https://*.nawafthportal.com",
 ]
 if _csrf_env:
 	CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_env.split(",") if o.strip()]

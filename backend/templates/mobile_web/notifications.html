@@ -1,0 +1,41 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — الإشعارات{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <!-- Auth gate -->
+    <div id="auth-gate" class="auth-gate hidden">
+      <div class="auth-gate-icon">🔔</div>
+      <h2>سجّل دخولك لعرض الإشعارات</h2>
+      <p>يمكنك تصفح إشعاراتك بعد تسجيل الدخول</p>
+      <a href="/login/?next=/notifications/" class="btn btn-primary">تسجيل الدخول</a>
+    </div>
+
+    <div id="notif-content" class="hidden">
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h1>الإشعارات <span id="notif-total" class="notif-total-badge"></span></h1>
+        <div class="notif-actions">
+          <button class="btn-sm" id="btn-mark-all">تمييز الكل كمقروء</button>
+          <button class="btn-sm btn-danger" id="btn-delete-old">حذف القديم</button>
+        </div>
+      </div>
+
+      <div id="notif-list" class="notif-list"></div>
+      <div id="notif-empty" class="empty-hint hidden">
+        <div class="empty-icon">🔕</div>
+        <p>لا توجد إشعارات</p>
+      </div>
+      <div id="notif-loader" class="text-center hidden">
+        <div class="spinner-inline"></div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/notificationsPage.js' %}"></script>
+{% endblock %}
