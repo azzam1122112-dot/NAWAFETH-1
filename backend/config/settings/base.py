@@ -63,7 +63,6 @@ INSTALLED_APPS = [
     "apps.notifications.apps.NotificationsConfig",
     "apps.reviews.apps.ReviewsConfig",
     "apps.content.apps.ContentConfig",
-    "apps.mobile_web.apps.MobileWebConfig",
 ]
 
 MIDDLEWARE = [

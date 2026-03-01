@@ -12,8 +12,6 @@ export DJANGO_ENV="${DJANGO_ENV:-prod}"
 python -m pip install --upgrade pip
 pip install -r requirements/prod.txt
 
-echo "[build] Verifying required static source files..."
-python manage.py findstatic mobile_web/css/theme.css --verbosity 0 >/dev/null
 
 echo "[build] Running collectstatic (--clear to remove stale files)..."
 python manage.py collectstatic --clear --noinput
