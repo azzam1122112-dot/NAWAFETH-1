@@ -1,0 +1,27 @@
+/* ═══ Add Service Landing ═══ */
+.nw-add-svc{max-width:700px;margin:0 auto;padding:16px 12px 100px}
+
+/* header */
+.nw-add-svc-header{background:linear-gradient(135deg,var(--nw-deep-purple) 0%,#8E5DBB 100%);border-radius:16px;padding:28px 20px;color:#fff;text-align:center;margin-bottom:20px}
+.nw-add-svc-header h1{font-size:1.35rem;font-weight:800;margin:0 0 6px}
+.nw-add-svc-header p{font-size:.85rem;opacity:.85}
+
+/* action cards */
+.nw-add-svc-actions{display:flex;flex-direction:column;gap:12px;margin-bottom:24px}
+.nw-add-action-card{display:flex;align-items:center;gap:14px;background:var(--nw-card-bg);border-radius:14px;padding:16px;cursor:pointer;transition:box-shadow .2s,transform .2s;text-decoration:none;color:inherit}
+.nw-add-action-card:hover{box-shadow:0 4px 16px rgba(102,61,144,.15);transform:translateY(-1px)}
+.nw-add-action-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.nw-add-action-icon .material-icons-round{font-size:26px;color:#fff}
+.nw-add-action-icon.search{background:linear-gradient(135deg,#1565C0,#42A5F5)}
+.nw-add-action-icon.urgent{background:linear-gradient(135deg,#C62828,#EF5350)}
+.nw-add-action-icon.quote{background:linear-gradient(135deg,#E65100,#FFA726)}
+.nw-add-action-body h3{font-size:.95rem;font-weight:700;margin:0 0 2px}
+.nw-add-action-body p{font-size:.78rem;color:var(--nw-text-secondary);margin:0}
+
+/* categories */
+.nw-add-svc-cats{margin-top:20px}
+.nw-add-svc-cats h2{font-size:1.05rem;font-weight:700;margin:0 0 12px}
+.nw-add-cat-grid{display:flex;flex-wrap:wrap;gap:8px}
+.nw-add-cat-chip{background:var(--nw-card-bg);border:1px solid var(--nw-border);border-radius:20px;padding:8px 16px;font:600 .82rem Cairo,sans-serif;cursor:pointer;transition:.2s;text-decoration:none;color:var(--nw-text-primary);white-space:nowrap}
+.nw-add-cat-chip:hover{border-color:var(--nw-deep-purple);background:rgba(102,61,144,.06)}
+.nw-add-cat-loading{color:var(--nw-text-secondary);font-size:.85rem;padding:10px 0}

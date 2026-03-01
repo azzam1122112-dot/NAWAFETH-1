@@ -85,17 +85,17 @@ class _ProfileTabState extends State<ProfileTab> with TickerProviderStateMixin {
       });
     }
 
-    // جلب بيانات المستخدم
-    final meResult = await ProfileService.fetchMyProfile();
+    // جلب بيانات المستخدم وملف المزود بالتوازي لتقليل زمن التحميل.
+    final meFuture = ProfileService.fetchMyProfile();
+    final providerFuture = ProfileService.fetchProviderProfile();
+
+    final meResult = await meFuture;
+    final providerResult = await providerFuture;
     if (!mounted) return;
 
     if (meResult.isSuccess && meResult.data != null) {
       _userProfile = meResult.data;
     }
-
-    // جلب بيانات ملف المزود
-    final providerResult = await ProfileService.fetchProviderProfile();
-    if (!mounted) return;
 
     if (providerResult.isSuccess && providerResult.data != null) {
       _providerProfile = providerResult.data;

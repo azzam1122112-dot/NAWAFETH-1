@@ -1,0 +1,58 @@
+/* ═══ Provider Registration Wizard ═══ */
+.nw-reg-page{max-width:620px;margin:0 auto;padding:0 0 100px}
+
+/* Header with gradient */
+.nw-reg-header{background:linear-gradient(135deg,#4C1D95,#7C3AED);padding:18px 16px 22px;border-radius:0 0 22px 22px;color:#fff}
+.nw-reg-header-top{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.nw-reg-header-top a{color:#fff;text-decoration:none;display:flex;align-items:center}
+.nw-reg-header-title{flex:1;font-size:18px;font-weight:800;text-align:center}
+
+/* Step indicators */
+.nw-reg-steps{display:flex;justify-content:center;gap:16px;margin-bottom:10px}
+.nw-reg-step-item{display:flex;flex-direction:column;align-items:center;width:100px}
+.nw-reg-step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.6);border:2px solid rgba(255,255,255,.3);transition:all .3s}
+.nw-reg-step-item.active .nw-reg-step-circle{background:#fff;color:#663d90;border-color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.nw-reg-step-item.done .nw-reg-step-circle{background:#4caf50;color:#fff;border-color:#4caf50}
+.nw-reg-step-label{font-size:11px;margin-top:5px;color:rgba(255,255,255,.6);text-align:center;font-weight:600}
+.nw-reg-step-item.active .nw-reg-step-label,.nw-reg-step-item.done .nw-reg-step-label{color:#fff}
+
+/* Progress bar */
+.nw-reg-progress{display:flex;align-items:center;gap:8px;margin-top:10px}
+.nw-reg-progress-bar{flex:1;height:6px;border-radius:6px;background:rgba(255,255,255,.25);overflow:hidden}
+.nw-reg-progress-fill{height:100%;background:#F1A559;border-radius:6px;transition:width .4s}
+.nw-reg-progress-pct{font-size:12px;font-weight:700}
+.nw-reg-progress-hint{font-size:11px;color:rgba(255,255,255,.7);margin-top:4px}
+
+/* Content area */
+.nw-reg-content{padding:18px 14px}
+
+/* Form fields */
+.nw-reg-field{margin-bottom:14px}
+.nw-reg-field label{display:block;font-weight:600;font-size:14px;margin-bottom:6px;color:#1a1a2e}
+.nw-reg-field input,.nw-reg-field select,.nw-reg-field textarea{
+  width:100%;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:14px;font-family:'Cairo',sans-serif;font-size:14px;background:#fff;transition:border-color .2s}
+.nw-reg-field input:focus,.nw-reg-field select:focus,.nw-reg-field textarea:focus{border-color:#663d90;outline:none}
+.nw-reg-field textarea{min-height:80px;resize:vertical}
+.nw-reg-field .hint{font-size:11px;color:#999;margin-top:4px}
+
+/* Category chips */
+.nw-reg-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.nw-reg-chip{padding:8px 14px;border-radius:20px;border:1.5px solid #e0e0e0;font-size:13px;cursor:pointer;transition:all .2s;user-select:none}
+.nw-reg-chip.is-selected{border-color:#663d90;background:rgba(102,61,144,.1);color:#663d90;font-weight:600}
+
+/* Footer */
+.nw-reg-footer{display:flex;gap:12px;padding:16px 14px}
+.nw-reg-btn{flex:1;padding:14px;border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s}
+.nw-reg-btn-prev{background:#fff;border:1.5px solid #663d90;color:#663d90}
+.nw-reg-btn-next{background:#663d90;border:none;color:#fff}
+.nw-reg-btn-next:disabled{opacity:.3;cursor:not-allowed}
+
+/* Success overlay */
+.nw-reg-success{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center}
+.nw-reg-success.is-visible{display:flex}
+.nw-reg-success-card{background:#fff;border-radius:24px;padding:30px 24px;text-align:center;max-width:420px;width:92%;box-shadow:0 16px 48px rgba(0,0,0,.2)}
+.nw-reg-success-icon{width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#4C1D95,#7C3AED);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 8px 24px rgba(102,61,144,.35)}
+.nw-reg-success-icon .material-icons-round{font-size:36px;color:#fff}
+.nw-reg-success-card h3{font-size:18px;font-weight:800;margin:0 0 8px}
+.nw-reg-success-card p{font-size:13px;color:#777;line-height:1.6;margin:0 0 18px}
+.nw-reg-success-btn{padding:12px 32px;border:none;border-radius:14px;background:#663d90;color:#fff;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;cursor:pointer}

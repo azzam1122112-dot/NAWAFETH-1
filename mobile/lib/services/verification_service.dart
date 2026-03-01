@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:nawafeth/services/api_client.dart';
 import 'package:nawafeth/services/auth_service.dart';
+import 'package:nawafeth/services/upload_optimizer.dart';
 
 class VerificationService {
   /// إنشاء طلب توثيق جديد
@@ -43,7 +44,8 @@ class VerificationService {
     request.headers['Authorization'] = 'Bearer $token';
     request.fields['doc_type'] = docType;
     if (title.isNotEmpty) request.fields['title'] = title;
-    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final optimized = await UploadOptimizer.optimizeForUpload(file);
+    request.files.add(await http.MultipartFile.fromPath('file', optimized.path));
 
     try {
       final streamed =

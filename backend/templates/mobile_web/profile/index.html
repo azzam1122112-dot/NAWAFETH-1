@@ -79,11 +79,11 @@
           <div class="nw-quick-action-icon"><span class="material-icons-round">shopping_bag</span></div>
           <span class="nw-quick-action-label">طلباتي</span>
         </a>
-        <a href="{% url 'mobile_web:interactive' %}" class="nw-quick-action-card">
+        <a href="{% url 'mobile_web:chats' %}" class="nw-quick-action-card">
           <div class="nw-quick-action-icon"><span class="material-icons-round">chat_bubble_outline</span></div>
           <span class="nw-quick-action-label">محادثاتي</span>
         </a>
-        <a href="{% url 'mobile_web:home' %}" class="nw-quick-action-card">
+        <a href="{% url 'mobile_web:notifications' %}" class="nw-quick-action-card">
           <div class="nw-quick-action-icon"><span class="material-icons-round">notifications_none</span></div>
           <span class="nw-quick-action-label">الإشعارات</span>
         </a>
@@ -95,7 +95,7 @@
 
       <!-- Menu section -->
       <div class="nw-profile-menu">
-        <a class="nw-menu-tile" id="menu-settings">
+        <a class="nw-menu-tile" href="{% url 'mobile_web:settings' %}" id="menu-settings">
           <div class="nw-menu-tile-icon"><span class="material-icons-round">person_outline</span></div>
           <div class="nw-menu-tile-text">
             <p class="nw-menu-tile-label">إعدادات الحساب</p>
@@ -104,10 +104,10 @@
           <span class="material-icons-round nw-menu-tile-chevron">chevron_left</span>
         </a>
         <div class="nw-menu-divider"></div>
-        <a class="nw-menu-tile">
-          <div class="nw-menu-tile-icon"><span class="material-icons-round">qr_code</span></div>
+        <a class="nw-menu-tile" href="{% url 'mobile_web:plans' %}">
+          <div class="nw-menu-tile-icon"><span class="material-icons-round">workspace_premium</span></div>
           <div class="nw-menu-tile-text">
-            <p class="nw-menu-tile-label">QR نافذتي</p>
+            <p class="nw-menu-tile-label">الباقات والاشتراكات</p>
           </div>
           <span class="material-icons-round nw-menu-tile-chevron">chevron_left</span>
         </a>
@@ -130,6 +130,27 @@
           <p>شارك مهاراتك وابدأ بتلقي الطلبات</p>
         </div>
         <button type="button" class="nw-cta-register-btn" id="provider-register-btn">سجّل الآن</button>
+      </div>
+
+      <!-- Info Links -->
+      <div class="nw-profile-menu" style="margin-top:8px">
+        <a class="nw-menu-tile" href="{% url 'mobile_web:about' %}">
+          <div class="nw-menu-tile-icon"><span class="material-icons-round">info_outline</span></div>
+          <div class="nw-menu-tile-text"><p class="nw-menu-tile-label">حول المنصة</p></div>
+          <span class="material-icons-round nw-menu-tile-chevron">chevron_left</span>
+        </a>
+        <div class="nw-menu-divider"></div>
+        <a class="nw-menu-tile" href="{% url 'mobile_web:terms' %}">
+          <div class="nw-menu-tile-icon"><span class="material-icons-round">gavel</span></div>
+          <div class="nw-menu-tile-text"><p class="nw-menu-tile-label">الشروط والأحكام</p></div>
+          <span class="material-icons-round nw-menu-tile-chevron">chevron_left</span>
+        </a>
+        <div class="nw-menu-divider"></div>
+        <a class="nw-menu-tile" href="{% url 'mobile_web:contact' %}">
+          <div class="nw-menu-tile-icon"><span class="material-icons-round">support_agent</span></div>
+          <div class="nw-menu-tile-text"><p class="nw-menu-tile-label">الدعم الفني</p></div>
+          <span class="material-icons-round nw-menu-tile-chevron">chevron_left</span>
+        </a>
       </div>
 
       <p id="profile-error" class="nw-form-error" hidden></p>

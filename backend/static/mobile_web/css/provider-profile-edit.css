@@ -1,0 +1,38 @@
+/* ═══ Provider Profile Edit ═══ */
+.nw-pp-edit{max-width:700px;margin:0 auto;padding:16px 12px 100px}
+.nw-pp-edit h1{font-size:1.3rem;font-weight:700;margin:0 0 16px}
+
+/* tabs */
+.nw-pp-tabs{display:flex;gap:4px;background:var(--nw-scaffold-bg);border-radius:12px;padding:4px;margin-bottom:16px}
+.nw-pp-tab{flex:1;text-align:center;border:none;background:transparent;font:600 .82rem Cairo,sans-serif;padding:10px;border-radius:10px;cursor:pointer;transition:.2s;color:var(--nw-text-secondary)}
+.nw-pp-tab.is-active{background:var(--nw-card-bg);color:var(--nw-deep-purple);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+/* tab panels */
+.nw-pp-panel{display:none}
+.nw-pp-panel.is-active{display:block}
+
+/* field row */
+.nw-pp-field{background:var(--nw-card-bg);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.nw-pp-field-header{display:flex;justify-content:space-between;align-items:center}
+.nw-pp-field-label{font-size:.82rem;font-weight:600}
+.nw-pp-field-edit{border:none;background:transparent;color:var(--nw-deep-purple);font:600 .78rem Cairo,sans-serif;cursor:pointer;display:flex;align-items:center;gap:3px}
+.nw-pp-field-edit .material-icons-round{font-size:16px}
+.nw-pp-field-value{font-size:.9rem;margin-top:4px;color:var(--nw-text-primary)}
+.nw-pp-field-value.empty{color:var(--nw-text-secondary);font-style:italic}
+
+/* inline edit */
+.nw-pp-field-input{display:none;margin-top:8px}
+.nw-pp-field.is-editing .nw-pp-field-input{display:block}
+.nw-pp-field.is-editing .nw-pp-field-value{display:none}
+.nw-pp-field-input input,.nw-pp-field-input textarea,.nw-pp-field-input select{width:100%;border:1px solid var(--nw-border);border-radius:10px;padding:10px;font:inherit;font-size:.85rem}
+.nw-pp-field-input textarea{min-height:60px;resize:vertical}
+.nw-pp-field-input .nw-pp-save{margin-top:8px;background:var(--nw-deep-purple);color:#fff;border:none;border-radius:10px;padding:8px 16px;font:600 .82rem Cairo,sans-serif;cursor:pointer}
+
+/* completion bar */
+.nw-pp-completion{background:var(--nw-card-bg);border-radius:14px;padding:16px;margin-bottom:16px}
+.nw-pp-completion h3{font-size:.9rem;font-weight:700;margin:0 0 8px}
+.nw-pp-completion-bar{height:8px;background:var(--nw-scaffold-bg);border-radius:4px;overflow:hidden}
+.nw-pp-completion-fill{height:100%;background:linear-gradient(90deg,var(--nw-deep-purple),var(--nw-accent));border-radius:4px;transition:width .4s}
+.nw-pp-completion-pct{font-size:.78rem;color:var(--nw-text-secondary);margin-top:4px;text-align:left}
+
+.nw-pp-loading{text-align:center;padding:30px;color:var(--nw-text-secondary)}

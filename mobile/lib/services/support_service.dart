@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 import 'auth_service.dart';
+import 'upload_optimizer.dart';
 
 class SupportService {
   // ─── فرق الدعم ───
@@ -79,7 +80,8 @@ class SupportService {
 
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = 'Bearer $token';
-    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final optimized = await UploadOptimizer.optimizeForUpload(file);
+    request.files.add(await http.MultipartFile.fromPath('file', optimized.path));
 
     try {
       final streamed =

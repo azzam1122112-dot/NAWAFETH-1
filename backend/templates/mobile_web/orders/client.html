@@ -1,0 +1,48 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}طلباتي | نوافذ{% endblock %}
+{% block page_id %}client-orders{% endblock %}
+{% block nav_orders %}is-active{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/client-orders.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-client-orders">
+    <h1>طلباتي</h1>
+    <p class="nw-sub">عرض وإدارة طلباتك كعميل</p>
+
+    <div class="nw-co-controls">
+      <div class="nw-co-search">
+        <span class="material-icons-round">search</span>
+        <input id="co-search" type="search" placeholder="بحث في الطلبات...">
+      </div>
+    </div>
+    <div class="nw-co-filters" id="co-filters">
+      <button class="nw-co-chip is-active" data-status="">الكل</button>
+      <button class="nw-co-chip" data-status="new">جديد</button>
+      <button class="nw-co-chip" data-status="in_progress">تحت التنفيذ</button>
+      <button class="nw-co-chip" data-status="completed">مكتمل</button>
+      <button class="nw-co-chip" data-status="cancelled">ملغي</button>
+    </div>
+
+    <p id="co-error" class="nw-form-error" hidden></p>
+
+    <div class="nw-co-layout">
+      <div id="co-list" class="nw-co-list"></div>
+      <div id="co-detail" class="nw-co-detail">
+        <div id="co-detail-empty" class="nw-co-empty">
+          <span class="material-icons-round">touch_app</span>
+          <p>اختر طلبًا لعرض التفاصيل</p>
+        </div>
+        <div id="co-detail-body" hidden></div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/client-orders.js' %}"></script>
+{% endblock %}

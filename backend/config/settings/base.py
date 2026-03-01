@@ -7,6 +7,14 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+
+def env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
@@ -31,6 +39,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "channels",
+    "storages",
 
     # Local apps (سنضيفها بعد قليل)
     "apps.core.apps.CoreConfig",
@@ -147,20 +156,75 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-MEDIA_URL = "/media/"
-_media_root_override = (os.getenv("DJANGO_MEDIA_ROOT", "") or "").strip()
-_render_disk_path = (os.getenv("RENDER_DISK_PATH", "") or "").strip()
-if _media_root_override:
-    MEDIA_ROOT = Path(_media_root_override)
-elif _render_disk_path:
-    # On Render, mount your persistent disk (e.g. /var/data) and store media under it.
-    MEDIA_ROOT = Path(_render_disk_path) / "media"
-else:
-    MEDIA_ROOT = BASE_DIR / "media"
+# Cloudflare R2 / S3-compatible media storage (optional)
+USE_R2_MEDIA = env_bool("USE_R2_MEDIA", False)
 
-# Serve /media/ via Django when no reverse proxy/static host is configured.
-# On Render this is the simplest option when using a persistent disk.
-SERVE_MEDIA = (os.getenv("DJANGO_SERVE_MEDIA", "1") == "1")
+R2_BUCKET_NAME = (os.getenv("R2_BUCKET_NAME", "") or "").strip()
+R2_ENDPOINT_URL = (os.getenv("R2_ENDPOINT_URL", "") or "").strip()
+R2_PUBLIC_BASE_URL = (os.getenv("R2_PUBLIC_BASE_URL", "") or "").strip()
+
+AWS_ACCESS_KEY_ID = (os.getenv("AWS_ACCESS_KEY_ID", os.getenv("R2_ACCESS_KEY_ID", "")) or "").strip()
+AWS_SECRET_ACCESS_KEY = (
+    os.getenv("AWS_SECRET_ACCESS_KEY", os.getenv("R2_SECRET_ACCESS_KEY", "")) or ""
+).strip()
+AWS_STORAGE_BUCKET_NAME = (os.getenv("AWS_STORAGE_BUCKET_NAME", R2_BUCKET_NAME) or "").strip()
+AWS_S3_ENDPOINT_URL = (os.getenv("AWS_S3_ENDPOINT_URL", R2_ENDPOINT_URL) or "").strip()
+AWS_S3_REGION_NAME = (os.getenv("AWS_S3_REGION_NAME", "auto") or "auto").strip()
+AWS_S3_SIGNATURE_VERSION = (os.getenv("AWS_S3_SIGNATURE_VERSION", "s3v4") or "s3v4").strip()
+AWS_S3_ADDRESSING_STYLE = (os.getenv("AWS_S3_ADDRESSING_STYLE", "path") or "path").strip()
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = env_bool("AWS_QUERYSTRING_AUTH", False)
+AWS_S3_FILE_OVERWRITE = env_bool("AWS_S3_FILE_OVERWRITE", False)
+
+_r2_media_ready = USE_R2_MEDIA and all(
+    [
+        AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY,
+        AWS_STORAGE_BUCKET_NAME,
+        AWS_S3_ENDPOINT_URL,
+    ]
+)
+
+if _r2_media_ready:
+    _media_base_url = R2_PUBLIC_BASE_URL.rstrip("/")
+    if not _media_base_url:
+        _media_base_url = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}"
+
+    MEDIA_URL = f"{_media_base_url}/"
+    # Keep a local media root for admin/dev tools that may still touch local files.
+    MEDIA_ROOT = BASE_DIR / "media"
+    SERVE_MEDIA = False
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    MEDIA_URL = "/media/"
+    _media_root_override = (os.getenv("DJANGO_MEDIA_ROOT", "") or "").strip()
+    _render_disk_path = (os.getenv("RENDER_DISK_PATH", "") or "").strip()
+    if _media_root_override:
+        MEDIA_ROOT = Path(_media_root_override)
+    elif _render_disk_path:
+        # On Render, mount your persistent disk (e.g. /var/data) and store media under it.
+        MEDIA_ROOT = Path(_render_disk_path) / "media"
+    else:
+        MEDIA_ROOT = BASE_DIR / "media"
+
+    # Serve /media/ via Django when no reverse proxy/static host is configured.
+    # On Render this is the simplest option when using a persistent disk.
+    SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", True)
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

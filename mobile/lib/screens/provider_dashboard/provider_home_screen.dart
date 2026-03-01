@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -86,7 +87,10 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
       _errorMessage = null;
     });
 
-    // جلب بيانات المستخدم الأساسية
+    // نبدأ طلب ملف المزود مبكراً بالتوازي لتقليل زمن الانتظار الكلي.
+    final providerFuture = ProfileService.fetchProviderProfile();
+
+    // جلب بيانات المستخدم الأساسية (الحد الأدنى لعرض الشاشة).
     final meResult = await ProfileService.fetchMyProfile();
     if (!mounted) return;
 
@@ -98,26 +102,31 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
       return;
     }
 
-    _userProfile = meResult.data;
-
-    // جلب بيانات ملف المزود
-    final providerResult = await ProfileService.fetchProviderProfile();
-    if (!mounted) return;
-
-    if (providerResult.isSuccess && providerResult.data != null) {
-      _providerProfile = providerResult.data;
-    }
-    // نستمر حتى لو فشل جلب ملف المزود — نعرض البيانات المتاحة
-
-    // جلب بيانات الاشتراك الحالي
-    _loadSubscriptionPlan();
-
-    // جلب عدد الطلبات العاجلة والجديدة
-    _loadOrderCounts();
-
     setState(() {
+      _userProfile = meResult.data;
       _isLoading = false;
     });
+
+    // تحميلات ثانوية بالخلفية حتى لا نحجب الشاشة.
+    unawaited(_loadProviderProfile(providerFuture));
+    unawaited(_loadSubscriptionPlan());
+    unawaited(_loadOrderCounts());
+  }
+
+  Future<void> _loadProviderProfile(
+    Future<ProfileResult<ProviderProfileModel>> providerFuture,
+  ) async {
+    try {
+      final providerResult = await providerFuture;
+      if (!mounted) return;
+      if (providerResult.isSuccess && providerResult.data != null) {
+        setState(() {
+          _providerProfile = providerResult.data;
+        });
+      }
+    } catch (_) {
+      // optional data
+    }
   }
 
   /// جلب أعداد الطلبات العاجلة والجديدة
@@ -125,7 +134,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
     try {
       final results = await Future.wait([
         MarketplaceService.getAvailableUrgentRequests(),
-        MarketplaceService.getProviderRequests(statusGroup: 'pending'),
+        MarketplaceService.getProviderRequests(statusGroup: 'new'),
         MarketplaceService.getProviderRequests(statusGroup: 'completed'),
       ]);
       if (!mounted) return;

@@ -58,7 +58,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initVideo();
-    _loadData();
+    final seeded = _seedFromCachedData();
+    _loadData(showLoader: !seeded);
     _startReelsScroll();
   }
 
@@ -71,20 +72,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
   }
 
-  Future<void> _loadData() async {
-    if (mounted) setState(() => _isLoading = true);
-    final results = await Future.wait([
-      HomeService.fetchCategories(),
-      HomeService.fetchFeaturedProviders(limit: 10),
-      HomeService.fetchHomeBanners(limit: 6),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _categories = results[0] as List<CategoryModel>;
-      _providers = results[1] as List<ProviderPublicModel>;
-      _banners = results[2] as List<BannerModel>;
-      _isLoading = false;
+  bool _seedFromCachedData() {
+    final cached = HomeService.getCachedHomeData(providersLimit: 10, bannersLimit: 6);
+    if (!cached.hasAnyData) return false;
+
+    _categories = cached.categories;
+    _providers = cached.providers;
+    _banners = cached.banners;
+    _isLoading = cached.providers.isEmpty;
+    return true;
+  }
+
+  Future<void> _loadData({
+    bool forceRefresh = false,
+    bool showLoader = true,
+  }) async {
+    if (showLoader && mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    final categoriesFuture = HomeService.fetchCategories(forceRefresh: forceRefresh);
+    final providersFuture = HomeService.fetchFeaturedProviders(
+      limit: 10,
+      forceRefresh: forceRefresh,
+    );
+    final bannersFuture = HomeService.fetchHomeBanners(
+      limit: 6,
+      forceRefresh: forceRefresh,
+    );
+
+    categoriesFuture.then((categories) {
+      if (!mounted) return;
+      setState(() => _categories = categories);
     });
+
+    bannersFuture.then((banners) {
+      if (!mounted) return;
+      setState(() => _banners = banners);
+    });
+
+    providersFuture.then((providers) {
+      if (!mounted) return;
+      setState(() {
+        _providers = providers;
+        _isLoading = false;
+      });
+    });
+
+    try {
+      await Future.wait([categoriesFuture, providersFuture, bannersFuture]);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
   }
 
   void _startReelsScroll() {
@@ -129,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       drawer: const CustomDrawer(),
       bottomNavigationBar: const CustomBottomNav(currentIndex: 0),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => _loadData(forceRefresh: true, showLoader: false),
         color: purple,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

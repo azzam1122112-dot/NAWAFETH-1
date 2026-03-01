@@ -1,0 +1,70 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}خدماتي | نوافذ{% endblock %}
+{% block page_id %}provider-services{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/provider-services.css' %}">
+{% endblock %}
+
+{% block content %}
+  <section class="nw-prov-svc">
+    <div class="nw-prov-svc-header">
+      <h1>خدماتي</h1>
+      <button class="nw-prov-svc-add" id="add-svc-btn"><span class="material-icons-round">add</span>إضافة خدمة</button>
+    </div>
+    <div id="svc-list" class="nw-prov-svc-list"></div>
+  </section>
+
+  <!-- Add/Edit Modal -->
+  <div class="nw-psvc-modal-overlay" id="svc-modal">
+    <div class="nw-psvc-modal">
+      <h2 id="modal-title">إضافة خدمة</h2>
+      <form id="svc-form">
+        <div class="nw-form-group">
+          <label>التصنيف الرئيسي</label>
+          <select id="m-category" required><option value="">اختر</option></select>
+        </div>
+        <div class="nw-form-group">
+          <label>التصنيف الفرعي</label>
+          <select id="m-subcategory" required><option value="">اختر</option></select>
+        </div>
+        <div class="nw-form-group">
+          <label>عنوان الخدمة</label>
+          <input type="text" id="m-title" required maxlength="100">
+        </div>
+        <div class="nw-form-group">
+          <label>وصف الخدمة</label>
+          <textarea id="m-desc" maxlength="500"></textarea>
+        </div>
+        <div class="nw-form-group">
+          <label>وحدة السعر</label>
+          <select id="m-price-unit">
+            <option value="fixed">ثابت</option>
+            <option value="starting_from">يبدأ من</option>
+            <option value="hour">بالساعة</option>
+            <option value="day">باليوم</option>
+            <option value="negotiable">قابل للتفاوض</option>
+          </select>
+        </div>
+        <div class="nw-form-row" id="price-range">
+          <div class="nw-form-group"><label>السعر من</label><input type="number" id="m-price-from" step="0.01"></div>
+          <div class="nw-form-group"><label>السعر إلى</label><input type="number" id="m-price-to" step="0.01"></div>
+        </div>
+        <div class="nw-psvc-toggle-row">
+          <label>نشطة</label>
+          <label class="nw-psvc-switch"><input type="checkbox" id="m-active" checked><span class="slider"></span></label>
+        </div>
+        <div class="nw-psvc-modal-btns">
+          <button type="button" class="nw-btn secondary" id="modal-cancel">إلغاء</button>
+          <button type="submit" class="nw-btn" id="modal-save">حفظ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/provider-services.js' %}"></script>
+{% endblock %}

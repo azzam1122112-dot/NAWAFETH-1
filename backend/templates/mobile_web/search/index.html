@@ -1,0 +1,104 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}البحث وطلب الخدمة | نوافذ{% endblock %}
+{% block page_id %}search{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/search.css' %}">
+{% endblock %}
+
+{% block content %}
+  <div class="nw-container">
+    <div class="nw-search-header">
+      <h1>البحث وطلب الخدمة</h1>
+      <p>ابحث عن مزود خدمة أو قدم طلب خدمة تنافسية</p>
+    </div>
+
+    <!-- Tabs (Provider Search | Service Request) -->
+    <div class="nw-search-tabs">
+      <button class="nw-search-tab is-active" data-tab="providers">بحث مزودي الخدمة</button>
+      <button class="nw-search-tab" data-tab="request">طلب خدمة تنافسية</button>
+    </div>
+
+    <!-- ══ Tab 1: Provider Search ══ -->
+    <div id="tab-providers">
+      <div class="nw-search-box">
+        <span class="material-icons-round">search</span>
+        <input type="text" id="provider-search" placeholder="ابحث عن اسم أو تخصص...">
+      </div>
+      <div id="provider-results" class="nw-provider-grid">
+        <div class="nw-search-loading"></div>
+      </div>
+    </div>
+
+    <!-- ══ Tab 2: Service Request Form ══ -->
+    <div id="tab-request" hidden>
+      <form class="nw-search-form" id="request-form">
+        <div class="nw-form-group">
+          <label class="nw-form-label">التصنيف</label>
+          <select class="nw-form-select" id="req-category" required>
+            <option value="">اختر التصنيف</option>
+          </select>
+        </div>
+
+        <div class="nw-form-group">
+          <label class="nw-form-label">التصنيف الفرعي</label>
+          <select class="nw-form-select" id="req-subcategory" required>
+            <option value="">اختر التصنيف الفرعي</option>
+          </select>
+        </div>
+
+        <div class="nw-form-group">
+          <label class="nw-form-label">
+            عنوان الطلب
+            <span class="char-count" id="title-count">0/50</span>
+          </label>
+          <input class="nw-form-input" type="text" id="req-title" maxlength="50" placeholder="عنوان مختصر للطلب" required>
+        </div>
+
+        <div class="nw-form-group">
+          <label class="nw-form-label">
+            تفاصيل الطلب
+            <span class="char-count" id="details-count">0/500</span>
+          </label>
+          <textarea class="nw-form-textarea" id="req-details" maxlength="500" rows="4" placeholder="اشرح ما تحتاجه بالتفصيل..." required></textarea>
+        </div>
+
+        <div class="nw-form-group">
+          <label class="nw-form-label">الموعد النهائي</label>
+          <input class="nw-form-input" type="datetime-local" id="req-deadline">
+        </div>
+
+        <div class="nw-form-group">
+          <label class="nw-form-label">خيار التسليم</label>
+          <div class="nw-radio-group" id="delivery-options">
+            <label class="nw-radio-pill is-selected">
+              <input type="radio" name="delivery" value="immediate" checked>فوري
+            </label>
+            <label class="nw-radio-pill">
+              <input type="radio" name="delivery" value="24h">خلال 24 ساعة
+            </label>
+            <label class="nw-radio-pill">
+              <input type="radio" name="delivery" value="72h">خلال 72 ساعة
+            </label>
+          </div>
+        </div>
+
+        <p class="nw-form-error" id="req-error" hidden></p>
+        <p class="nw-form-info" id="req-success" hidden></p>
+
+        <div class="nw-search-submit">
+          <button type="submit" class="nw-primary-btn" style="width:100%">
+            <span class="material-icons-round" style="font-size:18px">send</span>
+            إرسال الطلب
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/search.js' %}"></script>
+{% endblock %}

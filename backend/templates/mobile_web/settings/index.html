@@ -1,0 +1,77 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}الإعدادات | نوافذ{% endblock %}
+{% block page_id %}settings{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/settings.css' %}">
+{% endblock %}
+
+{% block content %}
+  <div class="nw-container">
+    <div class="nw-settings-header">
+      <h1>إعدادات الحساب</h1>
+    </div>
+
+    <!-- Avatar -->
+    <div class="nw-settings-avatar-section">
+      <div class="nw-settings-avatar" id="settings-avatar">
+        <div class="nw-settings-avatar-edit" id="btn-change-avatar" title="تغيير الصورة">
+          <span class="material-icons-round">camera_alt</span>
+        </div>
+      </div>
+      <p class="nw-settings-user-name" id="settings-name">...</p>
+      <p class="nw-settings-user-phone" id="settings-phone"></p>
+      <input type="file" id="avatar-file" accept="image/*" hidden>
+    </div>
+
+    <!-- Profile Form -->
+    <form class="nw-settings-form" id="profile-form">
+      <h3 class="nw-settings-section-title"><span class="material-icons-round">person</span>المعلومات الشخصية</h3>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">الاسم الأول</label>
+        <input class="nw-form-input" type="text" id="inp-first-name" placeholder="الاسم الأول" required>
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">الاسم الأخير</label>
+        <input class="nw-form-input" type="text" id="inp-last-name" placeholder="الاسم الأخير" required>
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">البريد الإلكتروني</label>
+        <input class="nw-form-input" type="email" id="inp-email" placeholder="example@email.com">
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">رقم الهاتف</label>
+        <input class="nw-form-input" type="tel" id="inp-phone" disabled placeholder="+966XXXXXXXXX">
+      </div>
+
+      <p class="nw-form-error" id="profile-error" hidden></p>
+      <p class="nw-form-info" id="profile-success" hidden></p>
+    </form>
+
+    <div class="nw-settings-submit">
+      <button type="button" class="nw-primary-btn" style="width:100%" id="btn-save">
+        <span class="material-icons-round" style="font-size:18px">save</span>
+        حفظ التغييرات
+      </button>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="nw-settings-danger">
+      <p class="nw-settings-danger-title">منطقة الخطر</p>
+      <button class="nw-settings-danger-btn" type="button" id="btn-delete-account">
+        <span class="material-icons-round" style="font-size:16px">delete_forever</span>
+        حذف الحساب
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/settings.js' %}"></script>
+{% endblock %}

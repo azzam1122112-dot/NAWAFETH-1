@@ -1,0 +1,30 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}الشروط والأحكام | نوافذ{% endblock %}
+{% block page_id %}terms{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/info-pages.css' %}">
+{% endblock %}
+
+{% block content %}
+  <!-- Hero -->
+  <div class="nw-info-hero">
+    <div class="nw-info-hero-icon">
+      <span class="material-icons-round">gavel</span>
+    </div>
+    <h1>الشروط والأحكام</h1>
+    <p>سياسات الاستخدام والخصوصية والتشريعات</p>
+  </div>
+
+  <div class="nw-container">
+    <div id="terms-list">
+      <div class="nw-info-loading"></div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/terms.js' %}"></script>
+{% endblock %}

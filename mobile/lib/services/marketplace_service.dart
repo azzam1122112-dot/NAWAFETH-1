@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 import 'auth_service.dart';
+import 'upload_optimizer.dart';
 import '../models/service_request_model.dart';
 
 class MarketplaceService {
@@ -70,13 +71,22 @@ class MarketplaceService {
     }
 
     for (final img in images) {
-      request.files.add(await http.MultipartFile.fromPath('images', img.path));
+      final optimized = await UploadOptimizer.optimizeForUpload(
+        img,
+        declaredType: 'image',
+      );
+      request.files.add(
+        await http.MultipartFile.fromPath('images', optimized.path),
+      );
     }
     for (final vid in videos) {
       request.files.add(await http.MultipartFile.fromPath('videos', vid.path));
     }
     for (final f in files) {
-      request.files.add(await http.MultipartFile.fromPath('files', f.path));
+      final optimized = await UploadOptimizer.optimizeForUpload(f);
+      request.files.add(
+        await http.MultipartFile.fromPath('files', optimized.path),
+      );
     }
     if (audio != null) {
       request.files.add(await http.MultipartFile.fromPath('audio', audio.path));

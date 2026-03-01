@@ -25,7 +25,10 @@
         <a href="{% url 'mobile_web:home' %}">الرئيسية</a>
         <a href="{% url 'mobile_web:orders' %}">الطلبات</a>
         <a href="{% url 'mobile_web:interactive' %}">تفاعلي</a>
+        <a href="{% url 'mobile_web:search' %}">البحث</a>
+        <a href="{% url 'mobile_web:chats' %}">المحادثات</a>
         <a href="{% url 'mobile_web:profile' %}">نافذتي</a>
+        <a href="{% url 'mobile_web:plans' %}">الباقات</a>
         <a href="{% url 'mobile_web:provider_dashboard' %}">لوحة المزود</a>
         <a href="{% url 'mobile_web:login' %}" id="nav-auth-link">تسجيل الدخول</a>
         <button id="nav-logout-btn" type="button" hidden>تسجيل الخروج</button>
@@ -33,6 +36,12 @@
 
       <!-- Mobile top-right actions -->
       <div class="nw-topbar-actions">
+        <a class="nw-topbar-btn" href="{% url 'mobile_web:notifications' %}" title="الإشعارات">
+          <span class="material-icons-round" style="font-size:18px">notifications</span>
+        </a>
+        <a class="nw-topbar-btn" href="{% url 'mobile_web:chats' %}" title="المحادثات">
+          <span class="material-icons-round" style="font-size:18px">chat</span>
+        </a>
         <a class="nw-topbar-btn" href="{% url 'mobile_web:login' %}" id="mobile-auth-link" title="تسجيل">
           <span class="material-icons-round" style="font-size:18px">login</span>
         </a>
@@ -85,7 +94,28 @@
         orders: "{% url 'mobile_web:orders' %}",
         interactive: "{% url 'mobile_web:interactive' %}",
         profile: "{% url 'mobile_web:profile' %}",
-        providerDashboard: "{% url 'mobile_web:provider_dashboard' %}"
+        providerDashboard: "{% url 'mobile_web:provider_dashboard' %}",
+        notifications: "{% url 'mobile_web:notifications' %}",
+        chats: "{% url 'mobile_web:chats' %}",
+        search: "{% url 'mobile_web:search' %}",
+        settings: "{% url 'mobile_web:settings' %}",
+        plans: "{% url 'mobile_web:plans' %}",
+        about: "{% url 'mobile_web:about' %}",
+        terms: "{% url 'mobile_web:terms' %}",
+        contact: "{% url 'mobile_web:contact' %}",
+        clientOrders: "{% url 'mobile_web:client_orders' %}",
+        providerOrders: "{% url 'mobile_web:provider_orders' %}",
+        serviceRequest: "{% url 'mobile_web:service_request' %}",
+        addService: "{% url 'mobile_web:add_service' %}",
+        searchProviders: "{% url 'mobile_web:search_providers' %}",
+        providerServices: "{% url 'mobile_web:provider_services' %}",
+        providerReviews: "{% url 'mobile_web:provider_reviews' %}",
+        providerProfileEdit: "{% url 'mobile_web:provider_profile_edit' %}",
+        promotions: "{% url 'mobile_web:promotions' %}",
+        verification: "{% url 'mobile_web:verification' %}",
+        notificationSettings: "{% url 'mobile_web:notification_settings' %}",
+        registerProvider: "{% url 'mobile_web:register_provider' %}",
+        extras: "{% url 'mobile_web:extras' %}"
       }
     };
   </script>

@@ -32,6 +32,22 @@ services:
       #   value: https://*.onrender.com,https://nawafeth.app,https://admin.nawafeth.app
       # - key: DJANGO_CORS_ALLOWED_ORIGINS
       #   value: https://nawafeth.app,https://admin.nawafeth.app
+      # - key: USE_R2_MEDIA
+      #   value: "1"
+      # - key: R2_BUCKET_NAME
+      #   value: nawafth-media
+      # - key: R2_ENDPOINT_URL
+      #   value: https://<accountid>.r2.cloudflarestorage.com
+      # - key: R2_PUBLIC_BASE_URL
+      #   value: https://cdn.your-domain.com
+      # - key: AWS_ACCESS_KEY_ID
+      #   sync: false
+      # - key: AWS_SECRET_ACCESS_KEY
+      #   sync: false
+      # - key: AWS_STORAGE_BUCKET_NAME
+      #   value: nawafth-media
+      # - key: AWS_S3_ENDPOINT_URL
+      #   value: https://<accountid>.r2.cloudflarestorage.com
 
   # Redis/Valkey (Render Key Value) for Channels (recommended in production)
   - type: keyvalue

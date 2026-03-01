@@ -1,0 +1,69 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}اتصل بنا | نوافذ{% endblock %}
+{% block page_id %}contact{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{% static 'mobile_web/css/info-pages.css' %}">
+{% endblock %}
+
+{% block content %}
+  <!-- Hero -->
+  <div class="nw-info-hero">
+    <div class="nw-info-hero-icon">
+      <span class="material-icons-round">support_agent</span>
+    </div>
+    <h1>الدعم الفني</h1>
+    <p>تواصل معنا وسنقوم بمساعدتك في أقرب وقت</p>
+  </div>
+
+  <div class="nw-container">
+    <!-- New Ticket Form -->
+    <form class="nw-contact-form" id="ticket-form">
+      <h3><span class="material-icons-round" style="font-size:18px">add_circle</span> تذكرة دعم جديدة</h3>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">فريق الدعم</label>
+        <select class="nw-form-select" id="ticket-team" required>
+          <option value="">اختر فريق الدعم</option>
+        </select>
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">الموضوع</label>
+        <input class="nw-form-input" type="text" id="ticket-subject" placeholder="موضوع مختصر" required>
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">الوصف</label>
+        <textarea class="nw-form-textarea" id="ticket-desc" rows="4" placeholder="اشرح مشكلتك بالتفصيل..." required></textarea>
+      </div>
+
+      <div class="nw-form-group">
+        <label class="nw-form-label">مرفق (اختياري)</label>
+        <input class="nw-form-input" type="file" id="ticket-file">
+      </div>
+
+      <p class="nw-form-error" id="ticket-error" hidden></p>
+      <p class="nw-form-info" id="ticket-success" hidden></p>
+
+      <button type="submit" class="nw-primary-btn" style="width:100%;margin-top:8px">
+        <span class="material-icons-round" style="font-size:18px">send</span>
+        إرسال التذكرة
+      </button>
+    </form>
+
+    <!-- My Tickets -->
+    <div class="nw-ticket-list" id="tickets-section">
+      <h3>تذاكري السابقة</h3>
+      <div id="tickets-list">
+        <div class="nw-info-loading"></div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'mobile_web/js/contact.js' %}"></script>
+{% endblock %}

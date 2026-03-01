@@ -24,6 +24,7 @@ import '../models/chat_thread_model.dart';
 import '../models/chat_message_model.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
+import 'upload_optimizer.dart';
 
 class MessagingService {
   // ──────────────────────────────────────────
@@ -142,7 +143,13 @@ class MessagingService {
       request.fields['body'] = body.trim();
     }
     request.fields['attachment_type'] = attachmentType;
-    request.files.add(await http.MultipartFile.fromPath('attachment', file.path));
+    final optimized = await UploadOptimizer.optimizeForUpload(
+      file,
+      declaredType: attachmentType,
+    );
+    request.files.add(
+      await http.MultipartFile.fromPath('attachment', optimized.path),
+    );
 
     try {
       final streamedRes = await request.send().timeout(const Duration(seconds: 60));
