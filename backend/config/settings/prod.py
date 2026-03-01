@@ -124,12 +124,16 @@ LOGGING = {
 	"filters": {
 		"exclude_health_access": {
 			"()": "apps.core.logging_filters.ExcludeHealthCheckAccessFilter",
-		}
+		},
+		"exclude_bot_scan_404": {
+			"()": "apps.core.logging_filters.ExcludeCommonBotScan404Filter",
+		},
 	},
 	"handlers": {
 		"console": {
 			"class": "logging.StreamHandler",
 			"formatter": "standard",
+			"filters": ["exclude_bot_scan_404"],
 		}
 	},
 	"root": {"handlers": ["console"], "level": _log_level},

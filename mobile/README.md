@@ -11,8 +11,7 @@ Supported keys:
 - `API_RENDER_BASE_URL=https://nawafeth-2290.onrender.com` (optional render override)
 
 Default behavior:
-- Android emulator: `http://10.0.2.2:8000`
-- iOS simulator / desktop: `http://127.0.0.1:8000`
+- Uses production backend (`https://nawafeth-2290.onrender.com`) unless overridden via `--dart-define`.
 
 ## Run commands
 

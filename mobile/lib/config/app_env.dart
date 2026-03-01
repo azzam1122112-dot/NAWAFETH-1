@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 class AppEnv {
   static const String _apiTargetDefine = String.fromEnvironment(
     'API_TARGET',
-    defaultValue: 'auto',
+    defaultValue: 'render',
   );
   static const String _apiBaseUrlDefine = String.fromEnvironment(
     'API_BASE_URL',

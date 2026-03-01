@@ -15,20 +15,20 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import include, path
-from django.views.generic import RedirectView
 from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.health import HealthCheckView, HealthLiveView, HealthReadyView
+from apps.mobile_web import views as mobile_web_views
 
 admin.site.site_header = _("إدارة منصة نوافذ")
 admin.site.site_title = _("لوحة إدارة نوافذ")
 admin.site.index_title = _("مرحبًا بك في لوحة التحكم")
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="mobile_web:home", permanent=False), name="root"),
+    path("", mobile_web_views.home_page, name="root"),
     path("web/", include(("apps.mobile_web.urls", "mobile_web"), namespace="mobile_web")),
     path("health/", HealthCheckView.as_view(), name="health"),
     path("health/live/", HealthLiveView.as_view(), name="health_live"),

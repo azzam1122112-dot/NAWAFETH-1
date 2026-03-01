@@ -2,7 +2,12 @@
 set -euo pipefail
 
 python manage.py migrate --noinput
-python manage.py collectstatic --noinput
+
+# collectstatic already runs during Render build. Keep startup fast to avoid
+# boot-time port scan timeouts; allow opt-in override when needed.
+if [ "${RUN_COLLECTSTATIC_ON_START:-0}" = "1" ]; then
+	python manage.py collectstatic --noinput
+fi
 
 PORT_VALUE="${PORT:-8000}"
 WEB_CONCURRENCY_VALUE="${WEB_CONCURRENCY:-2}"
