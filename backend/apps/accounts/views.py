@@ -303,7 +303,19 @@ def me_view(request):
             if field in data:
                 setattr(user, field, data.get(field))
 
-        user.save()
+        try:
+            user.save()
+        except Exception as exc:
+            # Catch storage backend errors (e.g. R2/S3 403 Forbidden)
+            msg = str(exc)
+            if any(kw in msg for kw in ("403", "Forbidden", "S3", "boto", "bucket", "storage", "ImproperlyConfigured")):
+                import logging
+                logging.getLogger(__name__).error("Storage error saving user profile: %s", msg)
+                return Response(
+                    {"detail": "فشل رفع الملف: مشكلة في التخزين السحابي. يرجى التواصل مع الدعم الفني."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            raise
 
     return Response(_me_payload(user))
 

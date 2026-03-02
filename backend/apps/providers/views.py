@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
@@ -5,6 +7,8 @@ from rest_framework.views import APIView
 from django.db.models import Count, F, Max, Q
 from django.db.models.functions import Coalesce
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 from apps.accounts.models import User
 
@@ -45,6 +49,46 @@ from .serializers import (
 from .media_thumbnails import ensure_video_thumbnail
 
 
+def _handle_storage_error(exc):
+	"""Convert storage/S3 exceptions into a user-friendly DRF Response."""
+	msg = str(exc)
+	if "403" in msg or "Forbidden" in msg:
+		logger.error("Storage access denied (403). Check R2/S3 credentials: %s", msg)
+		return Response(
+			{"detail": "فشل رفع الملف: صلاحيات التخزين السحابي غير كافية. يرجى التواصل مع الدعم الفني."},
+			status=status.HTTP_502_BAD_GATEWAY,
+		)
+	if "NoSuchBucket" in msg or "bucket" in msg.lower():
+		logger.error("Storage bucket not found: %s", msg)
+		return Response(
+			{"detail": "فشل رفع الملف: مشكلة في إعداد التخزين السحابي."},
+			status=status.HTTP_502_BAD_GATEWAY,
+		)
+	logger.error("Storage error during upload: %s", msg)
+	return Response(
+		{"detail": "فشل رفع الملف. يرجى المحاولة لاحقاً."},
+		status=status.HTTP_502_BAD_GATEWAY,
+	)
+
+
+def _is_storage_error(exc):
+	"""Check if an exception originates from the file storage backend."""
+	try:
+		from botocore.exceptions import ClientError, BotoCoreError
+		if isinstance(exc, (ClientError, BotoCoreError)):
+			return True
+	except ImportError:
+		pass
+	from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
+	if isinstance(exc, (ImproperlyConfigured, SuspiciousFileOperation, OSError)):
+		return True
+	# Catch generic exceptions that contain storage-related messages
+	msg = str(exc).lower()
+	if any(kw in msg for kw in ("s3", "r2", "boto", "storage", "bucket", "403", "forbidden")):
+		return True
+	return False
+
+
 class MyProviderProfileView(generics.RetrieveUpdateAPIView):
 	"""Get/update the current user's provider profile."""
 
@@ -56,6 +100,14 @@ class MyProviderProfileView(generics.RetrieveUpdateAPIView):
 		if not provider_profile:
 			raise NotFound("provider_profile_not_found")
 		return provider_profile
+
+	def update(self, request, *args, **kwargs):
+		try:
+			return super().update(request, *args, **kwargs)
+		except Exception as exc:
+			if _is_storage_error(exc):
+				return _handle_storage_error(exc)
+			raise
 
 
 class MyProviderSubcategoriesView(APIView):
@@ -344,6 +396,14 @@ class MyProviderPortfolioListCreateView(generics.ListCreateAPIView):
 		item = serializer.save(provider=pp)
 		ensure_video_thumbnail(item)
 
+	def create(self, request, *args, **kwargs):
+		try:
+			return super().create(request, *args, **kwargs)
+		except Exception as exc:
+			if _is_storage_error(exc):
+				return _handle_storage_error(exc)
+			raise
+
 
 class MyProviderPortfolioDetailView(generics.RetrieveDestroyAPIView):
 	"""Provider-owned single portfolio item (retrieve/delete)."""
@@ -427,6 +487,14 @@ class MyProviderSpotlightListCreateView(generics.ListCreateAPIView):
 			raise NotFound("provider_profile_not_found")
 		item = serializer.save(provider=pp)
 		ensure_video_thumbnail(item)
+
+	def create(self, request, *args, **kwargs):
+		try:
+			return super().create(request, *args, **kwargs)
+		except Exception as exc:
+			if _is_storage_error(exc):
+				return _handle_storage_error(exc)
+			raise
 
 
 class MyProviderSpotlightDetailView(generics.RetrieveDestroyAPIView):

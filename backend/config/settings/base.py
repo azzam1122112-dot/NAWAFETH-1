@@ -187,6 +187,32 @@ _r2_media_ready = USE_R2_MEDIA and all(
     ]
 )
 
+# Quick connectivity check for R2 to avoid silent 500s on every upload.
+# Runs only once at startup; falls back to local storage on failure.
+if _r2_media_ready:
+    try:
+        import boto3
+        from botocore.config import Config as BotoConfig
+        _test_client = boto3.client(
+            "s3",
+            endpoint_url=AWS_S3_ENDPOINT_URL,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=AWS_S3_REGION_NAME,
+            config=BotoConfig(
+                signature_version=AWS_S3_SIGNATURE_VERSION,
+                s3={"addressing_style": AWS_S3_ADDRESSING_STYLE},
+            ),
+        )
+        _test_client.head_bucket(Bucket=AWS_STORAGE_BUCKET_NAME)
+    except Exception as _r2_err:
+        import logging as _log
+        _log.getLogger("nawafeth.settings").warning(
+            "R2/S3 connectivity check failed (%s). Falling back to local FileSystemStorage.",
+            _r2_err,
+        )
+        _r2_media_ready = False
+
 if _r2_media_ready:
     _media_base_url = R2_PUBLIC_BASE_URL.rstrip("/")
     if not _media_base_url:
