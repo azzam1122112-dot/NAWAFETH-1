@@ -12,21 +12,30 @@
 {% endblock %}
 
 {% block content %}
-<!-- ====== HERO SECTION ====== -->
+<!-- ====== HERO SECTION (matches Flutter: video + gradient + top-bar + tagline + search) ====== -->
 <section id="hero">
-  <video
-    class="hero-video"
-    autoplay
-    muted
-    loop
-    playsinline
-    preload="metadata"
-    aria-hidden="true"
-  >
+  <video class="hero-video" autoplay muted loop playsinline preload="metadata" aria-hidden="true">
     <source src="{% static 'mobile_web/videos/V16.mp4' %}" type="video/mp4">
   </video>
   <div class="hero-bg"></div>
   <div class="hero-overlay"></div>
+
+  <!-- Hero top bar (mirrors Flutter: menu | logo | notifications + chat) -->
+  <div class="hero-top-bar container" id="hero-top-bar">
+    <button class="hero-icon-btn" id="btn-menu" aria-label="القائمة">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    </button>
+    <span class="hero-logo">نوافــذ</span>
+    <div class="hero-actions">
+      <a href="/notifications/" class="hero-icon-btn" aria-label="الإشعارات">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+      </a>
+      <a href="/chats/" class="hero-icon-btn" aria-label="المحادثات">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+      </a>
+    </div>
+  </div>
+
   <div class="hero-content container">
     <div class="hero-text">
       <h1 class="hero-tagline">اعثر على الخدمة المناسبة</h1>
@@ -40,18 +49,25 @@
 </section>
 
 <main id="main-content">
-  <!-- ====== REELS CAROUSEL ====== -->
+  <!-- ====== REELS / SPOTLIGHTS (horizontal auto-scroll, click → SpotlightViewer) ====== -->
   <section id="reels" class="section-reels">
     <div class="container">
-      <div class="reels-track" id="reels-track"></div>
+      <div class="reels-track" id="reels-track">
+        <!-- Skeleton reels -->
+        <div class="reel-item skeleton-reel"><div class="reel-ring shimmer"><div class="reel-inner"></div></div><div class="reel-caption shimmer" style="width:50px;height:10px;margin-top:4px"></div></div>
+        <div class="reel-item skeleton-reel"><div class="reel-ring shimmer"><div class="reel-inner"></div></div><div class="reel-caption shimmer" style="width:50px;height:10px;margin-top:4px"></div></div>
+        <div class="reel-item skeleton-reel"><div class="reel-ring shimmer"><div class="reel-inner"></div></div><div class="reel-caption shimmer" style="width:50px;height:10px;margin-top:4px"></div></div>
+        <div class="reel-item skeleton-reel"><div class="reel-ring shimmer"><div class="reel-inner"></div></div><div class="reel-caption shimmer" style="width:50px;height:10px;margin-top:4px"></div></div>
+        <div class="reel-item skeleton-reel"><div class="reel-ring shimmer"><div class="reel-inner"></div></div><div class="reel-caption shimmer" style="width:50px;height:10px;margin-top:4px"></div></div>
+      </div>
     </div>
   </section>
 
-  <!-- ====== CATEGORIES ====== -->
+  <!-- ====== CATEGORIES (horizontal scroll mobile, grid desktop) ====== -->
   <section id="categories" class="section-block">
     <div class="container">
       <h2 class="section-title">التصنيفات</h2>
-      <div class="categories-grid" id="categories-list">
+      <div class="categories-scroll" id="categories-list">
         <div class="cat-item skeleton-cat"><div class="cat-icon shimmer"></div><div class="cat-name shimmer"></div></div>
         <div class="cat-item skeleton-cat"><div class="cat-icon shimmer"></div><div class="cat-name shimmer"></div></div>
         <div class="cat-item skeleton-cat"><div class="cat-icon shimmer"></div><div class="cat-name shimmer"></div></div>
@@ -62,31 +78,31 @@
     </div>
   </section>
 
-  <!-- ====== PROVIDERS ====== -->
+  <!-- ====== PROVIDERS (horizontal scroll mobile, grid desktop) ====== -->
   <section id="providers" class="section-block">
     <div class="container">
       <div class="section-header">
         <h2 class="section-title">مقدمو الخدمة</h2>
         <a href="/search/" class="view-all-btn">عرض الكل</a>
       </div>
-      <div class="providers-grid" id="providers-list">
-        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
-        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
-        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
-        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:8px"></div></div></div>
+      <div class="providers-scroll" id="providers-list">
+        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:6px"></div></div></div>
+        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:6px"></div></div></div>
+        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:6px"></div></div></div>
+        <div class="provider-card skeleton-provider"><div class="provider-cover shimmer"></div><div class="provider-info-skeleton"><div class="shimmer" style="width:60%;height:12px;border-radius:4px"></div><div class="shimmer" style="width:40%;height:10px;border-radius:4px;margin-top:6px"></div></div></div>
       </div>
     </div>
   </section>
 
-  <!-- ====== BANNERS ====== -->
+  <!-- ====== BANNERS (horizontal scroll mobile, grid desktop) ====== -->
   <section id="banners" class="section-block" style="display:none">
     <div class="container">
       <h2 class="section-title">عروض ترويجية</h2>
-      <div class="banners-grid" id="banners-list"></div>
+      <div class="banners-scroll" id="banners-list"></div>
     </div>
   </section>
 
-  <!-- ====== STATS (Desktop only) ====== -->
+  <!-- ====== STATS (Desktop bonus) ====== -->
   <div class="container">
     <div class="stats-section">
       <div class="stat-card">
@@ -108,11 +124,11 @@
     </div>
   </div>
 
-  <!-- ====== CTA (Desktop only) ====== -->
+  <!-- ====== CTA (Desktop bonus) ====== -->
   <div class="container">
     <div class="cta-section">
       <div class="cta-title">هل أنت مقدم خدمة؟</div>
-      <div class="cta-desc">انضم إلى نوافذ وابدأ باستقبال طلبات العملاء من جميع أنحاء المملكة </div>
+      <div class="cta-desc">انضم إلى نوافذ وابدأ باستقبال طلبات العملاء من جميع أنحاء المملكة</div>
       <a href="/add-service/" class="cta-btn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         سجّل خدمتك الآن
@@ -123,5 +139,6 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'mobile_web/js/spotlightViewer.js' %}"></script>
 <script src="{% static 'mobile_web/js/homePage.js' %}"></script>
 {% endblock %}

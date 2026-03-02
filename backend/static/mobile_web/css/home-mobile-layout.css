@@ -1,6 +1,8 @@
 /* ===================================================================
-   Nawafeth Web — home-mobile-layout.css  v2.0
-   Home Page Specific Enhancements
+   Nawafeth Web — home-mobile-layout.css  v3.0
+   1:1 match with Flutter home_screen.dart layout.
+   Mobile-first: horizontal scroll carousels.
+   Desktop: graceful grid expansion.
    =================================================================== */
 
 /* ── Hero Video Background ── */
@@ -26,33 +28,194 @@ body.home-mobile-layout .hero-content {
   z-index: 3;
 }
 
+/* ── Hero Top Bar (mirrors Flutter: menu | "نوافــذ" | notifications + chat) ── */
+.hero-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top, 12px));
+}
+
+.hero-logo {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,.3);
+  letter-spacing: 1px;
+  font-family: 'Cairo', sans-serif;
+}
+
+.hero-icon-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: rgba(0,0,0,.25);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.hero-icon-btn:hover {
+  background: rgba(0,0,0,.45);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ── Home-specific sections ── */
 body.home-mobile-layout #main-content {
   position: relative;
   z-index: 1;
 }
 
-/* ── Reels auto-scroll animation ── */
-@keyframes reelsScroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+/* ================================================================
+   SCROLL CONTAINERS — Mobile-first horizontal carousels
+   Mirrors Flutter horizontal ListView for all sections.
+   ================================================================ */
+
+/* ── Categories Scroll (Flutter: 76px wide items, horizontal) ── */
+.categories-scroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 10px;
+  padding: 0 4px 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
 }
 
-body.home-mobile-layout .reels-track.auto-scroll {
-  animation: reelsScroll 30s linear infinite;
-  overflow: visible;
+.categories-scroll::-webkit-scrollbar {
+  display: none;
 }
 
-body.home-mobile-layout .reels-track.auto-scroll:hover {
-  animation-play-state: paused;
+.categories-scroll .cat-item {
+  flex: 0 0 78px;
+  width: 78px;
+  scroll-snap-align: start;
 }
 
-/* ── Mobile: Compact home adjustments ── */
+/* ── Providers Scroll (Flutter: 150px wide, 180px tall cards) ── */
+.providers-scroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 0 4px 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.providers-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.providers-scroll .provider-card {
+  flex: 0 0 155px;
+  width: 155px;
+  min-height: 185px;
+  scroll-snap-align: start;
+}
+
+/* Flutter provider card: cover 70px, compact info */
+.providers-scroll .provider-cover {
+  height: 70px;
+}
+
+.providers-scroll .provider-info {
+  margin-top: -16px;
+  padding: 0 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.providers-scroll .provider-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.providers-scroll .provider-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.providers-scroll .provider-name {
+  font-size: 12px;
+}
+
+.providers-scroll .provider-city {
+  font-size: 10px;
+}
+
+.providers-scroll .provider-stats {
+  padding: 4px 8px 6px;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.providers-scroll .provider-stat {
+  font-size: 10px;
+}
+
+/* ── Banners Scroll (Flutter: 220×130 cards) ── */
+.banners-scroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 0 4px 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.banners-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.banners-scroll .banner-card {
+  flex: 0 0 224px;
+  width: 224px;
+  height: 134px;
+  scroll-snap-align: start;
+}
+
+/* ── Reels auto-scroll ── */
+body.home-mobile-layout .section-reels {
+  padding: var(--space-md) 0 var(--space-xs);
+}
+
+/* ── Skeleton reels ── */
+.skeleton-reel .reel-ring {
+  border-radius: 50%;
+}
+
+/* ================================================================
+   MOBILE: ≤ 768px  — compact hero, horizontal-only carousels
+   ================================================================ */
 @media (max-width: 768px) {
+  /* Hero compact */
   body.home-mobile-layout .hero-content {
     min-height: 240px;
-    padding-top: 48px;
-    padding-bottom: 28px;
+    padding-top: 56px;
+    padding-bottom: 24px;
   }
 
   body.home-mobile-layout .hero-tagline {
@@ -63,83 +226,93 @@ body.home-mobile-layout .reels-track.auto-scroll:hover {
     font-size: 16px;
   }
 
-  /* Horizontal scrolling carousels on mobile */
-  body.home-mobile-layout .categories-grid {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 10px;
-    padding: 0 4px 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-  }
-
-  body.home-mobile-layout .categories-grid::-webkit-scrollbar {
-    display: none;
-  }
-
-  body.home-mobile-layout .cat-item {
-    flex: 0 0 78px;
-    width: 78px;
-    scroll-snap-align: start;
-  }
-
-  body.home-mobile-layout .providers-grid {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 12px;
-    padding: 0 4px 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-  }
-
-  body.home-mobile-layout .providers-grid::-webkit-scrollbar {
-    display: none;
-  }
-
-  body.home-mobile-layout .provider-card {
-    flex: 0 0 160px;
-    width: 160px;
-    min-height: 190px;
-    scroll-snap-align: start;
-  }
-
-  body.home-mobile-layout .banners-grid {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 12px;
-    padding: 0 4px 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  body.home-mobile-layout .banners-grid::-webkit-scrollbar {
-    display: none;
-  }
-
-  body.home-mobile-layout .banner-card {
-    flex: 0 0 240px;
-    width: 240px;
-    height: 140px;
-  }
+  /* Hide top-bar on mobile (navbar already handles it) — optional:
+     keep visible for Flutter-like experience */
+  /* .hero-top-bar { display: none; } */
 }
 
-/* ── Tablet: Moderate columns ── */
-@media (min-width: 769px) and (max-width: 1023px) {
-  body.home-mobile-layout .providers-grid {
+/* ================================================================
+   TABLET: 769px – 1023px  — partial grid expansion
+   ================================================================ */
+@media (min-width: 769px) {
+  /* Categories expands to wrapping flex */
+  .categories-scroll {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .categories-scroll .cat-item {
+    flex: 0 0 100px;
+    width: 100px;
+  }
+
+  /* Providers — 3 col grid */
+  .providers-scroll {
+    display: grid;
     grid-template-columns: repeat(3, 1fr);
+    overflow-x: visible;
+    gap: var(--space-lg);
   }
 
-  body.home-mobile-layout .categories-grid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  .providers-scroll .provider-card {
+    flex: none;
+    width: auto;
+    min-height: auto;
+  }
+
+  .providers-scroll .provider-cover {
+    height: 90px;
+  }
+
+  .providers-scroll .provider-info {
+    margin-top: -20px;
+    padding: 0 var(--space-md);
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .providers-scroll .provider-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .providers-scroll .provider-name {
+    font-size: 13px;
+  }
+
+  .providers-scroll .provider-city {
+    font-size: 11px;
+  }
+
+  .providers-scroll .provider-stats {
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+  }
+
+  .providers-scroll .provider-stat {
+    font-size: 11px;
+  }
+
+  /* Banners — 2 col grid */
+  .banners-scroll {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    overflow-x: visible;
+    gap: var(--space-lg);
+  }
+
+  .banners-scroll .banner-card {
+    flex: none;
+    width: auto;
+    height: 170px;
   }
 }
 
-/* ── Desktop: Full grid layout ── */
+/* ================================================================
+   DESKTOP: ≥ 1024px  — full grid layout
+   ================================================================ */
 @media (min-width: 1024px) {
   body.home-mobile-layout .hero-content {
     min-height: 460px;
@@ -158,27 +331,34 @@ body.home-mobile-layout .reels-track.auto-scroll:hover {
     font-size: 26px;
   }
 
-  body.home-mobile-layout .providers-grid {
+  /* Categories full grid */
+  .categories-scroll .cat-item {
+    flex: 0 0 120px;
+    width: 120px;
+  }
+
+  /* Providers 4-col */
+  .providers-scroll {
     grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-lg);
   }
 
-  body.home-mobile-layout .categories-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: var(--space-lg);
+  .providers-scroll .provider-cover {
+    height: 100px;
   }
 
-  body.home-mobile-layout .banners-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--space-lg);
+  /* Banners 3-col */
+  .banners-scroll {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   }
 
-  body.home-mobile-layout .banner-card {
+  .banners-scroll .banner-card {
     height: 200px;
   }
 }
 
-/* ── Large Desktop ── */
+/* ================================================================
+   LARGE DESKTOP: ≥ 1400px
+   ================================================================ */
 @media (min-width: 1400px) {
   body.home-mobile-layout .hero-content {
     min-height: 520px;
@@ -188,11 +368,250 @@ body.home-mobile-layout .reels-track.auto-scroll:hover {
     font-size: 52px;
   }
 
-  body.home-mobile-layout .providers-grid {
+  .providers-scroll {
     grid-template-columns: repeat(5, 1fr);
   }
 
-  body.home-mobile-layout .banner-card {
+  .banners-scroll .banner-card {
     height: 220px;
   }
 }
+
+/* ================================================================
+   SPOTLIGHT VIEWER — Fullscreen TikTok-style overlay
+   Mirrors Flutter SpotlightViewerPage
+   ================================================================ */
+.sv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: svFadeIn 0.25s ease;
+}
+
+@keyframes svFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Close button (top-left in RTL = top-right visually) */
+.sv-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 12px));
+  left: 12px;
+  z-index: 10;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.4);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.sv-close:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+/* Badge "لمحة" top-right */
+.sv-badge {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 16px));
+  right: 16px;
+  z-index: 10;
+  padding: 4px 14px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 16px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Counter */
+.sv-counter {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 16px));
+  left: 60px;
+  z-index: 10;
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Media container */
+.sv-media {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.sv-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sv-video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sv-media-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bottom info (provider + caption) */
+.sv-bottom {
+  position: absolute;
+  left: 0;
+  right: 72px; /* leave space for side actions */
+  bottom: 0;
+  padding: 24px 16px;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+  z-index: 5;
+}
+
+.sv-provider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.sv-provider-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  background: #7E57C2;
+}
+
+.sv-provider-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sv-provider-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Cairo', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sv-caption {
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  font-family: 'Cairo', sans-serif;
+  line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Side actions (right side — TikTok style) */
+.sv-side {
+  position: absolute;
+  right: 10px;
+  bottom: 24px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.sv-side-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #512DA8;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  margin-bottom: 4px;
+}
+
+.sv-side-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sv-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  gap: 4px;
+}
+
+.sv-action-icon svg {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: transform 0.2s;
+}
+
+.sv-action:active .sv-action-icon svg {
+  transform: scale(1.2);
+}
+
+.sv-action-label {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Cairo', sans-serif;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* Desktop SpotlightViewer — constrain media */
+@media (min-width: 768px) {
+  .sv-media {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .sv-bottom {
+    max-width: 480px;
+    margin: 0 auto;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    width: 100%;
+    padding-right: 72px;
+  }
+
+  .sv-side {
+    right: calc(50% - 240px - 60px);
+  }
+}
+
