@@ -21,6 +21,8 @@ from .views import (
     MobileWebTermsView,
     MobileWebAboutView,
     MobileWebContactView,
+    MobileWebLanguageView,
+    MobileWebMyQrView,
     MobileWebNotificationSettingsView,
     # ── New views (1:1 mobile parity) ──
     MobileWebProviderDashboardView,
@@ -70,6 +72,8 @@ urlpatterns = [
     path("terms/", MobileWebTermsView.as_view(), name="terms"),
     path("about/", MobileWebAboutView.as_view(), name="about"),
     path("contact/", MobileWebContactView.as_view(), name="contact"),
+    path("language/", MobileWebLanguageView.as_view(), name="language"),
+    path("my-qr/", MobileWebMyQrView.as_view(), name="my_qr"),
     # ── New routes (1:1 mobile parity) ──
     path("provider-dashboard/", MobileWebProviderDashboardView.as_view(), name="provider_dashboard"),
     path("provider-orders/", MobileWebProviderOrdersView.as_view(), name="provider_orders"),

@@ -10,43 +10,45 @@
 {% block content %}
 <main class="page-content">
   <div class="container">
-    <div class="page-header">
-      <h1 class="page-title">تفاعلي</h1>
-    </div>
-
-    <!-- Auth gate -->
-    <div id="auth-gate" class="auth-gate hidden">
-      <div class="auth-gate-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="#B39DDB"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-      </div>
-      <p class="auth-gate-text">يجب تسجيل الدخول لعرض تفاعلاتك</p>
-      <a href="/login/?next=/interactive/" class="btn-primary">تسجيل الدخول</a>
-    </div>
-
-    <!-- Content -->
-    <div id="interactive-content" class="hidden">
-      <!-- Tabs -->
-      <div class="tabs-row" id="interact-tabs">
-        <button class="tab-btn active" data-tab="following">متابعاتي</button>
-        <button class="tab-btn" data-tab="favorites">المفضلة</button>
-      </div>
-
-      <!-- Following tab -->
-      <div id="tab-following" class="tab-panel">
-        <div class="providers-grid" id="following-list"></div>
-        <div class="empty-state hidden" id="following-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          <p>لا توجد متابعات بعد</p>
+    <div class="interactive-root">
+      <div id="interactive-loading" class="interactive-loading">
+        <div class="interactive-state">
+          <div class="spinner"></div>
+          <p class="interactive-state-text">جاري تحميل الصفحة...</p>
         </div>
       </div>
 
-      <!-- Favorites tab -->
-      <div id="tab-favorites" class="tab-panel hidden">
-        <div class="media-grid" id="favorites-list"></div>
-        <div class="empty-state hidden" id="favorites-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          <p>لا توجد عناصر مفضلة</p>
+      <!-- Auth gate -->
+      <div id="auth-gate" class="interactive-auth-gate hidden">
+        <div class="interactive-auth-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 8V6a3 3 0 1 1 6 0v3H9z"/></svg>
         </div>
+        <p class="interactive-auth-title">تسجيل الدخول مطلوب</p>
+        <p class="interactive-auth-subtitle">يلزم تسجيل الدخول للوصول إلى المتابعة، المتابعين، والمفضلة</p>
+        <a href="/login/?next=/interactive/" class="btn-primary">تسجيل الدخول</a>
+      </div>
+
+      <!-- Content -->
+      <div id="interactive-content" class="hidden">
+        <!-- Tabs -->
+        <div class="interactive-tabs-shell">
+          <div class="tabs-row" id="interact-tabs"></div>
+        </div>
+
+        <!-- Following tab -->
+        <section id="tab-following" class="tab-panel active">
+          <div class="interactive-following-grid" id="following-list"></div>
+        </section>
+
+        <!-- Followers tab (provider mode only) -->
+        <section id="tab-followers" class="tab-panel">
+          <div class="interactive-followers-list" id="followers-list"></div>
+        </section>
+
+        <!-- Favorites tab -->
+        <section id="tab-favorites" class="tab-panel">
+          <div class="interactive-favorites-grid" id="favorites-list"></div>
+        </section>
       </div>
     </div>
   </div>
@@ -54,5 +56,6 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'mobile_web/js/spotlightViewer.js' %}"></script>
 <script src="{% static 'mobile_web/js/interactivePage.js' %}"></script>
 {% endblock %}

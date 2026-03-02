@@ -1,27 +1,35 @@
-{% extends "mobile_web/base.html" %}{% load static %}
+{% extends "mobile_web/base.html" %}
+{% load static %}
 {% block title %}إعدادات الدخول — نوافــذ{% endblock %}
 {% block body_class %}page-login-settings{% endblock %}
+{% block sidebar_settings %}active{% endblock %}
 
 {% block content %}
-<main class="page-shell">
+<main class="page-shell ls-page">
   <div class="page-header">
     <button class="btn-back" onclick="history.back()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
     <h1>إعدادات الدخول</h1>
   </div>
 
   <div id="ls-loading" class="loading-center"><div class="spinner"></div></div>
+  <div id="ls-error" class="detail-card hidden">
+    <p id="ls-error-text" class="text-muted">تعذر تحميل البيانات.</p>
+    <button class="btn btn-secondary btn-block" id="ls-retry">إعادة المحاولة</button>
+  </div>
 
-  <div id="ls-content" style="display:none">
-    <!-- User Avatar -->
+  <div id="ls-content" class="hidden">
     <div class="ls-avatar">
       <div class="avatar-circle" id="ls-avatar"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <h2 id="ls-name"></h2>
-      <p class="text-muted" id="ls-phone-display"></p>
+      <p class="text-muted" id="ls-email-display"></p>
     </div>
 
-    <!-- Account Info -->
     <section class="detail-card">
-      <h3>معلومات الحساب</h3>
+      <h3 class="ls-section-title">معلومات الحساب</h3>
+      <div class="form-group">
+        <label class="form-label">اسم المستخدم</label>
+        <input id="ls-username" type="text" class="form-input" disabled>
+      </div>
       <div class="form-group">
         <label class="form-label">الاسم الأول</label>
         <input id="ls-first-name" type="text" class="form-input">
@@ -34,35 +42,58 @@
         <label class="form-label">رقم الجوال</label>
         <input id="ls-phone" type="tel" class="form-input" dir="ltr">
       </div>
+    </section>
+
+    <section class="detail-card">
+      <h3 class="ls-section-title">الأمان</h3>
       <div class="form-group">
         <label class="form-label">البريد الإلكتروني</label>
         <input id="ls-email" type="email" class="form-input" dir="ltr">
       </div>
-      <button class="btn btn-primary btn-block" id="ls-save">حفظ التغييرات</button>
+      <button class="btn btn-outlined btn-block" id="ls-security-btn">إضافة رمز دخول أمان</button>
     </section>
 
-    <!-- Security -->
     <section class="detail-card">
-      <h3>الأمان</h3>
-      <div class="form-group">
-        <label class="form-label">رمز الأمان (PIN)</label>
-        <input id="ls-pin" type="password" class="form-input" maxlength="6" placeholder="أدخل رمز مكون من 4-6 أرقام">
-      </div>
-      <div class="form-group">
-        <label class="form-label">تأكيد رمز الأمان</label>
-        <input id="ls-pin-confirm" type="password" class="form-input" maxlength="6" placeholder="أعد إدخال الرمز">
-      </div>
-      <button class="btn btn-outline btn-block" id="ls-save-pin">حفظ رمز الأمان</button>
+      <h3 class="ls-section-title">طرق الدخول الإضافية</h3>
+      <button class="btn btn-outlined btn-block" id="ls-faceid-btn">الدخول بمعرف الوجه</button>
     </section>
 
-    <!-- Danger Zone -->
     <section class="detail-card ls-danger">
-      <h3>إجراءات الحساب</h3>
-      <button class="btn btn-outline btn-block" id="ls-logout">تسجيل الخروج</button>
+      <h3 class="ls-section-title">إجراءات الحساب</h3>
+      <button class="btn btn-secondary btn-block" id="ls-logout">تسجيل الخروج</button>
       <button class="btn btn-danger-outline btn-block" id="ls-delete" style="margin-top:8px">حذف الحساب</button>
     </section>
+
+    <button class="btn btn-primary btn-block" id="ls-save">حفظ التغييرات</button>
   </div>
 </main>
+
+<div id="ls-security-modal" class="ls-modal hidden">
+  <div class="ls-modal-card">
+    <h3>إضافة رمز دخول أمان</h3>
+    <p>احتفظ بالرمز في مكان آمن ولا تشاركه مع أحد.</p>
+    <input id="ls-pin" type="password" class="form-input" maxlength="6" placeholder="رمز الأمان (4-6 أرقام)" dir="ltr">
+    <input id="ls-pin-confirm" type="password" class="form-input" maxlength="6" placeholder="تأكيد الرمز" dir="ltr">
+    <div class="ls-modal-actions">
+      <button type="button" class="btn btn-secondary" id="ls-pin-cancel">إلغاء</button>
+      <button type="button" class="btn btn-primary" id="ls-pin-save">حفظ</button>
+    </div>
+  </div>
+</div>
+
+<div id="ls-faceid-modal" class="ls-modal hidden">
+  <div class="ls-modal-card">
+    <h3>إعداد الدخول بمعرف الوجه</h3>
+    <p>قم بإدخال رمز تحقق لتأكيد التفعيل.</p>
+    <input id="ls-faceid-code" type="password" class="form-input" maxlength="10" placeholder="رمز التحقق" dir="ltr">
+    <div class="ls-modal-actions">
+      <button type="button" class="btn btn-secondary" id="ls-faceid-cancel">إلغاء</button>
+      <button type="button" class="btn btn-primary" id="ls-faceid-save">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<div id="ls-toast" class="ls-toast" aria-live="polite"></div>
 {% endblock %}
 
 {% block extra_js %}

@@ -51,7 +51,7 @@ def test_subscribe(api, user):
     assert ur.metadata_record.payload.get("invoice_id") == sub.invoice_id
 
 
-def test_subscribe_rejects_unverified_provider(api, user):
+def test_subscribe_allows_unverified_provider(api, user):
     plan = SubscriptionPlan.objects.create(code="PRO2", title="Pro2", period=PlanPeriod.MONTH, price=Decimal("25.00"))
     ProviderProfile.objects.create(
         user=user,
@@ -63,9 +63,9 @@ def test_subscribe_rejects_unverified_provider(api, user):
     )
     api.force_authenticate(user=user)
     r = api.post(f"/api/subscriptions/subscribe/{plan.pk}/")
-    assert r.status_code == 400
-    assert "توثيق" in str(r.data.get("detail", ""))
-    assert not Subscription.objects.filter(user=user, plan=plan).exists()
+    assert r.status_code == 201
+    assert r.data["invoice"] is not None
+    assert Subscription.objects.filter(user=user, plan=plan).exists()
 
 
 def test_subscriptions_endpoints_require_auth(api):

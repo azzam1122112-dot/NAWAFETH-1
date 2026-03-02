@@ -12,7 +12,6 @@
 const ProfilePage = (() => {
   const MODE_KEY = 'nw_account_mode';
   let _profile = null;
-  let _providerProfile = null;
   let _mode = 'client';
 
   /* ──────── Init ──────── */
@@ -48,11 +47,15 @@ const ProfilePage = (() => {
       if (!btn) return;
       const nextMode = btn.dataset.mode === 'provider' ? 'provider' : 'client';
       if (nextMode === _mode) return;
-      if (nextMode === 'provider' && !_canSwitchToProvider()) return;
-      _mode = nextMode;
-      _saveMode(_mode);
+      if (nextMode === 'provider') {
+        if (!_canSwitchToProvider()) return;
+        _saveMode('provider');
+        window.location.href = '/provider-dashboard/';
+        return;
+      }
+      _mode = 'client';
+      _saveMode('client');
       _renderAll();
-      if (_mode === 'provider') _loadProviderKpis();
     });
   }
 
@@ -62,7 +65,7 @@ const ProfilePage = (() => {
     if (qrBtn) qrBtn.onclick = () => alert('ميزة QR ستكون متاحة قريبًا.');
 
     const settingsBtn = document.getElementById('btn-settings');
-    if (settingsBtn) settingsBtn.onclick = () => { window.location.href = '/settings/'; };
+    if (settingsBtn) settingsBtn.onclick = () => { window.location.href = '/login-settings/'; };
   }
 
   /* ──────── Image upload binding ──────── */
@@ -125,24 +128,20 @@ const ProfilePage = (() => {
 
   /* ──────── Load profile data ──────── */
   async function _loadProfile() {
-    const profile = await Auth.getProfile(true);
+    const profileRes = await ApiClient.get('/api/accounts/me/?mode=client');
+    const profile = (profileRes && profileRes.ok && profileRes.data) ? profileRes.data : null;
     if (!profile) { _showGate(); return; }
 
     _profile = profile;
-    _providerProfile = null;
-
-    if (_canSwitchToProvider()) {
-      const providerRes = await ApiClient.get('/api/providers/me/profile/');
-      if (providerRes.ok && providerRes.data && typeof providerRes.data === 'object') {
-        _providerProfile = providerRes.data;
-      }
-    }
 
     const preferred = _getSavedMode();
-    _mode = (_canSwitchToProvider() && preferred === 'provider') ? 'provider' : 'client';
+    if (_canSwitchToProvider() && preferred === 'provider') {
+      window.location.href = '/provider-dashboard/';
+      return;
+    }
+    _mode = 'client';
 
     _renderAll();
-    if (_mode === 'provider') _loadProviderKpis();
   }
 
   /* ──────── Render orchestrator ──────── */
@@ -155,7 +154,6 @@ const ProfilePage = (() => {
     _renderMenu();
     _renderProviderCTA();
     _renderProviderSection();
-    _toggleProviderStrip(_mode === 'provider' && _canSwitchToProvider());
   }
 
   /* ──────── Mode toggle render ──────── */
@@ -168,17 +166,14 @@ const ProfilePage = (() => {
     const clientBtn = document.getElementById('mode-client-btn');
     const providerBtn = document.getElementById('mode-provider-btn');
     if (clientBtn) clientBtn.classList.toggle('active', _mode !== 'provider');
-    if (providerBtn) providerBtn.classList.toggle('active', _mode === 'provider');
+    if (providerBtn) providerBtn.classList.toggle('active', false);
   }
 
   /* ──────── Header render (cover + avatar + name + username) ──────── */
   function _renderHeader() {
-    const useProvider = _mode === 'provider' && !!_providerProfile;
-    const coverPath = useProvider ? _providerProfile.cover_image : _profile.cover_image;
-    const avatarPath = useProvider ? _providerProfile.profile_image : _profile.profile_image;
-    const name = useProvider
-      ? (_providerProfile.display_name || _displayName(_profile))
-      : _displayName(_profile);
+    const coverPath = _profile.cover_image;
+    const avatarPath = _profile.profile_image;
+    const name = _displayName(_profile);
 
     // Cover
     const coverEl = document.getElementById('profile-cover');
@@ -254,11 +249,8 @@ const ProfilePage = (() => {
   /* ──────── Stats render ──────── */
   function _renderStats() {
     if (!_profile) return;
-    const isProvider = _mode === 'provider';
     const following = _toInt(_profile.following_count);
-    const likes = isProvider
-      ? _toInt(_profile.provider_likes_received_count || _profile.likes_count)
-      : _toInt(_profile.likes_count);
+    const likes = _toInt(_profile.likes_count);
     const favorites = _toInt(
       _profile.favorites_media_count || _profile.favorites_count || _profile.bookmarks_count
     );
@@ -266,64 +258,41 @@ const ProfilePage = (() => {
     _setText('stat-following', following);
     _setText('stat-likes', likes);
     _setText('stat-favorites', favorites);
-    _setText('stat-following-label', isProvider ? 'يتابع' : 'أتابع');
+    _setText('stat-following-label', 'أتابع');
     _setText('stat-likes-label', 'إعجاب');
-    _setText('stat-favorites-label', isProvider ? 'محفوظ' : 'مفضلتي');
+    _setText('stat-favorites-label', 'مفضلتي');
   }
 
   /* ──────── Quick actions render ──────── */
   function _renderQuickActions() {
-    const isProvider = _mode === 'provider';
-
-    // Orders
-    _setAction('action-orders', 'action-orders-label',
-      '/orders/', isProvider ? 'طلبات الخدمة' : 'طلباتي');
-
-    // Chats (Flutter: index 1 = محادثاتي)
-    _setAction('action-chats', 'action-chats-label',
-      isProvider ? '/add-service/' : '/chats/',
-      isProvider ? 'خدماتي' : 'محادثاتي');
-
-    // Notifications
-    _setAction('action-notifications', 'action-notifications-label',
-      '/notifications/', 'الإشعارات');
-
-    // Interactive (Flutter: index 3 = تفاعلي)
-    _setAction('action-interactive', 'action-interactive-label',
-      '/interactive/', isProvider ? 'المتابعون' : 'تفاعلي');
+    _setAction('action-orders', 'action-orders-label', '/orders/', 'طلباتي');
+    _setAction('action-chats', 'action-chats-label', '/chats/', 'محادثاتي');
+    _setAction('action-notifications', 'action-notifications-label', '/notifications/', 'الإشعارات');
+    _setAction('action-interactive', 'action-interactive-label', '/interactive/', 'تفاعلي');
   }
 
   /* ──────── Menu render ──────── */
   function _renderMenu() {
-    const isProvider = _mode === 'provider';
     // Settings subtitle (email or phone)
     const sub = _profile.email || _profile.phone || '';
     _setText('menu-settings-sub', sub);
 
     // Saved label
     const savedLabel = document.getElementById('menu-saved-label');
-    if (savedLabel) savedLabel.textContent = isProvider ? 'إدارة الخدمات' : 'المحفوظات';
+    if (savedLabel) savedLabel.textContent = 'المحفوظات';
 
     const savedBtn = document.getElementById('btn-saved');
     if (savedBtn) {
-      savedBtn.onclick = () => {
-        window.location.href = isProvider ? '/add-service/' : '/interactive/';
-      };
+      savedBtn.onclick = () => { window.location.href = '/interactive/'; };
     }
 
-    // Saved badge (favorites count)
+    // Saved badge count
     const badge = document.getElementById('menu-saved-badge');
     if (badge) {
       const count = _toInt(_profile.favorites_media_count || _profile.favorites_count || _profile.bookmarks_count);
-      if (count > 0 && !isProvider) {
-        badge.textContent = count;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
+      badge.textContent = String(count);
+      badge.classList.remove('hidden');
     }
-
-    _setText('provider-section-title', isProvider ? 'لوحة مقدم الخدمة' : 'ملفي كمقدم خدمة');
   }
 
   /* ──────── Provider CTA (for non-providers) ──────── */
@@ -332,22 +301,6 @@ const ProfilePage = (() => {
     if (!cta) return;
     const isProvider = _canSwitchToProvider();
     cta.classList.toggle('hidden', isProvider);
-  }
-
-  /* ──────── Provider KPIs ──────── */
-  async function _loadProviderKpis() {
-    const strip = document.getElementById('provider-dashboard-strip');
-    if (!strip || strip.classList.contains('hidden')) return;
-
-    const [urgentRes, newRes, completedRes] = await Promise.all([
-      ApiClient.get('/api/marketplace/provider/urgent/available/'),
-      ApiClient.get('/api/marketplace/provider/requests/?status_group=new'),
-      ApiClient.get('/api/marketplace/provider/requests/?status_group=completed'),
-    ]);
-
-    _setText('kpi-urgent', _responseCount(urgentRes));
-    _setText('kpi-new', _responseCount(newRes));
-    _setText('kpi-completed', _responseCount(completedRes));
   }
 
   function _toggleProviderStrip(show) {
@@ -359,34 +312,9 @@ const ProfilePage = (() => {
 
   /* ──────── Provider section card ──────── */
   function _renderProviderSection() {
+    _toggleProviderStrip(false);
     const section = document.getElementById('provider-section');
-    if (!section) return;
-    if (!_providerProfile) { section.classList.add('hidden'); return; }
-    section.classList.remove('hidden');
-
-    const card = document.getElementById('provider-card');
-    if (!card) return;
-    card.innerHTML = '';
-
-    const p = _providerProfile;
-    const link = UI.el('a', { className: 'provider-card', href: '/provider/' + p.id + '/' });
-
-    const cover = UI.el('div', { className: 'provider-cover' });
-    if (p.cover_image) cover.appendChild(UI.lazyImg(ApiClient.mediaUrl(p.cover_image), ''));
-    link.appendChild(cover);
-
-    const info = UI.el('div', { className: 'provider-info' });
-    const avatar = UI.el('div', { className: 'provider-avatar' });
-    if (p.profile_image) avatar.appendChild(UI.lazyImg(ApiClient.mediaUrl(p.profile_image), ''));
-    else avatar.textContent = (p.display_name || '').charAt(0) || '؟';
-    info.appendChild(avatar);
-
-    const meta = UI.el('div', { className: 'provider-meta' });
-    meta.appendChild(UI.el('span', { className: 'provider-name', textContent: p.display_name || '' }));
-    if (p.city) meta.appendChild(UI.el('div', { className: 'provider-city', textContent: p.city }));
-    info.appendChild(meta);
-    link.appendChild(info);
-    card.appendChild(link);
+    if (section) section.classList.add('hidden');
   }
 
   /* ──────── Helpers ──────── */
@@ -399,14 +327,6 @@ const ProfilePage = (() => {
   function _displayName(profile) {
     return [profile.first_name || '', profile.last_name || ''].join(' ').trim()
       || profile.username || profile.phone || 'مستخدم';
-  }
-
-  function _responseCount(res) {
-    if (!res || !res.ok || !res.data) return 0;
-    if (Array.isArray(res.data)) return res.data.length;
-    if (Array.isArray(res.data.results)) return res.data.results.length;
-    if (typeof res.data.count === 'number') return res.data.count;
-    return 0;
   }
 
   function _canSwitchToProvider() {

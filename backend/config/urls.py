@@ -43,6 +43,9 @@ from apps.mobile_web.views import (
     MobileWebTermsView,
     MobileWebAboutView,
     MobileWebContactView,
+    MobileWebLanguageView,
+    MobileWebMyQrView,
+    MobileWebLoginSettingsView,
     MobileWebNotificationSettingsView,
 )
 
@@ -118,6 +121,9 @@ urlpatterns = [
     path("terms/", MobileWebTermsView.as_view(), name="terms"),
     path("about/", MobileWebAboutView.as_view(), name="about"),
     path("contact/", MobileWebContactView.as_view(), name="contact"),
+    path("language/", MobileWebLanguageView.as_view(), name="language"),
+    path("my-qr/", MobileWebMyQrView.as_view(), name="my_qr"),
+    path("login-settings/", MobileWebLoginSettingsView.as_view(), name="login_settings"),
 ]
 
 if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):

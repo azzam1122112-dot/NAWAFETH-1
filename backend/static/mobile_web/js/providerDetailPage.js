@@ -12,6 +12,11 @@ const ProviderDetailPage = (() => {
   let _providerData = null;
   let _providerPhone = '';
   let _spotlights = [];
+  let _socialUrls = {
+    instagram: '',
+    x: '',
+    snapchat: '',
+  };
 
   function init() {
     const match = window.location.pathname.match(/\/provider\/(\d+)/);
@@ -228,98 +233,86 @@ const ProviderDetailPage = (() => {
 
   /* ── Render profile tab details ── */
   function _renderProfileTab(p) {
+    const unavailable = 'غير متوفر';
+    const serviceRangeKm = _resolveServiceRangeKm(p);
+
     // Bio
-    _setText('pd-bio', p.bio || p.description || p.about_details || 'لا توجد نبذة');
+    _setText('pd-bio', p.bio || p.description || p.about_details || 'لا يوجد وصف');
 
     // Categories
-    _setText('pd-main-category', p.category_name || p.main_category || '-');
-    _setText('pd-sub-category', p.subcategory_name || p.sub_category || '-');
+    _setText('pd-main-category', _displayOrUnavailable(p.category_name || p.main_category, unavailable));
+    _setText('pd-sub-category', _displayOrUnavailable(p.subcategory_name || p.sub_category, unavailable));
 
     // About details
-    _setText('pd-about-details', p.about_details || p.bio || '-');
+    _setText('pd-about-details', _displayOrUnavailable(p.about_details || p.bio, unavailable));
 
     // Qualifications
     const quals = p.qualifications || [];
     const qualsText = quals.map(q => typeof q === 'string' ? q : (q.title || q.name || '')).filter(Boolean).join('، ');
-    _setText('pd-qualifications', qualsText || '-');
+    _setText('pd-qualifications', _displayOrUnavailable(qualsText, unavailable));
 
     // Experience
-    _setText('pd-experience', p.years_experience ? p.years_experience + ' سنوات' : '-');
+    _setText('pd-experience', p.years_experience ? p.years_experience + ' سنوات' : unavailable);
 
     // Languages
     const langs = p.languages || [];
     const langsText = langs.map(l => typeof l === 'string' ? l : (l.name || '')).filter(Boolean).join('، ');
-    _setText('pd-languages', langsText || '-');
+    _setText('pd-languages', _displayOrUnavailable(langsText, unavailable));
+
+    _setText('pd-city-name', _displayOrUnavailable(p.city, unavailable));
 
     // Geo scope
-    const radius = p.coverage_radius_km;
     const city = p.city || '';
-    if (radius && radius > 0 && city) {
-      _setText('pd-geo-scope', city + ' (ضمن نطاق ' + Math.round(radius) + ' كم)');
+    if (serviceRangeKm > 0 && city) {
+      _setText('pd-geo-scope', 'ضمن نطاق محدد: ' + serviceRangeKm + ' كم (' + city + ')');
     } else if (city) {
-      _setText('pd-geo-scope', city);
+      _setText('pd-geo-scope', 'مدينتي: ' + city);
+    } else if (serviceRangeKm > 0) {
+      _setText('pd-geo-scope', 'ضمن نطاق محدد: ' + serviceRangeKm + ' كم');
+    } else {
+      _setText('pd-geo-scope', unavailable);
     }
 
-    // ── Contact info ──
-    const contactList = document.getElementById('pd-contact-list');
-    if (contactList) {
-      contactList.textContent = '';
-      if (p.city) _addContactRow(contactList, _svgIcon('location'), p.city);
-      if (p.phone) _addContactRow(contactList, _svgIcon('phone'), p.phone);
-      if (p.whatsapp && p.whatsapp !== p.phone) _addContactRow(contactList, _svgIcon('whatsapp'), p.whatsapp);
-      if (p.website) _addContactRow(contactList, _svgIcon('web'), p.website, p.website);
+    // ── Website ──
+    const websiteRaw = String(p.website || '').trim();
+    _setText('pd-website', websiteRaw || unavailable);
+    const websiteBtn = document.getElementById('pd-website-open');
+    if (websiteBtn) {
+      websiteBtn.disabled = !websiteRaw;
+      websiteBtn.classList.toggle('disabled', !websiteRaw);
+      websiteBtn.onclick = () => {
+        if (!websiteRaw) return;
+        const url = websiteRaw.startsWith('http') ? websiteRaw : ('https://' + websiteRaw);
+        window.open(url, '_blank', 'noopener');
+      };
     }
 
-    // ── Social links ──
-    const socialList = document.getElementById('pd-social-list');
-    if (socialList && p.social_links && p.social_links.length) {
-      socialList.textContent = '';
-      p.social_links.forEach(link => {
-        const url = typeof link === 'string' ? link : (link.url || '');
-        if (!url) return;
-        const platform = _detectPlatform(url);
-        _addSocialRow(socialList, platform.icon, platform.label, url);
-      });
-    } else if (socialList) {
-      // Check individual fields
-      const hasAny = p.website;
-      if (!hasAny && !(p.social_links && p.social_links.length)) {
-        const card = document.getElementById('pd-social-card');
-        if (card) card.classList.add('hidden');
-      }
-    }
+    // ── Social accounts (fixed 3 rows like Flutter) ──
+    _socialUrls.instagram = _findSocialUrl(p, 'instagram');
+    _socialUrls.x = _findSocialUrl(p, 'x.com') || _findSocialUrl(p, 'twitter');
+    _socialUrls.snapchat = _findSocialUrl(p, 'snapchat');
 
-    // ── Working hours ──
-    if (p.working_hours && p.working_hours.length) {
-      const hoursCard = document.getElementById('pd-hours-card');
-      const hoursEl = document.getElementById('pd-hours');
-      if (hoursCard && hoursEl) {
-        hoursCard.classList.remove('hidden');
-        hoursEl.textContent = '';
-        p.working_hours.forEach(h => {
-          const row = UI.el('div', { className: 'pd-hours-row' });
-          row.appendChild(UI.el('span', { className: 'pd-hours-day', textContent: h.day || '' }));
-          row.appendChild(UI.el('span', { className: 'pd-hours-time', textContent: (h.open || '') + ' - ' + (h.close || '') }));
-          hoursEl.appendChild(row);
-        });
-      }
-    }
+    _setSocialRow('instagram', 'pd-social-instagram', 'pd-social-open-instagram', unavailable);
+    _setSocialRow('x', 'pd-social-x', 'pd-social-open-x', unavailable);
+    _setSocialRow('snapchat', 'pd-social-snapchat', 'pd-social-open-snapchat', unavailable);
 
     // ── Map ──
-    if (p.lat && p.lng && p.lat !== 0 && p.lng !== 0 && typeof L !== 'undefined') {
-      const mapCard = document.getElementById('pd-map-card');
+    const lat = parseFloat(p.lat);
+    const lng = parseFloat(p.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0 && typeof L !== 'undefined') {
+      const mapCard = document.getElementById('pd-map-wrap');
       const mapEl = document.getElementById('pd-map');
       if (mapCard && mapEl) {
         mapCard.classList.remove('hidden');
         setTimeout(() => {
-          const map = L.map(mapEl, { scrollWheelZoom: false }).setView([p.lat, p.lng], 12);
+          const map = L.map(mapEl, { scrollWheelZoom: false }).setView([lat, lng], 12);
           L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap'
           }).addTo(map);
-          L.marker([p.lat, p.lng]).addTo(map);
-          if (p.coverage_radius_km) {
-            L.circle([p.lat, p.lng], {
-              radius: p.coverage_radius_km * 1000,
+          L.marker([lat, lng]).addTo(map);
+          if (serviceRangeKm > 0) {
+            L.circle([lat, lng], {
+              radius: serviceRangeKm * 1000,
               color: '#673AB7', fillColor: '#673AB7',
               fillOpacity: 0.08, weight: 2
             }).addTo(map);
@@ -605,7 +598,7 @@ const ProviderDetailPage = (() => {
 
   /* ═══ Portfolio ═══ */
   async function _loadPortfolio() {
-    const container = document.getElementById('pd-portfolio-list');
+    const container = document.getElementById('pd-portfolio-sections');
     const emptyEl = document.getElementById('pd-portfolio-empty');
     const res = await ApiClient.get('/api/providers/' + _providerId + '/portfolio/');
     if (!res.ok) return;
@@ -616,28 +609,75 @@ const ProviderDetailPage = (() => {
       if (emptyEl) emptyEl.classList.remove('hidden');
       return;
     }
+    if (emptyEl) emptyEl.classList.add('hidden');
 
+    const grouped = new Map();
     list.forEach(item => {
-      const el = UI.el('div', { className: 'pd-portfolio-item' });
-      const imgUrl = item.file_url || item.image || item.media_url || item.file || item.thumbnail_url || '';
-      const fileType = item.file_type || 'image';
+      const fileType = String(item.file_type || 'image').toLowerCase();
+      const fileUrl = String(item.file_url || item.image || item.media_url || item.file || '').trim();
+      const thumbUrl = String(item.thumbnail_url || '').trim();
+      const media = fileUrl || thumbUrl;
+      if (!media) return;
 
-      if (imgUrl) {
-        const displayUrl = (fileType === 'video' && item.thumbnail_url) ? item.thumbnail_url : imgUrl;
-        el.appendChild(UI.lazyImg(ApiClient.mediaUrl(displayUrl), item.caption || ''));
-      }
+      const rawCaption = String(item.caption || item.title || '').trim();
+      const sectionTitle = _extractPortfolioSectionTitle(rawCaption);
+      const description = _extractPortfolioItemDescription(rawCaption, sectionTitle);
 
-      if (fileType === 'video') {
-        const badge = UI.el('div', { className: 'pd-portfolio-video-badge' });
-        badge.appendChild(_createSVG('<polygon points="5 3 19 12 5 21 5 3" fill="#fff"/>', 14));
-        el.appendChild(badge);
-      }
-
-      if (item.caption || item.title) {
-        el.appendChild(UI.el('div', { className: 'pd-portfolio-overlay', textContent: item.caption || item.title }));
-      }
-      container.appendChild(el);
+      if (!grouped.has(sectionTitle)) grouped.set(sectionTitle, []);
+      grouped.get(sectionTitle).push({
+        type: fileType.startsWith('video') ? 'video' : 'image',
+        media: media,
+        thumbnail: thumbUrl,
+        desc: description,
+      });
     });
+
+    const sections = _resolvePortfolioSections(grouped);
+    sections.forEach(({ sectionTitle, sectionDesc, items }) => {
+      const section = UI.el('section', { className: 'pd-portfolio-section' });
+      const header = UI.el('div', { className: 'pd-portfolio-section-head' });
+      header.appendChild(UI.el('h4', { className: 'pd-portfolio-section-title', textContent: sectionTitle }));
+      header.appendChild(UI.el('span', { className: 'pd-portfolio-section-count', textContent: String(items.length) }));
+      section.appendChild(header);
+
+      if (sectionDesc) {
+        section.appendChild(UI.el('p', { className: 'pd-portfolio-section-desc', textContent: sectionDesc }));
+      }
+
+      if (!items.length) {
+        const emptyCard = UI.el('div', { className: 'pd-empty-section-card' });
+        emptyCard.appendChild(UI.el('p', { className: 'pd-empty-title', textContent: 'لا توجد عناصر في هذا القسم حالياً' }));
+        emptyCard.appendChild(UI.el('p', { className: 'pd-empty-subtitle', textContent: 'سيظهر المحتوى هنا عند إضافته من ملف مقدم الخدمة.' }));
+        section.appendChild(emptyCard);
+        container.appendChild(section);
+        return;
+      }
+
+      const grid = UI.el('div', { className: 'pd-portfolio-grid' });
+      items.forEach(item => {
+        const el = UI.el('div', { className: 'pd-portfolio-item' });
+        const displayUrl = (item.type === 'video' && item.thumbnail) ? item.thumbnail : item.media;
+        el.appendChild(UI.lazyImg(ApiClient.mediaUrl(displayUrl), item.desc || sectionTitle));
+
+        if (item.type === 'video') {
+          const badge = UI.el('div', { className: 'pd-portfolio-video-badge' });
+          badge.appendChild(_createSVG('<polygon points="5 3 19 12 5 21 5 3" fill="#fff"/>', 14));
+          el.appendChild(badge);
+        }
+
+        if (item.desc && item.desc !== 'بدون وصف') {
+          el.appendChild(UI.el('div', { className: 'pd-portfolio-overlay', textContent: item.desc }));
+        }
+        grid.appendChild(el);
+      });
+
+      section.appendChild(grid);
+      container.appendChild(section);
+    });
+
+    if (!container.children.length && emptyEl) {
+      emptyEl.classList.remove('hidden');
+    }
   }
 
   /* ═══ Reviews ═══ */
@@ -765,6 +805,104 @@ const ProviderDetailPage = (() => {
       const parts = uri.pathname.split('/').filter(Boolean);
       return parts.length ? '@' + parts[parts.length - 1] : '';
     } catch { return ''; }
+  }
+
+  function _displayOrUnavailable(value, unavailableText) {
+    const text = String(value || '').trim();
+    return text || unavailableText;
+  }
+
+  function _setSocialRow(kind, valueId, buttonId, unavailableText) {
+    const url = String(_socialUrls[kind] || '').trim();
+    const valueEl = document.getElementById(valueId);
+    if (valueEl) {
+      valueEl.textContent = url ? (_extractHandle(url) || url) : unavailableText;
+    }
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.disabled = !url;
+    button.classList.toggle('disabled', !url);
+    button.onclick = () => {
+      if (!url) return;
+      const href = url.startsWith('http') ? url : ('https://' + url);
+      window.open(href, '_blank', 'noopener');
+    };
+  }
+
+  function _findSocialUrl(provider, keyword) {
+    const socialLinks = Array.isArray(provider.social_links) ? provider.social_links : [];
+    const needle = String(keyword || '').trim().toLowerCase();
+    if (!needle) return '';
+
+    for (const item of socialLinks) {
+      const url = (typeof item === 'string' ? item : (item?.url || '')).toString().trim();
+      if (!url) continue;
+      if (url.toLowerCase().includes(needle)) return url;
+    }
+    return '';
+  }
+
+  function _extractPortfolioSectionTitle(caption) {
+    const text = String(caption || '').trim();
+    if (!text) return 'أعمالي';
+    const separators = [' - ', ' — ', ' – ', ' | ', '|'];
+    for (const separator of separators) {
+      const idx = text.indexOf(separator);
+      if (idx > 0) return text.slice(0, idx).trim() || 'أعمالي';
+    }
+    return 'أعمالي';
+  }
+
+  function _extractPortfolioItemDescription(caption, sectionTitle) {
+    const text = String(caption || '').trim();
+    if (!text) return 'بدون وصف';
+    const section = String(sectionTitle || '').trim();
+    if (!section || section === 'أعمالي') return text;
+
+    const separators = [' - ', ' — ', ' – ', ' | ', '|'];
+    for (const separator of separators) {
+      const prefix = section + separator;
+      if (text.startsWith(prefix)) {
+        const rest = text.slice(prefix.length).trim();
+        return rest || 'بدون وصف';
+      }
+    }
+    return text;
+  }
+
+  function _resolveServiceRangeKm(provider) {
+    const radiusRaw = Number(provider.coverage_radius_km);
+    if (Number.isFinite(radiusRaw) && radiusRaw > 0) {
+      return Math.round(radiusRaw);
+    }
+    return 5;
+  }
+
+  function _resolvePortfolioSections(grouped) {
+    const rawSections = (_providerData && (_providerData.content_sections || _providerData.contentSections)) || [];
+    const definedSections = Array.isArray(rawSections)
+      ? rawSections.filter(section => section && typeof section === 'object')
+      : [];
+
+    if (definedSections.length) {
+      return definedSections.map(section => {
+        const title = String(section.section_title || section.title || section.name || 'أعمالي').trim() || 'أعمالي';
+        const desc = String(section.section_desc || section.description || '').trim();
+        const items = grouped.get(title) || [];
+        return { sectionTitle: title, sectionDesc: desc, items };
+      });
+    }
+
+    const results = [];
+    grouped.forEach((items, title) => {
+      const firstDesc = items.find(item => item.desc && item.desc !== 'بدون وصف');
+      results.push({
+        sectionTitle: title,
+        sectionDesc: firstDesc ? firstDesc.desc : '',
+        items,
+      });
+    });
+    return results;
   }
 
   function _detectPlatform(url) {

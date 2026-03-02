@@ -95,6 +95,7 @@ CONTENT_SECURITY_POLICY = {
 	"DIRECTIVES": {
 		"default-src": ("'self'",),
 		"img-src": ("'self'", "data:", "https:"),
+		"media-src": ("'self'", "https:", "blob:"),
 		"style-src": ("'self'", "'unsafe-inline'", "https:"),
 		"script-src": ("'self'", "'unsafe-inline'", "https:"),
 		"font-src": ("'self'", "https://fonts.gstatic.com", "data:"),

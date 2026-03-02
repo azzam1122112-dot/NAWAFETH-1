@@ -9,6 +9,11 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'mobile_web/css/home-mobile-layout.css' %}">
+<style>
+  body.home-mobile-layout #top-navbar {
+    display: none;
+  }
+</style>
 {% endblock %}
 
 {% block content %}

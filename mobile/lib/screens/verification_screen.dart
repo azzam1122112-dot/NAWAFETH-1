@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/colors.dart';
+import 'plans_screen.dart';
 import '../services/verification_service.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -198,10 +199,24 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
     if (!createRes.isSuccess) {
       setState(() => _isSending = false);
+      final errorText = (createRes.error ?? 'فشل في إنشاء الطلب').trim();
+      final isPlanRestricted = errorText.contains('غير متاح في باقتك الحالية');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(createRes.error ?? 'فشل في إنشاء الطلب'),
+          content: Text(errorText),
           backgroundColor: Colors.red,
+          action: isPlanRestricted
+              ? SnackBarAction(
+                  label: 'عرض الباقات',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PlansScreen()),
+                    );
+                  },
+                )
+              : null,
         ),
       );
       return;

@@ -6,11 +6,21 @@
 
 const UrgentRequestPage = (() => {
   let _selectedFiles = [];
+  const _cities = [
+    'الرياض','جدة','مكة المكرمة','المدينة المنورة','الدمام','الخبر','الظهران','الطائف','تبوك','بريدة',
+    'عنيزة','حائل','أبها','خميس مشيط','نجران','جازان','ينبع','الباحة','الجبيل','حفر الباطن',
+    'القطيف','الأحساء','سكاكا','عرعر','بيشة','الخرج','الدوادمي','المجمعة','القويعية','وادي الدواسر'
+  ];
 
   function init() {
-    if (!Auth.isLoggedIn()) return;
+    const isLoggedIn = !!Auth.isLoggedIn();
+    _setAuthState(isLoggedIn);
+    if (!isLoggedIn) return;
 
+    _loadCities();
     _loadCategories();
+    _bindDispatchMode();
+    _bindDescriptionCounter();
 
     const catSel = document.getElementById('ur-category');
     if (catSel) catSel.addEventListener('change', _onCategoryChange);
@@ -20,6 +30,48 @@ const UrgentRequestPage = (() => {
 
     const form = document.getElementById('ur-form');
     if (form) form.addEventListener('submit', _onSubmit);
+  }
+
+  function _setAuthState(isLoggedIn) {
+    const gate = document.getElementById('auth-gate');
+    const formContent = document.getElementById('form-content');
+    if (gate) gate.classList.toggle('hidden', isLoggedIn);
+    if (formContent) formContent.classList.toggle('hidden', !isLoggedIn);
+  }
+
+  function _loadCities() {
+    const citySel = document.getElementById('ur-city');
+    if (!citySel) return;
+    _cities.forEach((city) => {
+      const option = document.createElement('option');
+      option.value = city;
+      option.textContent = city;
+      citySel.appendChild(option);
+    });
+  }
+
+  function _bindDispatchMode() {
+    const labels = document.querySelectorAll('.radio-chip-label');
+    labels.forEach((label) => {
+      const input = label.querySelector('input[type="radio"]');
+      const chip = label.querySelector('.radio-chip');
+      if (!input || !chip) return;
+      input.addEventListener('change', () => {
+        document.querySelectorAll('.radio-chip-label .radio-chip').forEach((node) => {
+          node.classList.remove('active');
+        });
+        chip.classList.add('active');
+      });
+    });
+  }
+
+  function _bindDescriptionCounter() {
+    const textarea = document.getElementById('ur-description');
+    const counter = document.getElementById('ur-desc-count');
+    if (!textarea || !counter) return;
+    const update = () => { counter.textContent = String((textarea.value || '').length); };
+    textarea.addEventListener('input', update);
+    update();
   }
 
   /* ---- Categories cascade ---- */
@@ -78,6 +130,7 @@ const UrgentRequestPage = (() => {
 
     const desc = document.getElementById('ur-description')?.value?.trim();
     const subcat = document.getElementById('ur-subcategory')?.value;
+    const city = document.getElementById('ur-city')?.value;
     const dispatch = document.querySelector('input[name="dispatch_mode"]:checked')?.value || 'nearest';
 
     if (!desc) {
@@ -90,6 +143,7 @@ const UrgentRequestPage = (() => {
     fd.append('request_type', 'urgent');
     fd.append('description', desc);
     if (subcat) fd.append('subcategory', subcat);
+    if (city) fd.append('city', city);
     fd.append('dispatch_mode', dispatch);
     _selectedFiles.forEach(f => fd.append('images', f));
 
@@ -115,7 +169,9 @@ const UrgentRequestPage = (() => {
   }
 
   function _resetBtn(btn) {
-    if (btn) { btn.disabled = false; btn.textContent = 'إرسال الطلب العاجل'; }
+    if (!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-inline-end:4px"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>إرسال الطلب';
   }
 
   // Boot

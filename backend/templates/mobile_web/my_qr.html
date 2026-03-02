@@ -1,0 +1,41 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — QR نافذتي{% endblock %}
+{% block body_class %}page-my-qr{% endblock %}
+{% block sidebar_my_qr %}active{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <div class="page-header">
+      <h1>QR نافذتي</h1>
+    </div>
+
+    <div id="qr-auth-gate" class="auth-gate hidden">
+      <div class="auth-gate-icon">🔳</div>
+      <h2>سجّل دخولك</h2>
+      <p>لعرض كود نافذتي، سجّل دخولك أولاً</p>
+      <a href="/login/?next=/my-qr/" class="btn btn-primary">تسجيل الدخول</a>
+    </div>
+
+    <div id="qr-content" class="form-card hidden">
+      <h3 class="form-card-title" id="qr-title">رابط نافذتي</h3>
+      <p class="form-hint" id="qr-link-text" dir="ltr"></p>
+      <div style="display:flex;justify-content:center;margin:12px 0;">
+        <img id="my-qr-image" alt="QR" style="width:220px;height:220px;border-radius:12px;border:1px solid #eee;" />
+      </div>
+      <div class="support-toolbar">
+        <button class="btn-sm" id="copy-qr-link" type="button">نسخ الرابط</button>
+        <a class="btn-sm" id="open-qr-link" href="#" target="_blank" rel="noopener">فتح الرابط</a>
+      </div>
+      <div class="form-success hidden" id="qr-success"></div>
+      <div class="form-error hidden" id="qr-error"></div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/myQrPage.js' %}"></script>
+{% endblock %}

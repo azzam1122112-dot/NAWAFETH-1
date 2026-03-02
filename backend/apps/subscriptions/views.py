@@ -39,22 +39,6 @@ class SubscribeView(APIView):
     def post(self, request, plan_id: int):
         plan = get_object_or_404(SubscriptionPlan, pk=plan_id, is_active=True)
 
-        provider_profile = getattr(request.user, "provider_profile", None)
-        is_verified_provider = bool(
-            provider_profile
-            and (provider_profile.is_verified_blue or provider_profile.is_verified_green)
-        )
-        if not is_verified_provider:
-            return Response(
-                {
-                    "detail": (
-                        "لا يمكن طلب ترقية الباقة قبل توثيق حساب مقدم الخدمة. "
-                        "يرجى إكمال التوثيق أولاً."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         sub = start_subscription_checkout(user=request.user, plan=plan)
 
         return Response(SubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)

@@ -1,0 +1,40 @@
+{% extends "mobile_web/base.html" %}
+{% load static %}
+
+{% block title %}نوافــذ — اللغة{% endblock %}
+{% block body_class %}page-language{% endblock %}
+{% block sidebar_language %}active{% endblock %}
+
+{% block content %}
+<main class="page-content">
+  <div class="container">
+    <div class="page-header">
+      <h1>اختيار اللغة</h1>
+    </div>
+
+    <div id="language-auth-gate" class="auth-gate hidden">
+      <div class="auth-gate-icon">🌐</div>
+      <h2>سجّل دخولك</h2>
+      <p>للمزامنة مع حسابك، سجّل دخولك أولاً</p>
+      <a href="/login/?next=/language/" class="btn btn-primary">تسجيل الدخول</a>
+    </div>
+
+    <div id="language-content" class="form-card hidden">
+      <h3 class="form-card-title">اللغة الحالية</h3>
+      <p class="form-hint" id="language-current-label">—</p>
+
+      <div class="support-toolbar" style="margin-top:10px">
+        <button class="btn-sm" id="lang-ar" type="button">🇸🇦 العربية</button>
+        <button class="btn-sm" id="lang-en" type="button">🇺🇸 English</button>
+      </div>
+
+      <div class="form-success hidden" id="language-success"></div>
+      <div class="form-error hidden" id="language-error"></div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mobile_web/js/languagePage.js' %}"></script>
+{% endblock %}

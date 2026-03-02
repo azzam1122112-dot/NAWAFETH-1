@@ -89,6 +89,14 @@ class MobileWebContactView(TemplateView):
     template_name = "mobile_web/contact.html"
 
 
+class MobileWebLanguageView(TemplateView):
+    template_name = "mobile_web/language.html"
+
+
+class MobileWebMyQrView(TemplateView):
+    template_name = "mobile_web/my_qr.html"
+
+
 class MobileWebNotificationSettingsView(TemplateView):
     template_name = "mobile_web/notification_settings.html"
 
