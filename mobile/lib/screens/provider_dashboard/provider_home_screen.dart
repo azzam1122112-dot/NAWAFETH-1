@@ -53,6 +53,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   UserProfile? _userProfile;
   ProviderProfileModel? _providerProfile;
   String? _subscriptionPlanName;
+  String? _subscriptionStatus;
+  DateTime? _subscriptionEndAt;
   int _urgentOrdersCount = 0;
   int _newOrdersCount = 0;
   int _clientsCount = 0;
@@ -61,6 +63,9 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
 
   // ────── بيانات محسوبة ──────
   String get _currentPlanName => _subscriptionPlanName ?? "الباقة المجانية";
+  String? get _currentPlanStatusLabel => _subscriptionStatus == null
+      ? null
+      : SubscriptionsService.subscriptionStatusLabel(_subscriptionStatus);
   int get _followersCount => _userProfile?.providerFollowersCount ?? 0;
   int get _followingCount => _userProfile?.followingCount ?? 0;
   int get _likesReceivedCount => _userProfile?.providerLikesReceivedCount ?? 0;
@@ -151,27 +156,13 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   Future<void> _loadSubscriptionPlan() async {
     final subs = await SubscriptionsService.mySubscriptions();
     if (!mounted) return;
-    if (subs.isEmpty) return;
-
-    // Get the active/latest subscription plan name
-    for (final sub in subs) {
-      final status = sub['status'];
-      if (status == 'active' || subs.indexOf(sub) == 0) {
-        final planObj = sub['plan'];
-        if (planObj is Map) {
-          setState(() {
-            _subscriptionPlanName =
-                planObj['title'] as String? ?? 'الباقة المجانية';
-          });
-        } else {
-          setState(() {
-            _subscriptionPlanName =
-                sub['plan_title'] as String? ?? 'الباقة المجانية';
-          });
-        }
-        break;
-      }
-    }
+    final selected = SubscriptionsService.selectPreferredSubscription(subs);
+    setState(() {
+      _subscriptionPlanName =
+          SubscriptionsService.planTitleFromSubscription(selected);
+      _subscriptionStatus = selected?['status']?.toString();
+      _subscriptionEndAt = SubscriptionsService.parseSubscriptionEndAt(selected);
+    });
   }
 
   @override
@@ -365,6 +356,13 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value.trim());
     return null;
+  }
+
+  String _formatDate(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final year = value.year.toString();
+    return '$day/$month/$year';
   }
 
   // نافذة QR
@@ -584,6 +582,10 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
 
   // كرت الباقة (ذهبي بسيط)
   Widget _planCard() {
+    final statusLabel = _currentPlanStatusLabel;
+    final endAt = _subscriptionEndAt;
+    final expiryLabel = endAt == null ? null : 'ينتهي: ${_formatDate(endAt)}';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -596,13 +598,33 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
           const Icon(Icons.workspace_premium, color: Color(0xFFF9A825)),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              _currentPlanName,
-              style: const TextStyle(
-                fontFamily: "Cairo",
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _currentPlanName,
+                  style: const TextStyle(
+                    fontFamily: "Cairo",
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (statusLabel != null || expiryLabel != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      [statusLabel, expiryLabel]
+                          .whereType<String>()
+                          .where((item) => item.trim().isNotEmpty)
+                          .join(' • '),
+                      style: const TextStyle(
+                        fontFamily: "Cairo",
+                        fontSize: 11,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           TextButton(

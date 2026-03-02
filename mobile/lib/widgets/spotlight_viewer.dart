@@ -132,9 +132,7 @@ class _SpotlightViewerPageState extends State<SpotlightViewerPage> {
       if (item.likesCount < 0) item.likesCount = 0;
     });
 
-    final success = wasLiked
-        ? await InteractiveService.unlikeSpotlight(item.id)
-        : await InteractiveService.likeSpotlight(item.id);
+    final success = await _toggleLikeBySource(item, wasLiked);
 
     if (!mounted) return;
     setState(() {
@@ -163,9 +161,7 @@ class _SpotlightViewerPageState extends State<SpotlightViewerPage> {
       if (item.savesCount < 0) item.savesCount = 0;
     });
 
-    final success = wasSaved
-        ? await InteractiveService.unsaveSpotlight(item.id)
-        : await InteractiveService.saveSpotlight(item.id);
+    final success = await _toggleSaveBySource(item, wasSaved);
 
     if (!mounted) return;
     setState(() {
@@ -175,6 +171,27 @@ class _SpotlightViewerPageState extends State<SpotlightViewerPage> {
         item.savesCount += wasSaved ? 1 : -1;
       }
     });
+  }
+
+  Future<bool> _toggleLikeBySource(MediaItemModel item, bool wasLiked) {
+    if (item.source == MediaItemSource.portfolio) {
+      return wasLiked
+          ? InteractiveService.unlikePortfolio(item.id)
+          : InteractiveService.likePortfolio(item.id);
+    }
+    return wasLiked
+        ? InteractiveService.unlikeSpotlight(item.id)
+        : InteractiveService.likeSpotlight(item.id);
+  }
+
+  Future<bool> _toggleSaveBySource(MediaItemModel item, bool wasSaved) {
+    if (wasSaved) {
+      return InteractiveService.unsaveItem(item);
+    }
+    if (item.source == MediaItemSource.portfolio) {
+      return InteractiveService.savePortfolio(item.id);
+    }
+    return InteractiveService.saveSpotlight(item.id);
   }
 
   // ──────────────────────────────────────────

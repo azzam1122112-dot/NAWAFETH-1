@@ -10,9 +10,60 @@ class PlansScreen extends StatefulWidget {
 
 class _PlansScreenState extends State<PlansScreen> {
   List<Map<String, dynamic>> _plans = [];
+  Map<String, dynamic>? _currentSubscription;
   bool _loading = true;
   String? _error;
   bool _subscribing = false;
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  String _translateFeatureKey(String key) {
+    switch (key.trim().toLowerCase()) {
+      case 'verify_blue':
+        return 'توثيق (شارة زرقاء)';
+      case 'verify_green':
+        return 'توثيق (شارة خضراء)';
+      case 'promo_ads':
+        return 'إعلانات وترويج';
+      case 'priority_support':
+        return 'دعم أولوية';
+      case 'extra_uploads':
+        return 'سعة مرفقات إضافية';
+      case 'advanced_analytics':
+        return 'تحليلات متقدمة';
+      default:
+        return key.replaceAll('_', ' ').trim();
+    }
+  }
+
+  List<String> _extractFeatures(Map<String, dynamic> plan) {
+    final labels = plan['feature_labels'];
+    if (labels is List) {
+      final parsed = labels
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+      if (parsed.isNotEmpty) return parsed;
+    }
+
+    final rawFeatures = plan['features'];
+    if (rawFeatures is! List) return const <String>[];
+    return rawFeatures
+        .map((item) {
+          if (item is String) return _translateFeatureKey(item);
+          if (item is Map) {
+            return (item['title'] ?? item['name'] ?? '').toString().trim();
+          }
+          return item.toString().trim();
+        })
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
 
   @override
   void initState() {
@@ -25,18 +76,28 @@ class _PlansScreenState extends State<PlansScreen> {
       _loading = true;
       _error = null;
     });
-    final plans = await SubscriptionsService.getPlans();
+    final results = await Future.wait<List<Map<String, dynamic>>>([
+      SubscriptionsService.getPlans(),
+      SubscriptionsService.mySubscriptions(),
+    ]);
+    final plans = results[0];
+    final mySubscriptions = results[1];
+
     if (!mounted) return;
 
     if (plans.isEmpty) {
       setState(() {
         _error = 'لا توجد باقات متاحة حالياً';
+        _currentSubscription =
+            SubscriptionsService.selectPreferredSubscription(mySubscriptions);
         _loading = false;
       });
       return;
     }
     setState(() {
       _plans = plans;
+      _currentSubscription =
+          SubscriptionsService.selectPreferredSubscription(mySubscriptions);
       _loading = false;
     });
   }
@@ -48,7 +109,7 @@ class _PlansScreenState extends State<PlansScreen> {
     setState(() => _subscribing = false);
 
     if (res.isSuccess) {
-      showDialog(
+      await showDialog(
         context: context,
         builder: (_) => Directionality(
           textDirection: TextDirection.rtl,
@@ -71,6 +132,8 @@ class _PlansScreenState extends State<PlansScreen> {
           ),
         ),
       );
+      if (!mounted) return;
+      await _loadPlans();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(res.error ?? 'فشل الاشتراك',
@@ -126,7 +189,7 @@ class _PlansScreenState extends State<PlansScreen> {
                               style: TextStyle(fontFamily: 'Cairo'))),
                     ]))
                 : Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
                     child: ListView.builder(
                       itemCount: _plans.length,
                       itemBuilder: (context, index) {
@@ -143,21 +206,55 @@ class _PlansScreenState extends State<PlansScreen> {
 
   Widget _planCard(
       Map<String, dynamic> plan, Color c1, Color c2, IconData icon) {
-    final id = plan['id'] as int;
-    final title = plan['title'] as String? ?? '';
-    final description = plan['description'] as String? ?? '';
+    final width = MediaQuery.of(context).size.width;
+    final compact = width <= 430;
+    final cardRadius = compact ? 18.0 : 24.0;
+    final cardPadding = compact ? 14.0 : 20.0;
+    final titleFont = compact ? 17.0 : 22.0;
+    final descFont = compact ? 10.5 : 12.0;
+    final featureFont = compact ? 12.0 : 14.0;
+    final featureIconSize = compact ? 17.0 : 20.0;
+    final priceFont = compact ? 13.0 : 14.0;
+    final actionFont = compact ? 13.0 : 15.0;
+    final avatarRadius = compact ? 21.0 : 26.0;
+
+    final id = _toInt(plan['id']) ?? 0;
+    final title = (plan['title'] ?? plan['name'] ?? 'باقة').toString();
+    final description = (plan['description'] ?? '').toString();
     final price = plan['price'];
-    final period = plan['period'] as String? ?? '';
-    final features = (plan['features'] as List?)?.cast<String>() ?? [];
+    final period = (plan['period'] ?? '').toString();
+    final periodLabel = (plan['period_label'] ?? '').toString().trim();
+    final features = _extractFeatures(plan);
+
+    final currentSub = _currentSubscription;
+    final currentPlanId = _toInt(
+      currentSub?['plan'] is Map
+          ? (currentSub?['plan'] as Map)['id']
+          : currentSub?['plan_id'],
+    );
+    final currentStatusCode =
+        (currentSub?['status'] ?? '').toString().trim().toLowerCase();
+    final isCurrentPlan = currentPlanId != null && currentPlanId == id;
+    final isCurrentLocked = isCurrentPlan &&
+        const {'active', 'grace', 'pending_payment'}
+            .contains(currentStatusCode);
+    final currentStatusLabel = isCurrentPlan
+        ? SubscriptionsService.subscriptionStatusLabel(currentStatusCode)
+        : null;
 
     final priceDisplay = price == null || price.toString() == '0.00'
         ? 'مجاني'
-        : '$price ر.س / ${period == 'year' ? 'سنة' : 'شهر'}';
+        : '$price ر.س / ${periodLabel.isNotEmpty ? periodLabel : (period == 'year' ? 'سنة' : 'شهر')}';
+    final buttonLabel = isCurrentLocked
+        ? (currentStatusCode == 'pending_payment'
+            ? 'قيد التفعيل'
+            : 'الباقة الحالية')
+        : 'اشترك الآن';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: EdgeInsets.only(bottom: compact ? 12 : 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(cardRadius),
         gradient: LinearGradient(
             colors: [c1, c2],
             begin: Alignment.topLeft,
@@ -172,44 +269,66 @@ class _PlansScreenState extends State<PlansScreen> {
       ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(cardRadius),
           color: Colors.white.withAlpha(40),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(cardPadding),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // Header
             Row(children: [
               CircleAvatar(
-                radius: 26,
+                radius: avatarRadius,
                 backgroundColor: Colors.white.withAlpha(50),
-                child: Icon(icon, size: 28, color: Colors.white),
+                child: Icon(icon, size: compact ? 22 : 28, color: Colors.white),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: compact ? 10 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Cairo',
-                            fontSize: 22,
+                            fontSize: titleFont,
                             fontWeight: FontWeight.bold,
                             color: Colors.white)),
                     if (description.isNotEmpty)
                       Text(description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Cairo',
-                              fontSize: 12,
+                              fontSize: descFont,
                               color: Colors.white70)),
+                    if (isCurrentPlan)
+                      Padding(
+                        padding: EdgeInsets.only(top: compact ? 6 : 8),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 8 : 10,
+                              vertical: compact ? 3 : 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(220),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            currentStatusLabel ?? 'الباقة المختارة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w700,
+                              fontSize: compact ? 10 : 11,
+                              color: c2,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    EdgeInsets.symmetric(horizontal: compact ? 10 : 14, vertical: 6),
                 decoration: BoxDecoration(
                     color: Colors.white.withAlpha(230),
                     borderRadius: BorderRadius.circular(12)),
@@ -217,41 +336,42 @@ class _PlansScreenState extends State<PlansScreen> {
                     style: TextStyle(
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: priceFont,
                         color: c2)),
               ),
             ]),
-            const SizedBox(height: 20),
+            SizedBox(height: compact ? 12 : 20),
 
             // Features
             if (features.isNotEmpty)
               ...features.map((f) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
                     child: Row(children: [
-                      const Icon(Icons.check_circle,
-                          size: 20, color: Colors.white),
-                      const SizedBox(width: 8),
+                      Icon(Icons.check_circle,
+                          size: featureIconSize, color: Colors.white),
+                      SizedBox(width: compact ? 6 : 8),
                       Expanded(
                           child: Text(f,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontFamily: 'Cairo',
-                                  fontSize: 14,
+                                  fontSize: featureFont,
                                   color: Colors.white))),
                     ]),
                   )),
-            const SizedBox(height: 20),
+            SizedBox(height: compact ? 12 : 20),
 
             // Subscribe button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed:
-                    _subscribing ? null : () => _subscribe(id, title),
+                onPressed: (_subscribing || id <= 0 || isCurrentLocked)
+                    ? null
+                    : () => _subscribe(id, title),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  minimumSize: const Size(double.infinity, 50),
+                      borderRadius: BorderRadius.circular(compact ? 12 : 14)),
+                  minimumSize: Size(double.infinity, compact ? 44 : 50),
                 ),
                 child: _subscribing
                     ? SizedBox(
@@ -259,11 +379,11 @@ class _PlansScreenState extends State<PlansScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: c2))
-                    : Text('اشترك الآن',
+                    : Text(buttonLabel,
                         style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                            fontSize: actionFont,
                             color: c2)),
               ),
             ),

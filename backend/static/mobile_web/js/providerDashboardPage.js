@@ -8,6 +8,71 @@ const ProviderDashboardPage = (() => {
   let _profile = null;
   let _providerProfile = null;
 
+  function _extractList(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.results)) return payload.results;
+    return [];
+  }
+
+  function _statusCode(status) {
+    return String(status || '').trim().toLowerCase();
+  }
+
+  function _subscriptionRank(sub) {
+    switch (_statusCode(sub && sub.status)) {
+      case 'active':
+        return 0;
+      case 'grace':
+        return 1;
+      case 'pending_payment':
+        return 2;
+      default:
+        return 9;
+    }
+  }
+
+  function _pickPreferredSubscription(subs) {
+    if (!Array.isArray(subs) || !subs.length) return null;
+    let best = subs[0];
+    let bestRank = _subscriptionRank(best);
+    for (const sub of subs) {
+      const rank = _subscriptionRank(sub);
+      if (rank < bestRank) {
+        best = sub;
+        bestRank = rank;
+        if (rank === 0) break;
+      }
+    }
+    return best;
+  }
+
+  function _planTitle(sub) {
+    return (
+      sub?.plan?.title ||
+      sub?.plan?.name ||
+      sub?.plan_title ||
+      sub?.plan_name ||
+      'الباقة'
+    );
+  }
+
+  function _statusLabel(status) {
+    switch (_statusCode(status)) {
+      case 'active':
+        return 'نشط';
+      case 'grace':
+        return 'فترة سماح';
+      case 'pending_payment':
+        return 'بانتظار الدفع';
+      case 'expired':
+        return 'منتهي';
+      case 'cancelled':
+        return 'ملغي';
+      default:
+        return 'غير معروف';
+    }
+  }
+
   function init() {
     if (!Auth.isLoggedIn()) {
       document.getElementById('auth-gate').style.display = '';
@@ -87,14 +152,20 @@ const ProviderDashboardPage = (() => {
   function _renderSubscription(subRes) {
     const card = document.getElementById('subscription-card');
     if (subRes.status === 'fulfilled' && subRes.value.ok && subRes.value.data) {
-      const subs = Array.isArray(subRes.value.data) ? subRes.value.data : (subRes.value.data.results || []);
-      const active = subs.find(s => s.status === 'active');
-      if (active) {
+      const subs = _extractList(subRes.value.data);
+      const selected = _pickPreferredSubscription(subs);
+      if (selected) {
         card.style.display = '';
-        document.getElementById('plan-name').textContent = active.plan_name || active.plan?.name || 'الباقة';
-        if (active.end_date) {
-          document.getElementById('plan-expiry').textContent = `ينتهي: ${new Date(active.end_date).toLocaleDateString('ar-SA')}`;
+        document.getElementById('plan-name').textContent = _planTitle(selected);
+        const metaParts = [`الحالة: ${_statusLabel(selected.status)}`];
+        const endRaw = selected.end_at || selected.end_date;
+        if (endRaw) {
+          const endDate = new Date(endRaw);
+          if (!Number.isNaN(endDate.getTime())) {
+            metaParts.push(`ينتهي: ${endDate.toLocaleDateString('ar-SA')}`);
+          }
         }
+        document.getElementById('plan-expiry').textContent = metaParts.join(' • ');
       }
     }
   }

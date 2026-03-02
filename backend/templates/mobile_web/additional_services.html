@@ -3,27 +3,37 @@
 {% block body_class %}page-additional-services{% endblock %}
 
 {% block content %}
-<main class="page-shell">
+<main class="page-shell as-page">
   <div class="page-header">
     <button class="btn-back" id="as-back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
     <h1 id="as-title">الخدمات الإضافية</h1>
+    <button class="btn-icon" id="as-refresh" title="تحديث" aria-label="تحديث"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg></button>
   </div>
 
+  <section class="detail-card as-intro">
+    <h2>خدمات إضافية مرتبطة بالنظام</h2>
+    <p>اطلب الإضافة المناسبة لحسابك وتابع حالتها كما تظهر في لوحة التحكم والداشبورد.</p>
+  </section>
+
   <div id="as-loading" class="loading-center"><div class="spinner"></div></div>
+  <div id="as-error" class="detail-card as-error" style="display:none"></div>
 
-  <!-- Level 1: Main Categories -->
-  <div id="as-main" class="as-list"></div>
+  <div id="as-content" style="display:none">
+    <section class="detail-card as-block">
+      <div class="as-block-head">
+        <h3>الكتالوج المتاح</h3>
+        <span class="text-muted" id="as-catalog-count"></span>
+      </div>
+      <div id="as-catalog-items" class="as-stack"></div>
+    </section>
 
-  <!-- Level 2: Sub-services -->
-  <div id="as-sub" class="as-list" style="display:none"></div>
-
-  <!-- Level 3: Service Detail + Buy -->
-  <div id="as-detail" style="display:none">
-    <div class="detail-card">
-      <h3 id="as-detail-title"></h3>
-      <p id="as-detail-desc" class="text-muted"></p>
-      <div id="as-catalog-items"></div>
-    </div>
+    <section class="detail-card as-block">
+      <div class="as-block-head">
+        <h3>طلباتي السابقة</h3>
+        <span class="text-muted" id="as-history-count"></span>
+      </div>
+      <div id="as-my-items" class="as-stack"></div>
+    </section>
   </div>
 </main>
 {% endblock %}

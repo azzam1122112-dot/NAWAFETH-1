@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 from decimal import Decimal
 
 from apps.accounts.models import User
+from apps.providers.models import ProviderProfile
 from apps.subscriptions.models import SubscriptionPlan, PlanPeriod, Subscription, SubscriptionStatus
 from apps.subscriptions.services import activate_subscription_after_payment, refresh_subscription_status
 from apps.unified_requests.models import UnifiedRequest
@@ -32,6 +33,13 @@ def test_plans_list(api, user):
 
 def test_subscribe(api, user):
     plan = SubscriptionPlan.objects.create(code="PRO", title="Pro", period=PlanPeriod.MONTH, price=Decimal("25.00"), features=["verify_blue"])
+    ProviderProfile.objects.create(
+        user=user,
+        provider_type="individual",
+        display_name="Provider Pro",
+        bio="bio",
+        is_verified_blue=True,
+    )
     api.force_authenticate(user=user)
     r = api.post(f"/api/subscriptions/subscribe/{plan.pk}/")
     assert r.status_code == 201
@@ -41,6 +49,23 @@ def test_subscribe(api, user):
     assert ur.code.startswith("SD")
     assert ur.status == "new"
     assert ur.metadata_record.payload.get("invoice_id") == sub.invoice_id
+
+
+def test_subscribe_rejects_unverified_provider(api, user):
+    plan = SubscriptionPlan.objects.create(code="PRO2", title="Pro2", period=PlanPeriod.MONTH, price=Decimal("25.00"))
+    ProviderProfile.objects.create(
+        user=user,
+        provider_type="individual",
+        display_name="Provider Basic",
+        bio="bio",
+        is_verified_blue=False,
+        is_verified_green=False,
+    )
+    api.force_authenticate(user=user)
+    r = api.post(f"/api/subscriptions/subscribe/{plan.pk}/")
+    assert r.status_code == 400
+    assert "توثيق" in str(r.data.get("detail", ""))
+    assert not Subscription.objects.filter(user=user, plan=plan).exists()
 
 
 def test_subscriptions_endpoints_require_auth(api):

@@ -11,6 +11,7 @@ import '../services/interactive_service.dart';
 import '../models/provider_public_model.dart';
 import '../models/user_public_model.dart';
 import '../models/media_item_model.dart';
+import '../widgets/spotlight_viewer.dart';
 
 class InteractiveScreen extends StatefulWidget {
   const InteractiveScreen({super.key});
@@ -623,7 +624,7 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     final imageUrl = ApiClient.buildMediaUrl(item.thumbnailUrl ?? item.fileUrl);
 
     return GestureDetector(
-      onTap: () => _navigateToProviderById(item.providerId, item.providerDisplayName),
+      onTap: () => _openFavoriteViewer(index),
       child: ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Stack(
@@ -713,13 +714,21 @@ class _InteractiveScreenState extends State<InteractiveScreen>
     );
   }
 
-  void _navigateToProviderById(int providerId, String providerName) {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => ProviderProfileScreen(
-        providerId: providerId.toString(),
-        providerName: providerName,
+  Future<void> _openFavoriteViewer(int initialIndex) async {
+    if (_favorites.isEmpty) return;
+    final safeIndex = initialIndex.clamp(0, _favorites.length - 1);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SpotlightViewerPage(
+          items: _favorites,
+          initialIndex: safeIndex,
+        ),
       ),
-    ));
+    );
+    if (mounted) {
+      _loadFavorites();
+    }
   }
 
   Widget _brokenImgPlaceholder(bool isDark) {
