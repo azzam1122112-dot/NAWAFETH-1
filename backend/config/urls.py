@@ -121,4 +121,22 @@ urlpatterns = [
 ]
 
 if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # django.conf.urls.static.static() is a no-op when DEBUG=False (even on
+    # Django 5.x).  When SERVE_MEDIA is explicitly True (e.g. R2/S3 fallback
+    # to local storage on Render) we must register the pattern ourselves so
+    # that uploaded media is reachable in production.
+    if settings.DEBUG:
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    else:
+        import re as _re
+        from django.urls import re_path as _re_path
+        from django.views.static import serve as _serve_static
+
+        _media_prefix = settings.MEDIA_URL.lstrip("/")
+        urlpatterns += [
+            _re_path(
+                r"^%s(?P<path>.*)$" % _re.escape(_media_prefix),
+                _serve_static,
+                {"document_root": settings.MEDIA_ROOT},
+            ),
+        ]
