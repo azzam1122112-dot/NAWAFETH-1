@@ -58,6 +58,11 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
   late AnimationController _hintController;
   late Animation<Offset> _hintSlideAnim;
 
+  bool _isNetworkSource(String value) {
+    final v = value.trim().toLowerCase();
+    return v.startsWith('http://') || v.startsWith('https://');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -102,9 +107,10 @@ class _VideoFullScreenPageState extends State<VideoFullScreenPage>
       _controller?.pause();
       await _controller?.dispose();
 
-      final controller = VideoPlayerController.asset(
-        widget.videoPaths[_currentIndex],
-      );
+      final source = widget.videoPaths[_currentIndex];
+      final controller = _isNetworkSource(source)
+          ? VideoPlayerController.networkUrl(Uri.parse(source))
+          : VideoPlayerController.asset(source);
       _controller = controller;
 
       await controller.initialize();

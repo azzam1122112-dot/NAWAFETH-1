@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:nawafeth/services/api_client.dart';
 import 'package:nawafeth/services/profile_service.dart';
+import 'package:nawafeth/services/provider_services_service.dart';
 import 'package:nawafeth/utils/debounced_save_runner.dart';
 
 class ServiceDetailsStep extends StatefulWidget {
@@ -20,6 +22,7 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
   final List<_ServiceItem> _services = [];
   final DebouncedSaveRunner _autoSaveRunner = DebouncedSaveRunner();
 
+  int? _fallbackSubcategoryId;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isInitialized = false;
@@ -44,29 +47,66 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
   }
 
   Future<void> _loadInitialData() async {
-    final result = await ProfileService.fetchProviderProfile();
+    final results = await Future.wait([
+      ProfileService.fetchProviderProfile(),
+      ProviderServicesService.fetchMyServices(),
+      ApiClient.get('/api/providers/me/subcategories/'),
+    ]);
     if (!mounted) return;
 
-    if (result.isSuccess && result.data != null) {
-      final profile = result.data!;
-      final first = _services.first;
+    final profileResult = results[0] as ProfileResult<dynamic>;
+    final servicesResp = results[1] as ApiResponse;
+    final subcategoriesResp = results[2] as ApiResponse;
 
-      setState(() {
-        _isInitialized = false;
-        first.name.text = profile.displayName;
-        first.description.text = profile.bio;
-        first.isUrgent = profile.acceptsUrgent;
-        first.isEditing = false;
-        _isLoading = false;
-        _saveError = null;
-        _isInitialized = true;
-      });
-      return;
+    bool acceptsUrgent = false;
+    if (profileResult.isSuccess && profileResult.data != null) {
+      final dynamic profile = profileResult.data;
+      acceptsUrgent = (profile.acceptsUrgent as bool?) ?? false;
     }
 
+    final subcategoryIds = _parseSubcategoryIds(subcategoriesResp.data);
+    _fallbackSubcategoryId = subcategoryIds.isNotEmpty ? subcategoryIds.first : null;
+
+    final serviceList = _parseServices(servicesResp.data);
+
     setState(() {
+      _isInitialized = false;
+
+      for (final s in _services) {
+        _detachItemListeners(s);
+        s.dispose();
+      }
+      _services.clear();
+
+      if (serviceList.isNotEmpty) {
+        for (final raw in serviceList) {
+          final sub = raw['subcategory'];
+          final subIdFromMap = sub is Map ? _toInt(sub['id']) : null;
+          final item = _ServiceItem(
+            id: _toInt(raw['id']),
+            subcategoryId: subIdFromMap,
+            initialName: (raw['title'] ?? '').toString(),
+            initialDescription: (raw['description'] ?? '').toString(),
+            isUrgent: acceptsUrgent,
+            isEditing: false,
+          );
+          _services.add(item);
+          _attachItemListeners(item);
+        }
+      } else {
+        final first = _ServiceItem(
+          isUrgent: acceptsUrgent,
+          isEditing: true,
+          subcategoryId: _fallbackSubcategoryId,
+        );
+        _services.add(first);
+        _attachItemListeners(first);
+      }
+
       _isLoading = false;
-      _saveError = result.error ?? 'تعذر تحميل بيانات الخدمة';
+      _saveError = servicesResp.isSuccess
+          ? null
+          : (servicesResp.error ?? profileResult.error ?? 'تعذر تحميل بيانات الخدمة');
       _isInitialized = true;
     });
   }
@@ -92,23 +132,9 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
   }
 
   Future<void> _saveToApi() async {
-    final firstValid = _services.firstWhere(
-      (s) => s.name.text.trim().isNotEmpty || s.description.text.trim().isNotEmpty,
-      orElse: () => _services.first,
-    );
-
-    final displayName = firstValid.name.text.trim();
-    final bioRaw = firstValid.description.text.trim();
     final payload = <String, dynamic>{
       'accepts_urgent': _services.any((s) => s.isUrgent),
     };
-
-    if (displayName.isNotEmpty) {
-      payload['display_name'] = displayName;
-    }
-    if (bioRaw.isNotEmpty) {
-      payload['bio'] = bioRaw.length > 300 ? bioRaw.substring(0, 300) : bioRaw;
-    }
 
     if (!mounted) return;
     setState(() {
@@ -128,6 +154,7 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
     final item = _ServiceItem(
       isUrgent: false,
       isEditing: true, // الخدمة الجديدة تُفتح في وضع تعديل مباشرة
+      subcategoryId: _fallbackSubcategoryId,
     );
     _attachItemListeners(item);
     setState(() {
@@ -141,12 +168,22 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
     });
   }
 
-  void _removeService(int index) {
+  Future<void> _removeService(int index) async {
     if (_services.length == 1) {
       _showSnack("يجب أن يكون لديك خدمة واحدة على الأقل في ملفك.");
       return;
     }
     final item = _services[index];
+
+    if (item.id != null) {
+      final res = await ProviderServicesService.deleteService(item.id!);
+      if (!mounted) return;
+      if (!res.isSuccess) {
+        _showSnack(res.error ?? 'تعذر حذف الخدمة', isError: true);
+        return;
+      }
+    }
+
     setState(() {
       _detachItemListeners(item);
       item.dispose();
@@ -156,13 +193,50 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
     _showSnack("تم حذف الخدمة بنجاح.");
   }
 
-  void _saveService(int index) {
+  Future<void> _saveService(int index) async {
     final item = _services[index];
     final name = item.name.text.trim();
+    final desc = item.description.text.trim();
 
     if (name.isEmpty) {
       _showSnack("رجاء أدخل اسمًا واضحًا للخدمة قبل الحفظ.");
       return;
+    }
+
+    final subcategoryId = item.subcategoryId ?? _fallbackSubcategoryId;
+    if (subcategoryId == null) {
+      _showSnack("لا يمكن حفظ الخدمة بدون تصنيف فرعي. حدّد التصنيف أولًا.", isError: true);
+      return;
+    }
+
+    final payload = <String, dynamic>{
+      'title': name,
+      'description': desc,
+      'subcategory_id': subcategoryId,
+      'is_active': true,
+    };
+
+    if (!mounted) return;
+    setState(() => _isSaving = true);
+    final res = item.id != null
+        ? await ProviderServicesService.updateService(item.id!, payload)
+        : await ProviderServicesService.createService(payload);
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (!res.isSuccess) {
+      _showSnack(res.error ?? "تعذر حفظ الخدمة", isError: true);
+      return;
+    }
+
+    final data = res.dataAsMap;
+    if (data != null) {
+      item.id = _toInt(data['id']) ?? item.id;
+      final sub = data['subcategory'];
+      final subId = sub is Map ? _toInt(sub['id']) : null;
+      item.subcategoryId = subId ?? subcategoryId;
+    } else {
+      item.subcategoryId = subcategoryId;
     }
 
     setState(() {
@@ -196,8 +270,14 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
     widget.onNext();
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
   }
 
   @override
@@ -702,7 +782,7 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
               ),
               const Spacer(),
               IconButton(
-                onPressed: () => _removeService(index),
+                  onPressed: () => _removeService(index),
                 icon: const Icon(
                   Icons.delete_outline,
                   color: Colors.redAccent,
@@ -770,16 +850,52 @@ class _ServiceDetailsStepState extends State<ServiceDetailsStep> {
       ),
     );
   }
+
+  List<Map<String, dynamic>> _parseServices(dynamic data) {
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (data is Map && data['results'] is List) {
+      final list = data['results'] as List;
+      return list
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return [];
+  }
+
+  List<int> _parseSubcategoryIds(dynamic data) {
+    if (data is Map && data['subcategory_ids'] is List) {
+      final ids = data['subcategory_ids'] as List;
+      return ids.map(_toInt).whereType<int>().toList();
+    }
+    return [];
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
 }
 
 /// عنصر داخلي لإدارة الكنترولات لكل خدمة
 class _ServiceItem {
+  int? id;
+  int? subcategoryId;
   final TextEditingController name;
   final TextEditingController description;
   bool isUrgent;
   bool isEditing;
 
   _ServiceItem({
+    this.id,
+    this.subcategoryId,
     String? initialName,
     String? initialDescription,
     this.isUrgent = false,

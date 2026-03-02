@@ -8,11 +8,13 @@ class ReviewsTab extends StatefulWidget {
     super.key,
     this.embedded = false,
     this.onOpenChat,
+    this.providerId,
   });
 
   final bool embedded;
 
   final Future<void> Function(String customerName)? onOpenChat;
+  final int? providerId;
 
   @override
   State<ReviewsTab> createState() => _ReviewsTabState();
@@ -39,6 +41,7 @@ class _ReviewsTabState extends State<ReviewsTab> {
   String _sortOption = 'الأحدث';
   final Map<String, bool> _isReplying = {};
   final Map<String, TextEditingController> _replyControllers = {};
+  bool get _canReply => widget.providerId == null;
 
   @override
   void initState() {
@@ -63,25 +66,29 @@ class _ReviewsTabState extends State<ReviewsTab> {
       });
     }
 
-    // جلب provider ID من ملف المستخدم
-    final meResult = await ProfileService.fetchMyProfile();
-    if (!mounted) return;
-
-    if (!meResult.isSuccess || meResult.data == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = meResult.error ?? 'تعذر جلب بيانات المستخدم';
-      });
-      return;
-    }
-
-    _providerId = meResult.data!.providerProfileId;
+    // إذا تم تمرير providerId من شاشة عامة نستخدمه مباشرة،
+    // وإلا نرجع لسلوك "مزودي أنا".
+    _providerId = widget.providerId;
     if (_providerId == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'لا يوجد ملف مزود مرتبط بحسابك';
-      });
-      return;
+      final meResult = await ProfileService.fetchMyProfile();
+      if (!mounted) return;
+
+      if (!meResult.isSuccess || meResult.data == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = meResult.error ?? 'تعذر جلب بيانات المستخدم';
+        });
+        return;
+      }
+
+      _providerId = meResult.data!.providerProfileId;
+      if (_providerId == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'لا يوجد ملف مزود مرتبط بحسابك';
+        });
+        return;
+      }
     }
 
     // جلب التقييمات + ملخص التقييم
@@ -148,6 +155,7 @@ class _ReviewsTabState extends State<ReviewsTab> {
 
   /// إرسال رد على مراجعة عبر API
   Future<void> _submitReply(int reviewId, String reviewKey) async {
+    if (!_canReply) return;
     final text = _replyControllers[reviewKey]?.text.trim() ?? '';
     if (text.isEmpty) return;
 
@@ -571,61 +579,62 @@ class _ReviewsTabState extends State<ReviewsTab> {
               ),
             ],
 
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _toggleReply(reviewKey),
-                icon: const Icon(Icons.reply,
-                    size: 18, color: Colors.deepPurple),
-                label: Text(
-                  providerReply.isEmpty ? "رد" : "تعديل الرد",
-                  style: const TextStyle(color: Colors.deepPurple),
-                ),
-              ),
-            ),
-
-            if (_isReplying[reviewKey] ?? false) ...[
+            if (_canReply) ...[
               const SizedBox(height: 10),
-              TextField(
-                controller: _replyControllers[reviewKey],
-                decoration: InputDecoration(
-                  hintText: "اكتب ردك هنا...",
-                  hintStyle: const TextStyle(fontFamily: 'Cairo'),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: _isReplySending
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                child: TextButton.icon(
+                  onPressed: () => _toggleReply(reviewKey),
+                  icon: const Icon(Icons.reply,
+                      size: 18, color: Colors.deepPurple),
+                  label: Text(
+                    providerReply.isEmpty ? "رد" : "تعديل الرد",
+                    style: const TextStyle(color: Colors.deepPurple),
+                  ),
+                ),
+              ),
+              if (_isReplying[reviewKey] ?? false) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _replyControllers[reviewKey],
+                  decoration: InputDecoration(
+                    hintText: "اكتب ردك هنا...",
+                    hintStyle: const TextStyle(fontFamily: 'Cairo'),
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _isReplySending
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () =>
+                              _submitReply(reviewId, reviewKey),
+                          child: const Text(
+                            "إرسال",
+                            style: TextStyle(
+                                color: Colors.white, fontFamily: 'Cairo'),
                           ),
                         ),
-                        onPressed: () =>
-                            _submitReply(reviewId, reviewKey),
-                        child: const Text(
-                          "إرسال",
-                          style: TextStyle(
-                              color: Colors.white, fontFamily: 'Cairo'),
-                        ),
-                      ),
-              ),
+                ),
+              ],
             ],
           ],
         ),

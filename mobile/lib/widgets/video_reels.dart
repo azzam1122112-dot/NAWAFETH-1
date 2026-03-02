@@ -124,6 +124,37 @@ class _VideoThumbnailWidgetState extends State<VideoThumbnailWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
+  bool get _isNetworkLogo {
+    final logo = widget.logo.trim().toLowerCase();
+    return logo.startsWith('http://') || logo.startsWith('https://');
+  }
+
+  Widget _buildLogoImage() {
+    if (_isNetworkLogo) {
+      return Image.network(
+        widget.logo,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _logoFallback(),
+      );
+    }
+    if (widget.logo.startsWith('assets/')) {
+      return Image.asset(
+        widget.logo,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _logoFallback(),
+      );
+    }
+    return _logoFallback();
+  }
+
+  Widget _logoFallback() {
+    return Container(
+      color: Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: const Icon(Icons.play_circle_outline, color: Colors.grey),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -181,7 +212,7 @@ class _VideoThumbnailWidgetState extends State<VideoThumbnailWidget>
                 color: Colors.white,
               ),
               child: ClipOval(
-                child: Image.asset(widget.logo, fit: BoxFit.cover),
+                child: _buildLogoImage(),
               ),
             ),
           ],

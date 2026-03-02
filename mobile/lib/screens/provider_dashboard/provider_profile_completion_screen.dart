@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nawafeth/models/provider_profile_model.dart';
+import 'package:nawafeth/models/user_profile.dart';
+import 'package:nawafeth/services/api_client.dart';
 import 'package:nawafeth/services/profile_service.dart';
 import 'package:nawafeth/screens/registration/steps/additional_details_step.dart';
 import 'package:nawafeth/screens/registration/steps/contact_info_step.dart';
@@ -93,7 +95,7 @@ class _ProviderProfileCompletionScreenState
         await Navigator.push<bool>(
           context,
           MaterialPageRoute(
-            builder: (_) => const _BasicInfoPlaceholderScreen(),
+            builder: (_) => _BasicInfoDetailsScreen(initialProfile: _profile),
           ),
         );
         await _loadProfile(silent: true);
@@ -530,45 +532,266 @@ class _ProviderProfileCompletionScreenState
   }
 }
 
-class _BasicInfoPlaceholderScreen extends StatelessWidget {
-  const _BasicInfoPlaceholderScreen();
+class _BasicInfoDetailsScreen extends StatefulWidget {
+  final ProviderProfileModel? initialProfile;
+
+  const _BasicInfoDetailsScreen({this.initialProfile});
+
+  @override
+  State<_BasicInfoDetailsScreen> createState() => _BasicInfoDetailsScreenState();
+}
+
+class _BasicInfoDetailsScreenState extends State<_BasicInfoDetailsScreen> {
+  ProviderProfileModel? _providerProfile;
+  UserProfile? _userProfile;
+  List<Map<String, dynamic>> _myServices = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _providerProfile = widget.initialProfile;
+    _loadData();
+  }
+
+  Future<void> _loadData({bool silent = false}) async {
+    if (!mounted) return;
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    final results = await Future.wait([
+      ProfileService.fetchProviderProfile(),
+      ProfileService.fetchMyProfile(),
+      ApiClient.get('/api/providers/me/services/'),
+    ]);
+    if (!mounted) return;
+
+    final providerResult = results[0] as ProfileResult<ProviderProfileModel>;
+    final meResult = results[1] as ProfileResult<UserProfile>;
+    final servicesResp = results[2] as ApiResponse;
+
+    if (providerResult.isSuccess && providerResult.data != null) {
+      _providerProfile = providerResult.data;
+    }
+    if (meResult.isSuccess && meResult.data != null) {
+      _userProfile = meResult.data;
+    }
+    if (servicesResp.isSuccess) {
+      _myServices = _parseList(servicesResp.data);
+    } else {
+      _myServices = [];
+    }
+
+    setState(() {
+      _isLoading = false;
+      if (_providerProfile == null) {
+        _errorMessage = providerResult.error ?? 'تعذر جلب بيانات التسجيل الأساسية';
+      } else {
+        _errorMessage = null;
+      }
+    });
+  }
+
+  List<Map<String, dynamic>> _parseList(dynamic data) {
+    if (data is List) {
+      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    if (data is Map && data['results'] is List) {
+      final list = data['results'] as List;
+      return list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  String _providerTypeLabel(String type) {
+    switch (type) {
+      case 'individual':
+        return 'فرد';
+      case 'company':
+        return 'مؤسسة';
+      case 'freelancer':
+        return 'مستقل';
+      default:
+        return type.trim();
+    }
+  }
+
+  List<String> _uniqueNonEmpty(Iterable<String> values) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isEmpty) continue;
+      if (seen.add(clean)) {
+        result.add(clean);
+      }
+    }
+    return result;
+  }
+
+  String _nameAccountValue() {
+    final providerName = (_providerProfile?.displayName ?? '').trim();
+    final usernameRaw = (_userProfile?.username ?? '').trim();
+    final username = usernameRaw.isEmpty
+        ? ''
+        : (usernameRaw.startsWith('@') ? usernameRaw : '@$usernameRaw');
+
+    if (providerName.isEmpty && username.isEmpty) return 'غير متوفر';
+    if (providerName.isNotEmpty && username.isNotEmpty) {
+      return '$providerName\n$username';
+    }
+    return providerName.isNotEmpty ? providerName : username;
+  }
+
+  String _specializationValue() {
+    final providerType = _providerTypeLabel(_providerProfile?.providerType ?? '');
+    final categories = _uniqueNonEmpty(_myServices.map((service) {
+      final sub = service['subcategory'];
+      if (sub is Map) {
+        return (sub['category_name'] ?? '').toString();
+      }
+      return '';
+    }));
+    final subcategories = _uniqueNonEmpty(_myServices.map((service) {
+      final sub = service['subcategory'];
+      if (sub is Map) {
+        return (sub['name'] ?? '').toString();
+      }
+      return '';
+    }));
+
+    final lines = <String>[];
+    if (providerType.isNotEmpty) lines.add('نوع الحساب: $providerType');
+    if (categories.isNotEmpty) lines.add('التصنيف: ${categories.join('، ')}');
+    if (subcategories.isNotEmpty) {
+      lines.add('التخصصات: ${subcategories.join('، ')}');
+    }
+
+    if (lines.isEmpty) return 'غير متوفر';
+    return lines.join('\n');
+  }
+
+  String _contactValue() {
+    final phone = (_userProfile?.phone ?? '').trim();
+    final whatsapp = (_providerProfile?.whatsapp ?? '').trim();
+    final city = (_providerProfile?.city ?? '').trim();
+
+    final lines = <String>[];
+    if (phone.isNotEmpty) lines.add('الجوال: $phone');
+    if (whatsapp.isNotEmpty) lines.add('واتساب: $whatsapp');
+    if (city.isNotEmpty) lines.add('المدينة: $city');
+    return lines.isEmpty ? 'غير متوفر' : lines.join('\n');
+  }
+
+  Widget _infoTile({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.black87),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: Colors.black87,
+        ),
+      ),
+      subtitle: Text(
+        value,
+        style: const TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 13,
+          color: Colors.black54,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'بيانات التسجيل الأساسية',
-          style: TextStyle(fontFamily: 'Cairo'),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F4FC),
+        appBar: AppBar(
+          backgroundColor: AppColors.deepPurple,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: const Text(
+            'بيانات التسجيل الأساسية',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'هذه البيانات تم إدخالها أثناء التسجيل الأولي.',
-              style: TextStyle(fontFamily: 'Cairo', color: Colors.black54),
-            ),
-            SizedBox(height: 12),
-            ListTile(
-              leading: Icon(Icons.person),
-              title: Text('الاسم / اسم الحساب'),
-              subtitle: Text('سيتم جلبه من قاعدة البيانات لاحقاً.'),
-            ),
-            ListTile(
-              leading: Icon(Icons.category_outlined),
-              title: Text('تصنيف الاختصاص'),
-              subtitle: Text('يُعرض هنا التصنيف الرئيسي والتخصصات.'),
-            ),
-            ListTile(
-              leading: Icon(Icons.phone),
-              title: Text('بيانات التواصل الأساسية'),
-              subtitle: Text('رقم الجوال / واتساب الأساسي.'),
-            ),
-          ],
-        ),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.deepPurple),
+              )
+            : RefreshIndicator(
+                onRefresh: () => _loadData(silent: true),
+                color: AppColors.deepPurple,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const Text(
+                      'هذه البيانات تم إدخالها أثناء التسجيل الأولي.',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    _infoTile(
+                      icon: Icons.person,
+                      title: 'الاسم / اسم الحساب',
+                      value: _nameAccountValue(),
+                    ),
+                    _infoTile(
+                      icon: Icons.category_outlined,
+                      title: 'تصنيف الاختصاص',
+                      value: _specializationValue(),
+                    ),
+                    _infoTile(
+                      icon: Icons.phone,
+                      title: 'بيانات التواصل الأساسية',
+                      value: _contactValue(),
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

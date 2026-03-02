@@ -5,9 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:nawafeth/widgets/app_bar.dart';
 import 'package:nawafeth/widgets/bottom_nav.dart';
-import 'package:nawafeth/widgets/custom_drawer.dart';
 import 'package:nawafeth/services/api_client.dart';
 import 'package:nawafeth/services/account_mode_service.dart';
 import 'package:nawafeth/services/interactive_service.dart';
@@ -16,6 +14,8 @@ import 'package:nawafeth/services/subscriptions_service.dart';
 import 'package:nawafeth/services/marketplace_service.dart';
 import 'package:nawafeth/models/user_profile.dart';
 import 'package:nawafeth/models/provider_profile_model.dart';
+import 'package:nawafeth/screens/notifications_screen.dart';
+import 'package:nawafeth/screens/my_chats_screen.dart';
 
 import 'profile_tab.dart';
 import 'services_tab.dart';
@@ -37,15 +37,11 @@ class ProviderHomeScreen extends StatefulWidget {
   State<ProviderHomeScreen> createState() => _ProviderHomeScreenState();
 }
 
-class _ProviderHomeScreenState extends State<ProviderHomeScreen>
-    with SingleTickerProviderStateMixin {
+class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   final Color mainColor = Colors.deepPurple;
 
   File? _profileImage;
   File? _coverImage;
-  File? _reelVideo;
-
-  late AnimationController _controller;
 
   // ────── حالات التحميل ──────
   bool _isLoading = true;
@@ -60,7 +56,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
   int _urgentOrdersCount = 0;
   int _newOrdersCount = 0;
   int _clientsCount = 0;
-  bool _hasSpotlights = false;
+  List<Map<String, dynamic>> _mySpotlights = <Map<String, dynamic>>[];
+  final Set<int> _deletingSpotlightIds = <int>{};
 
   // ────── بيانات محسوبة ──────
   String get _currentPlanName => _subscriptionPlanName ?? "الباقة المجانية";
@@ -77,10 +74,6 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
     _loadProviderData();
   }
 
@@ -183,7 +176,6 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
 
   @override
   void dispose() {
-    _controller.dispose();
     super.dispose();
   }
 
@@ -248,10 +240,19 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
     try {
       final response = await InteractiveService.fetchMySpotlights();
       if (!mounted) return;
-      final list = response.dataAsList ?? const <dynamic>[];
       if (response.isSuccess) {
+        final data = response.data;
+        final list = data is List
+            ? data
+            : (data is Map && data['results'] is List
+                ? data['results'] as List
+                : const <dynamic>[]);
+        final parsed = list
+            .whereType<Map>()
+            .map((e) => e.map((key, value) => MapEntry(key.toString(), value)))
+            .toList();
         setState(() {
-          _hasSpotlights = list.isNotEmpty;
+          _mySpotlights = parsed;
         });
       }
     } catch (_) {
@@ -269,7 +270,6 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
 
     setState(() {
       _isUploadingSpotlight = true;
-      _reelVideo = File(picked.path);
     });
 
     final result = await ProfileService.uploadProviderSpotlight(
@@ -281,11 +281,6 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
 
     setState(() {
       _isUploadingSpotlight = false;
-      if (result.isSuccess) {
-        _hasSpotlights = true;
-      } else {
-        _reelVideo = null;
-      }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -303,6 +298,73 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
     if (result.isSuccess) {
       unawaited(_loadMySpotlights());
     }
+  }
+
+  Future<void> _deleteSpotlight(int itemId) async {
+    if (_deletingSpotlightIds.contains(itemId)) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف اللمحة', style: TextStyle(fontFamily: 'Cairo')),
+        content: const Text(
+          'هل تريد حذف هذه اللمحة؟',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(
+              'حذف',
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() {
+      _deletingSpotlightIds.add(itemId);
+    });
+
+    final response = await InteractiveService.deleteSpotlightItem(itemId);
+    if (!mounted) return;
+
+    setState(() {
+      _deletingSpotlightIds.remove(itemId);
+      if (response.isSuccess) {
+        _mySpotlights.removeWhere((item) => _toInt(item['id']) == itemId);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          response.isSuccess
+              ? 'تم حذف اللمحة'
+              : (response.error ?? 'تعذر حذف اللمحة'),
+          style: const TextStyle(fontFamily: 'Cairo'),
+        ),
+        backgroundColor: response.isSuccess ? Colors.green : Colors.red,
+      ),
+    );
+
+    if (response.isSuccess) {
+      unawaited(_loadMySpotlights());
+    }
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
   }
 
   // نافذة QR
@@ -440,6 +502,42 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _headerActionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    String? semanticLabel,
+  }) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Ink(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(14),
+              border:
+                  Border.all(color: Colors.white.withOpacity(0.45), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 21),
+          ),
         ),
       ),
     );
@@ -677,6 +775,42 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
             ),
           ),
         ),
+        Positioned(
+          top: 8,
+          right: 16,
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                _headerActionButton(
+                  icon: Icons.notifications_none_rounded,
+                  semanticLabel: 'الإشعارات',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+                _headerActionButton(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  semanticLabel: 'الرسائل',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyChatsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
         if (_isUploadingProfileMedia)
           Positioned.fill(
             child: IgnorePointer(
@@ -773,7 +907,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                       backgroundColor: Colors.green,
                       duration: const Duration(seconds: 2),
                       behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                   );
                   Navigator.pushReplacementNamed(context, '/profile');
@@ -788,12 +923,15 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.person_rounded, size: 16, color: Colors.grey.shade500),
+                    Icon(Icons.person_rounded,
+                        size: 16, color: Colors.grey.shade500),
                     const SizedBox(width: 5),
                     Text(
                       'عميل',
                       style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'Cairo',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Cairo',
                         color: Colors.grey.shade500,
                       ),
                     ),
@@ -826,7 +964,9 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                   Text(
                     'مقدم خدمة',
                     style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Cairo',
                       color: mainColor,
                     ),
                   ),
@@ -926,14 +1066,15 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
     );
   }
 
-  // ريلز
+  // لمحات المزود: إضافة + عرض + حذف
   Widget _reelsRow() {
+    final spotlights = _mySpotlights;
     return SizedBox(
-      height: 100,
+      height: 106,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        itemCount: 3,
+        itemCount: spotlights.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           if (index == 0) {
@@ -959,20 +1100,27 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                                 AlwaysStoppedAnimation<Color>(mainColor),
                           ),
                         )
-                      : Icon(
-                          (_reelVideo == null && !_hasSpotlights)
-                              ? Icons.add
-                              : Icons.edit,
-                          color: mainColor,
-                          size: 26,
-                        ),
+                      : Icon(Icons.add, color: mainColor, size: 26),
                 ),
               ),
             );
-          } else {
-            return RotationTransition(
-              turns: _controller,
-              child: Container(
+          }
+
+          final item = spotlights[index - 1];
+          final itemId = _toInt(item['id']);
+          final rawThumb =
+              ((item['thumbnail_url'] ?? item['file_url']) as String?)
+                      ?.trim() ??
+                  '';
+          final thumbUrl =
+              rawThumb.isEmpty ? null : ApiClient.buildMediaUrl(rawThumb);
+          final isDeleting =
+              itemId != null && _deletingSpotlightIds.contains(itemId);
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
                 padding: const EdgeInsets.all(3),
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
@@ -982,18 +1130,48 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
                     end: Alignment.bottomLeft,
                   ),
                 ),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   radius: 34,
                   backgroundColor: Colors.white,
-                  child: Icon(
-                    Icons.play_arrow,
-                    color: Colors.deepPurple,
-                    size: 26,
+                  backgroundImage: (thumbUrl != null && thumbUrl.isNotEmpty)
+                      ? NetworkImage(thumbUrl)
+                      : null,
+                  child: (thumbUrl == null || thumbUrl.isEmpty)
+                      ? const Icon(
+                          Icons.play_arrow,
+                          color: Colors.deepPurple,
+                          size: 26,
+                        )
+                      : null,
+                ),
+              ),
+              Positioned(
+                top: -2,
+                left: -2,
+                child: GestureDetector(
+                  onTap: (itemId == null || isDeleting)
+                      ? null
+                      : () => _deleteSpotlight(itemId),
+                  child: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: isDeleting ? Colors.grey : Colors.red,
+                    child: isDeleting
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.8,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.close,
+                            color: Colors.white, size: 14),
                   ),
                 ),
               ),
-            );
-          }
+            ],
+          );
         },
       ),
     );
@@ -1196,11 +1374,6 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen>
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF3F4F6),
-        drawer: const CustomDrawer(),
-        appBar: const PreferredSize(
-          preferredSize: Size.fromHeight(60),
-          child: CustomAppBar(showSearchField: false, title: 'نافذتي'),
-        ),
         bottomNavigationBar: const CustomBottomNav(currentIndex: 3),
         body: _isLoading
             ? const Center(

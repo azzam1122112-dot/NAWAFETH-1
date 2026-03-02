@@ -189,6 +189,7 @@ _r2_media_ready = USE_R2_MEDIA and all(
 
 # Quick connectivity check for R2 to avoid silent 500s on every upload.
 # Runs only once at startup; falls back to local storage on failure.
+R2_HEAD_BUCKET_STRICT = env_bool("R2_HEAD_BUCKET_STRICT", False)
 if _r2_media_ready:
     try:
         import boto3
@@ -207,11 +208,35 @@ if _r2_media_ready:
         _test_client.head_bucket(Bucket=AWS_STORAGE_BUCKET_NAME)
     except Exception as _r2_err:
         import logging as _log
-        _log.getLogger("nawafeth.settings").warning(
-            "R2/S3 connectivity check failed (%s). Falling back to local FileSystemStorage.",
-            _r2_err,
-        )
-        _r2_media_ready = False
+        _logger = _log.getLogger("nawafeth.settings")
+
+        # NOTE:
+        # Some S3-compatible providers/tokens (including certain R2 tokens)
+        # may reject HeadBucket with 403 while object-level operations still
+        # work. In that case, do not force fallback unless strict mode is on.
+        _is_head_bucket_forbidden = False
+        _error_code = ""
+        try:
+            from botocore.exceptions import ClientError as _ClientError
+            if isinstance(_r2_err, _ClientError):
+                _error_code = str(
+                    ((_r2_err.response or {}).get("Error", {}) or {}).get("Code", "")
+                ).strip()
+                _is_head_bucket_forbidden = _error_code in {"403", "Forbidden", "AccessDenied"}
+        except Exception:
+            pass
+
+        if _is_head_bucket_forbidden and not R2_HEAD_BUCKET_STRICT:
+            _logger.warning(
+                "R2/S3 HeadBucket returned %s. Keeping S3 storage enabled (set R2_HEAD_BUCKET_STRICT=1 to force fallback).",
+                _error_code or "403",
+            )
+        else:
+            _logger.warning(
+                "R2/S3 connectivity check failed (%s). Falling back to local FileSystemStorage.",
+                _r2_err,
+            )
+            _r2_media_ready = False
 
 if _r2_media_ready:
     # ── Determine public base URL for media served from R2 ──

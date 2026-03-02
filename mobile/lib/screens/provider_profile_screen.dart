@@ -5,8 +5,6 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../widgets/app_bar.dart';
-import '../widgets/custom_drawer.dart';
 import '../widgets/auto_scrolling_reels_row.dart';
 import '../widgets/platform_report_dialog.dart';
 import '../widgets/video_reels.dart';
@@ -70,15 +68,22 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   // لمحات مقدم الخدمة
   List<String> get _highlightsVideos {
     return _apiSpotlights
-        .where((s) => (s['file_type'] ?? '') == 'video')
-        .map((s) => s['file_url'] as String? ?? '')
+        .where((s) {
+          final type = (s['file_type'] ?? '').toString().toLowerCase();
+          return type == 'video' || type.startsWith('video');
+        })
+        .map((s) => _normalizeMediaUrl((s['file_url'] ?? '').toString()))
         .where((url) => url.isNotEmpty)
         .toList();
   }
 
   List<String> get _highlightsLogos {
     return _apiSpotlights
-        .map((s) => s['thumbnail_url'] as String? ?? s['file_url'] as String? ?? '')
+        .map(
+          (s) => _normalizeMediaUrl(
+            (s['thumbnail_url'] ?? s['file_url'] ?? '').toString(),
+          ),
+        )
         .where((url) => url.isNotEmpty)
         .toList();
   }
@@ -127,8 +132,10 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
         'title': 'أعمالي',
         'items': _apiPortfolio.map((item) {
           final fileType = (item['file_type'] ?? 'image') as String;
-          final fileUrl = item['file_url'] as String? ?? '';
-          final thumbnailUrl = item['thumbnail_url'] as String? ?? '';
+          final fileUrl = _normalizeMediaUrl((item['file_url'] ?? '').toString());
+          final thumbnailUrl = _normalizeMediaUrl(
+            (item['thumbnail_url'] ?? '').toString(),
+          );
           return {
             'type': fileType == 'video' ? 'video' : 'image',
             'media': fileUrl.isNotEmpty ? fileUrl : thumbnailUrl,
@@ -142,11 +149,23 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   String get providerName =>
       _providerDetail?.displayName ?? widget.providerName ?? 'مزود خدمة';
 
-  String get providerCategory =>
-      widget.providerCategory ?? '';
+  String get providerCategory {
+    final fromWidget = (widget.providerCategory ?? '').trim();
+    if (fromWidget.isNotEmpty) return fromWidget;
+    final categories = _uniqueNonEmpty(
+      _apiServices.map((service) => _serviceCategoryFromService(service)),
+    );
+    return _joinForDisplay(categories);
+  }
 
-  String get providerSubCategory =>
-      widget.providerSubCategory ?? '';
+  String get providerSubCategory {
+    final fromWidget = (widget.providerSubCategory ?? '').trim();
+    if (fromWidget.isNotEmpty) return fromWidget;
+    final subcategories = _uniqueNonEmpty(
+      _apiServices.map((service) => _serviceSubCategoryFromService(service)),
+    );
+    return _joinForDisplay(subcategories);
+  }
 
   double get providerRating =>
       _providerDetail?.ratingAvg ?? widget.providerRating ?? 0.0;
@@ -154,8 +173,12 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   int get providerOperations =>
       _providerDetail?.completedRequests ?? widget.providerOperations ?? 0;
 
-  String get providerImage =>
-      _providerDetail?.profileImage ?? widget.providerImage ?? 'assets/images/8410.jpeg';
+  String get providerImage {
+    final raw = _providerDetail?.profileImage ?? widget.providerImage ?? '';
+    final normalized = _normalizeMediaUrl(raw);
+    if (normalized.isNotEmpty) return normalized;
+    return 'assets/images/8410.jpeg';
+  }
 
   bool get providerVerified =>
       _providerDetail?.isVerified ?? widget.providerVerified ?? false;
@@ -222,6 +245,51 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
   int get _serviceRangeKm =>
       (_providerDetail?.coverageRadiusKm?.toInt()) ?? 5;
+
+  String _normalizeMediaUrl(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('assets/')) return value;
+    return ApiClient.buildMediaUrl(value) ?? value;
+  }
+
+  Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return null;
+  }
+
+  String _serviceCategoryFromService(Map<String, dynamic> service) {
+    final subcategory = _asMap(service['subcategory']);
+    return (subcategory?['category_name'] ?? '').toString().trim();
+  }
+
+  String _serviceSubCategoryFromService(Map<String, dynamic> service) {
+    final subcategory = _asMap(service['subcategory']);
+    return (subcategory?['name'] ?? '').toString().trim();
+  }
+
+  List<String> _uniqueNonEmpty(Iterable<String> values) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final value in values) {
+      final clean = value.trim();
+      if (clean.isEmpty) continue;
+      if (seen.add(clean)) {
+        result.add(clean);
+      }
+    }
+    return result;
+  }
+
+  String _joinForDisplay(List<String> values, {int maxItems = 3}) {
+    if (values.isEmpty) return '';
+    if (values.length <= maxItems) return values.join('، ');
+    final shown = values.take(maxItems).join('، ');
+    return '$shown (+${values.length - maxItems})';
+  }
 
   String _extractSocialHandle(String url) {
     final trimmed = url.trim();
@@ -406,10 +474,12 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           // Services
           if (servicesResp.isSuccess) {
             final list = _parseListResponse(servicesResp);
-            final fallbackImage = parsedDetail?.profileImage ?? widget.providerImage ?? '';
+            final fallbackImage = _normalizeMediaUrl(
+              parsedDetail?.profileImage ?? widget.providerImage ?? '',
+            );
             _apiServices = list.map((e) {
               final dynamic rawImage = e['image'] ?? e['thumbnail_url'] ?? fallbackImage;
-              final image = rawImage is String ? rawImage : '';
+              final image = _normalizeMediaUrl(rawImage is String ? rawImage : '');
               return <String, dynamic>{
                 'id': e['id'],
                 'title': e['title'] ?? '',
@@ -421,7 +491,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 'price_from': e['price_from'],
                 'price_to': e['price_to'],
                 'price_unit': e['price_unit'] ?? '',
-                'subcategory': e['subcategory'],
+                'subcategory': _asMap(e['subcategory']),
                 'isLiked': false,
               };
             }).toList();
@@ -430,12 +500,30 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
           // Portfolio
           if (portfolioResp.isSuccess) {
-            _apiPortfolio = _parseListResponse(portfolioResp);
+            _apiPortfolio = _parseListResponse(portfolioResp).map((item) {
+              final normalized = Map<String, dynamic>.from(item);
+              normalized['file_url'] = _normalizeMediaUrl(
+                (item['file_url'] ?? '').toString(),
+              );
+              normalized['thumbnail_url'] = _normalizeMediaUrl(
+                (item['thumbnail_url'] ?? '').toString(),
+              );
+              return normalized;
+            }).toList();
           }
 
           // Spotlights
           if (spotlightsResp.isSuccess) {
-            _apiSpotlights = _parseListResponse(spotlightsResp);
+            _apiSpotlights = _parseListResponse(spotlightsResp).map((item) {
+              final normalized = Map<String, dynamic>.from(item);
+              normalized['file_url'] = _normalizeMediaUrl(
+                (item['file_url'] ?? '').toString(),
+              );
+              normalized['thumbnail_url'] = _normalizeMediaUrl(
+                (item['thumbnail_url'] ?? '').toString(),
+              );
+              return normalized;
+            }).toList();
           }
 
           _isLoading = false;
@@ -557,7 +645,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
   Future<void> _showShareAndReportSheet() async {
     final e164 = _formatPhoneE164(providerPhone);
-    final fakeLink = 'https://nawafeth.app/provider/${widget.providerId ?? 'provider_demo'}';
+    final providerLink = 'https://nawafeth.app/provider/${widget.providerId ?? 'provider'}';
 
     await showModalBottomSheet(
       context: context,
@@ -637,7 +725,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () async {
-                                await Clipboard.setData(ClipboardData(text: fakeLink));
+                                await Clipboard.setData(ClipboardData(text: providerLink));
                                 if (sheetContext.mounted) {
                                   Navigator.pop(sheetContext);
                                 }
@@ -654,13 +742,13 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () {
-                                Clipboard.setData(ClipboardData(text: fakeLink));
+                                Clipboard.setData(ClipboardData(text: providerLink));
                                 if (sheetContext.mounted) {
                                   Navigator.pop(sheetContext);
                                 }
                                 if (!mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تمت مشاركة الرابط (وهمي)')),
+                                  const SnackBar(content: Text('تم تجهيز الرابط للمشاركة')),
                                 );
                               },
                               icon: const Icon(Icons.share, size: 18),
@@ -697,6 +785,19 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _showFollowersList() async {
+    final providerId = _resolvedProviderId;
+    if (providerId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر جلب قائمة المتابعين')),
+      );
+      return;
+    }
+    final result = await InteractiveService.fetchProviderFollowers(providerId);
+    if (!mounted) return;
+    final followers = result.items;
+    final error = result.error;
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -744,17 +845,67 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: ListView.separated(
-                    itemCount: 12,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) {
-                      final name = 'متابع ${index + 1}';
-                      return ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.person)),
-                        title: Text(name, style: const TextStyle(fontFamily: 'Cairo')),
-                      );
-                    },
-                  ),
+                  child: error != null && followers.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              error,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        )
+                      : followers.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'لا يوجد متابعون بعد',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: followers.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (_, index) {
+                                final follower = followers[index];
+                                final name = follower.displayName.trim().isNotEmpty
+                                    ? follower.displayName.trim()
+                                    : 'مستخدم';
+                                final initial = name[0];
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: mainColor.withValues(alpha: 0.12),
+                                    child: Text(
+                                      initial,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        color: mainColor,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    name,
+                                    style: const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                  subtitle: Text(
+                                    follower.usernameDisplay,
+                                    style: const TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
@@ -765,6 +916,19 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   }
 
   Future<void> _showFollowingList() async {
+    final providerId = _resolvedProviderId;
+    if (providerId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر جلب قائمة المتابَعين')),
+      );
+      return;
+    }
+    final result = await InteractiveService.fetchProviderFollowing(providerId);
+    if (!mounted) return;
+    final following = result.items;
+    final error = result.error;
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -815,20 +979,72 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: ListView.separated(
-                    itemCount: 8,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) {
-                      final name = 'حساب ${index + 1}';
-                      return ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.person)),
-                        title: Text(
-                          name,
-                          style: const TextStyle(fontFamily: 'Cairo'),
-                        ),
-                      );
-                    },
-                  ),
+                  child: error != null && following.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              error,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        )
+                      : following.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'لا يوجد متابَعون بعد',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: following.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (_, index) {
+                                final provider = following[index];
+                                final name = provider.displayName.trim().isNotEmpty
+                                    ? provider.displayName.trim()
+                                    : 'مزود خدمة';
+                                final handle = provider.username?.trim().isNotEmpty == true
+                                    ? '@${provider.username!.trim()}'
+                                    : '';
+                                final initial = name[0];
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: mainColor.withValues(alpha: 0.12),
+                                    child: Text(
+                                      initial,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        color: mainColor,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    name,
+                                    style: const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                  subtitle: handle.isEmpty
+                                      ? null
+                                      : Text(
+                                          handle,
+                                          style: const TextStyle(
+                                            fontFamily: 'Cairo',
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
@@ -849,7 +1065,6 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: bgColor,
-        drawer: const CustomDrawer(),
         body: _isLoading
             ? Center(child: CircularProgressIndicator(color: mainColor))
             : CustomScrollView(
@@ -876,7 +1091,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 14),
                 child: SizedBox(
-                  height: 56,
+                  height: 62,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -887,7 +1102,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                       return GestureDetector(
                         onTap: () => setState(() => _selectedTabIndex = index),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? mainColor.withValues(alpha: 0.12)
@@ -903,6 +1118,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                             ]),
                           ),
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(tabs[index]['icon'], size: 20, color: isSelected ? mainColor : (isDark ? Colors.grey[300] : Colors.grey.shade600)),
@@ -914,6 +1130,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontSize: 10.5,
+                                  height: 1.1,
                                   fontWeight: FontWeight.w700,
                                   color: isSelected ? mainColor : (isDark ? Colors.white70 : Colors.black87),
                                 ),
@@ -945,9 +1162,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
 
   Widget _buildProviderHeader(bool isDark, Color bgColor, Color textColor, Color? secondaryTextColor) {
     ImageProvider<Object>? coverProvider;
-    if (_providerDetail?.coverImage != null &&
-        _providerDetail!.coverImage!.startsWith('http')) {
-      coverProvider = NetworkImage(_providerDetail!.coverImage!);
+    final coverImageUrl = _normalizeMediaUrl(_providerDetail?.coverImage);
+    if (coverImageUrl.startsWith('http')) {
+      coverProvider = NetworkImage(coverImageUrl);
     }
 
     ImageProvider<Object>? avatarProvider;
@@ -1081,6 +1298,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 const SizedBox(height: 10),
                 // ── Stats Row ──
                 _buildStatsRow(isDark),
+                const SizedBox(height: 4),
+                _buildConnectionsShortcuts(isDark),
               ],
             ),
           ),
@@ -1121,25 +1340,106 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
         children: [
           _statItem('$_completedRequests', 'عمليات', isDark),
           _dividerVertical(isDark),
-          _statItem('$_followersCount', 'متابعون', isDark),
+          _statItem(
+            '$_followersCount',
+            'متابعون',
+            isDark,
+            onTap: _showFollowersList,
+          ),
           _dividerVertical(isDark),
-          _statItem('$_likesCount', 'إعجاب', isDark),
+          _statItem(
+            '$_likesCount',
+            'إعجاب',
+            isDark,
+          ),
           _dividerVertical(isDark),
-          _statItem('${providerRating.toStringAsFixed(1)}', 'التقييم', isDark),
+          _statItem(
+            providerRating.toStringAsFixed(1),
+            'التقييم',
+            isDark,
+          ),
         ],
       ),
     );
   }
 
-  Widget _statItem(String count, String label, bool isDark) {
+  Widget _buildConnectionsShortcuts(bool isDark) {
+    final textColor = isDark ? Colors.grey.shade400 : Colors.grey.shade700;
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.grey.shade300;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton(
+          onPressed: _showFollowersList,
+          style: TextButton.styleFrom(
+            foregroundColor: mainColor,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'عرض المتابعين',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Container(
+          width: 1,
+          height: 14,
+          color: dividerColor,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+        ),
+        TextButton(
+          onPressed: _showFollowingList,
+          style: TextButton.styleFrom(
+            foregroundColor: textColor,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text(
+            'عرض المتابَعين',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statItem(
+    String count,
+    String label,
+    bool isDark, {
+    VoidCallback? onTap,
+  }) {
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(count, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: mainColor, fontFamily: 'Cairo')),
+        Text(label, style: TextStyle(fontSize: 9.5, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600, fontFamily: 'Cairo')),
+      ],
+    );
+
     return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(count, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: mainColor, fontFamily: 'Cairo')),
-          Text(label, style: TextStyle(fontSize: 9.5, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600, fontFamily: 'Cairo')),
-        ],
-      ),
+      child: onTap == null
+          ? content
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: content,
+              ),
+            ),
     );
   }
 
@@ -1317,7 +1617,10 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       case 2:
         return _galleryTab();
       case 3:
-        return const ReviewsTab(embedded: true);
+        return ReviewsTab(
+          embedded: true,
+          providerId: _resolvedProviderId,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -1497,6 +1800,13 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
               _labeledField(
                 label: 'لغة التواصل',
                 value: providerCommunicationLanguage,
+                borderColor: borderColor,
+                isDark: isDark,
+              ),
+              const Divider(height: 18),
+              _labeledField(
+                label: 'المدينة',
+                value: providerCityName,
                 borderColor: borderColor,
                 isDark: isDark,
               ),
@@ -1881,14 +2191,6 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
             files: service["files"],
             comments: service["comments"],
             isLiked: service['isLiked'] == true,
-            onToggleLike: () {
-              setState(() {
-                final liked = service['isLiked'] == true;
-                service['isLiked'] = !liked;
-                service['likes'] = (service['likes'] as int) + (!liked ? 1 : -1);
-                if ((service['likes'] as int) < 0) service['likes'] = 0;
-              });
-            },
           ),
         );
       },
@@ -1902,13 +2204,14 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     required int files,
     required int comments,
     required bool isLiked,
-    required VoidCallback onToggleLike,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? Colors.grey[850] : Colors.white;
     final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade200;
     final textColor = isDark ? Colors.white : Colors.black;
     final iconColor = isDark ? Colors.grey[400]! : Colors.grey.shade700;
+
+    final normalizedImage = _normalizeMediaUrl(imagePath);
 
     return Container(
       decoration: BoxDecoration(
@@ -1922,9 +2225,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: imagePath.startsWith('http')
+              child: normalizedImage.startsWith('http')
                   ? Image.network(
-                      imagePath,
+                      normalizedImage,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       errorBuilder: (_, __, ___) => Container(
@@ -1934,9 +2237,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                         ),
                       ),
                     )
-                  : imagePath.isNotEmpty
+                  : normalizedImage.startsWith('assets/')
                       ? Image.asset(
-                          imagePath,
+                          normalizedImage,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           errorBuilder: (_, __, ___) => Container(
@@ -1973,30 +2276,26 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    InkWell(
-                      onTap: onToggleLike,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
-                              size: 16,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
+                            size: 16,
+                            color: isLiked ? mainColor : iconColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$likes',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 11,
                               color: isLiked ? mainColor : iconColor,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$likes',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 11,
-                                color: isLiked ? mainColor : iconColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2143,6 +2442,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     final media = (item['media'] ?? '').toString();
     final desc = (item['desc'] ?? '').toString();
     final isVideo = type == 'video';
+    final normalizedMedia = _normalizeMediaUrl(media);
 
     return InkWell(
       onTap: () => _openGalleryItem(section: section, indexInSection: indexInSection),
@@ -2161,9 +2461,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                    child: media.startsWith('http')
+                    child: normalizedMedia.startsWith('http')
                         ? Image.network(
-                            media,
+                            normalizedMedia,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             errorBuilder: (_, __, ___) => Container(
@@ -2174,7 +2474,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                             ),
                           )
                         : Image.asset(
-                            media.isNotEmpty ? media : 'assets/images/8410.jpeg',
+                            normalizedMedia.startsWith('assets/') ? normalizedMedia : 'assets/images/8410.jpeg',
                             fit: BoxFit.cover,
                             width: double.infinity,
                             errorBuilder: (_, __, ___) => Container(
@@ -2260,7 +2560,7 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
     final items = (section['items'] as List).cast<Map<String, dynamic>>();
     final tapped = items[indexInSection];
     final type = (tapped['type'] ?? 'image').toString();
-    final media = (tapped['media'] ?? '').toString();
+    final media = _normalizeMediaUrl((tapped['media'] ?? '').toString());
 
     if (type == 'video') {
       final videoPaths = items

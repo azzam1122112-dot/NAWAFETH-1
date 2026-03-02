@@ -54,6 +54,36 @@ class InteractiveService {
     return ListResult(data: items);
   }
 
+  /// جلب متابعين مزود محدد (عام)
+  static Future<ListResult<UserPublicModel>> fetchProviderFollowers(
+    int providerId,
+  ) async {
+    final path = await _withMode('/api/providers/$providerId/followers/');
+    final resp = await ApiClient.get(path);
+    if (!resp.isSuccess) {
+      return ListResult(error: resp.error ?? 'خطأ في جلب متابعين المزود');
+    }
+
+    final list = _parseList(resp);
+    final items = list.map((e) => UserPublicModel.fromJson(e)).toList();
+    return ListResult(data: items);
+  }
+
+  /// جلب المزودين الذين يتابعهم مزود محدد (عام)
+  static Future<ListResult<ProviderPublicModel>> fetchProviderFollowing(
+    int providerId,
+  ) async {
+    final path = await _withMode('/api/providers/$providerId/following/');
+    final resp = await ApiClient.get(path);
+    if (!resp.isSuccess) {
+      return ListResult(error: resp.error ?? 'خطأ في جلب قائمة المتابَعين');
+    }
+
+    final list = _parseList(resp);
+    final items = list.map((e) => ProviderPublicModel.fromJson(e)).toList();
+    return ListResult(data: items);
+  }
+
   /// جلب المفضلة (معرض أعمال + أضواء) — معزول حسب الوضع
   static Future<ListResult<MediaItemModel>> fetchFavorites() async {
     final mode = await AccountModeService.apiMode();
