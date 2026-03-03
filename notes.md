@@ -59,3 +59,13 @@ adb devices
 flutter devices
 flutter doctor -v
 ```
+
+---
+
+## 5) Firebase / Google Services
+
+```text
+- التطبيق مضبوط حالياً بدون Firebase/FCM على Android.
+- لا تحتاج ملف google-services.json للتشغيل المحلي أو على المحاكي.
+- إذا رغبت مستقبلاً بتفعيل Push عبر Firebase، يجب إعادة تفعيل Google Services وإضافة ملف google-services.json.
+```

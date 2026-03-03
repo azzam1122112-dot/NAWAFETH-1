@@ -3,139 +3,111 @@
 {% block body_class %}page-provider-order-detail{% endblock %}
 
 {% block content %}
-<main class="page-shell">
+<main class="page-shell pod-shell">
   <div id="auth-gate" class="auth-gate" style="display:none">
     <div class="auth-gate-inner">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#663D90" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
       <h2>تسجيل الدخول مطلوب</h2>
-      <a href="/login/" class="btn btn-primary">تسجيل الدخول</a>
+      <a href="/login/" id="pod-login-link" class="btn btn-primary">تسجيل الدخول</a>
     </div>
   </div>
 
   <div id="pod-content" style="display:none">
-    <div class="page-header">
-      <a href="/provider-orders/" class="btn-back">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    <header class="pod-appbar">
+      <a href="/provider-orders/" class="pod-icon-btn" aria-label="رجوع">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </a>
-      <h1>تفاصيل الطلب</h1>
-    </div>
+      <h1 class="pod-appbar-title">تفاصيل الطلب</h1>
+      <button type="button" class="pod-icon-btn" id="pod-chat-btn" aria-label="فتح المحادثة">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+      </button>
+    </header>
 
     <div id="pod-loading" class="loading-center"><div class="spinner"></div></div>
-    <div id="pod-error" class="error-banner" style="display:none"></div>
+    <div id="pod-error" class="error-banner pod-error" style="display:none"></div>
 
     <div id="pod-detail" style="display:none">
-      <!-- Client Info -->
-      <section class="detail-card" id="pod-client-card">
-        <h3>معلومات العميل</h3>
-        <div class="detail-row"><span>الاسم:</span><span id="pod-client-name"></span></div>
-        <div class="detail-row"><span>الهاتف:</span><span id="pod-client-phone"></span></div>
-        <div class="detail-row"><span>المدينة:</span><span id="pod-client-city"></span></div>
-      </section>
+      <div class="pod-screen-chip">تفاصيل الطلب</div>
 
-      <!-- Order Header -->
-      <section class="detail-card">
-        <div class="detail-header-row">
-          <span class="order-id" id="pod-display-id"></span>
-          <span class="order-type-badge" id="pod-type"></span>
-          <span class="order-status" id="pod-status"></span>
+      <section class="pod-card pod-client-card">
+        <div class="pod-client-head">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#673AB7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <h3>بيانات العميل</h3>
         </div>
-        <div class="detail-row"><span>التصنيف:</span><span id="pod-category"></span></div>
-        <div class="detail-row"><span>التاريخ:</span><span id="pod-date"></span></div>
+        <div class="pod-info-line">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#673AB7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>
+          <span class="pod-info-label">الاسم</span>
+          <span class="pod-info-value" id="pod-client-name"></span>
+        </div>
+        <div class="pod-info-line">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#673AB7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7 12.8 12.8 0 0 0 .7 2.8 2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2.1-.4 12.8 12.8 0 0 0 2.8.7 2 2 0 0 1 1.6 2z"/></svg>
+          <span class="pod-info-label">الجوال</span>
+          <span class="pod-info-value" id="pod-client-phone"></span>
+        </div>
+        <div class="pod-info-line">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#673AB7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span class="pod-info-label">المدينة</span>
+          <span class="pod-info-value" id="pod-client-city"></span>
+        </div>
       </section>
 
-      <!-- Title & Description -->
-      <section class="detail-card">
-        <h3>تفاصيل الطلب</h3>
-        <div class="detail-field"><label>العنوان</label><p id="pod-title"></p></div>
-        <div class="detail-field"><label>الوصف</label><p id="pod-description"></p></div>
-      </section>
-
-      <!-- Attachments -->
-      <section class="detail-card" id="pod-attachments-section" style="display:none">
-        <h3>المرفقات</h3>
-        <div id="pod-attachments" class="attachments-list"></div>
-      </section>
-
-      <!-- Status Logs -->
-      <section class="detail-card" id="pod-logs-section" style="display:none">
-        <h3>سجل الحالة</h3>
-        <div id="pod-logs" class="status-timeline"></div>
-      </section>
-
-      <!-- Action Forms (dynamic per status) -->
-      <section id="pod-actions" class="detail-card" style="display:none">
-        <h3>الإجراءات</h3>
-
-        <!-- Accept + Start Form (for new orders) -->
-        <div id="action-new" style="display:none">
-          <button class="btn btn-primary btn-block" id="btn-accept">قبول الطلب</button>
-          <div id="start-form" style="display:none;margin-top:16px">
-            <div class="form-group">
-              <label>تاريخ التسليم المتوقع</label>
-              <input type="date" id="start-delivery-date" class="form-input">
+      <section class="pod-card pod-header-card">
+        <div class="pod-header-main">
+          <div class="pod-header-meta">
+            <div class="pod-id-row">
+              <span class="pod-display-id" id="pod-display-id"></span>
+              <span class="pod-type-badge" id="pod-type-badge" style="display:none"></span>
             </div>
-            <div class="form-group">
-              <label>المبلغ المتوقع (ر.س)</label>
-              <input type="number" id="start-amount" class="form-input" placeholder="0.00">
-            </div>
-            <div class="form-group">
-              <label>المبلغ المستلم (ر.س)</label>
-              <input type="number" id="start-received" class="form-input" placeholder="0.00">
-            </div>
-            <div class="form-group">
-              <label>ملاحظات</label>
-              <textarea id="start-note" class="form-input" rows="3"></textarea>
-            </div>
-            <button class="btn btn-primary btn-block" id="btn-start">بدء التنفيذ</button>
+            <p class="pod-meta-line" id="pod-category" style="display:none"></p>
+            <p class="pod-meta-line" id="pod-date"></p>
           </div>
-          <button class="btn btn-outline btn-danger btn-block mt-8" id="btn-reject-new">رفض الطلب</button>
-        </div>
-
-        <!-- In Progress Actions -->
-        <div id="action-progress" style="display:none">
-          <div class="form-group">
-            <label>تحديث التقدم</label>
-            <textarea id="progress-note" class="form-input" rows="3" placeholder="أضف ملاحظة تقدم..."></textarea>
-          </div>
-          <button class="btn btn-primary btn-block" id="btn-update-progress">تحديث</button>
-          <hr class="separator">
-          <div class="form-group">
-            <label>تاريخ التسليم الفعلي</label>
-            <input type="date" id="complete-date" class="form-input">
-          </div>
-          <div class="form-group">
-            <label>المبلغ الفعلي (ر.س)</label>
-            <input type="number" id="complete-amount" class="form-input" placeholder="0.00">
-          </div>
-          <button class="btn btn-success btn-block" id="btn-complete">إكمال الطلب</button>
-          <button class="btn btn-outline btn-danger btn-block mt-8" id="btn-reject-progress">إلغاء / رفض</button>
-        </div>
-
-        <!-- Reject Form -->
-        <div id="reject-form" style="display:none">
-          <div class="form-group">
-            <label>سبب الرفض / الإلغاء</label>
-            <textarea id="reject-reason" class="form-input" rows="3" placeholder="اذكر السبب..."></textarea>
-          </div>
-          <button class="btn btn-danger btn-block" id="btn-confirm-reject">تأكيد الرفض</button>
-          <button class="btn btn-outline btn-block mt-8" id="btn-cancel-reject">إلغاء</button>
-        </div>
-
-        <!-- Completed Info -->
-        <div id="action-completed" style="display:none">
-          <div class="detail-row"><span>تاريخ التسليم:</span><span id="completed-date"></span></div>
-          <div class="detail-row"><span>المبلغ الفعلي:</span><span id="completed-amount"></span></div>
-        </div>
-
-        <!-- Cancelled Info -->
-        <div id="action-cancelled" style="display:none">
-          <div class="detail-row"><span>تاريخ الإلغاء:</span><span id="cancelled-date"></span></div>
-          <div class="detail-row"><span>سبب الإلغاء:</span><span id="cancelled-reason"></span></div>
+          <span class="pod-status-pill" id="pod-status-pill"></span>
         </div>
       </section>
+
+      <section class="pod-card">
+        <div class="pod-readonly-box">
+          <label>عنوان الطلب</label>
+          <p id="pod-title"></p>
+        </div>
+        <div class="pod-readonly-box">
+          <label>تفاصيل الطلب</label>
+          <p id="pod-description" class="pod-multiline"></p>
+        </div>
+      </section>
+
+      <section class="pod-card">
+        <h3 class="pod-section-title">مرفقات العميل</h3>
+        <p id="pod-attachments-empty" class="pod-muted">لا توجد مرفقات</p>
+
+        <div id="pod-final-attachments-wrap" style="display:none">
+          <h4 class="pod-subsection-title">مرفقات التسليم النهائي</h4>
+          <div id="pod-final-attachments"></div>
+        </div>
+
+        <div id="pod-regular-attachments-wrap" style="display:none">
+          <h4 id="pod-regular-heading" class="pod-subsection-title">مرفقات الطلب</h4>
+          <div id="pod-regular-attachments"></div>
+        </div>
+      </section>
+
+      <section class="pod-card" id="pod-logs-section" style="display:none">
+        <h3 class="pod-section-title">سجل تغيير الحالة</h3>
+        <div id="pod-logs"></div>
+      </section>
+
+      <section class="pod-card">
+        <h3 class="pod-section-title">إجراء على الطلب</h3>
+        <div id="pod-actions"></div>
+      </section>
+
+      <div class="pod-back-wrap">
+        <a href="/provider-orders/" class="pod-btn pod-btn-outline-neutral pod-btn-block">رجوع</a>
+      </div>
     </div>
   </div>
 </main>
+<div id="pod-toast" class="pod-toast" aria-live="polite"></div>
 {% endblock %}
 
 {% block extra_js %}

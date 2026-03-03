@@ -109,6 +109,12 @@ const ProviderDashboardPage = (() => {
       _providerProfile = provRes.value.data;
     }
 
+    if (!_providerProfile || !_providerProfile.id) {
+      sessionStorage.setItem('nw_account_mode', 'client');
+      window.location.href = '/profile/';
+      return;
+    }
+
     if (_providerProfile && _providerProfile.id) {
       const statsRes = await ApiClient.get('/api/providers/' + _providerProfile.id + '/stats/?mode=provider');
       if (statsRes.ok && statsRes.data) {
@@ -210,9 +216,43 @@ const ProviderDashboardPage = (() => {
     }
   }
 
+  function _hasText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function _hasNonEmptyList(value) {
+    if (!Array.isArray(value) || !value.length) return false;
+    return value.some((item) => {
+      if (item == null) return false;
+      if (typeof item === 'string') return item.trim().length > 0;
+      if (Array.isArray(item)) return item.length > 0;
+      if (typeof item === 'object') return Object.keys(item).length > 0;
+      return true;
+    });
+  }
+
+  function _mobileProfileCompletionPercent(profile) {
+    const p = profile || {};
+    const checks = [
+      _hasText(p.display_name) && _hasText(p.bio), // service details
+      _hasText(p.about_details) || _hasNonEmptyList(p.qualifications) || _hasNonEmptyList(p.experiences), // additional
+      _hasText(p.whatsapp) || _hasText(p.website) || _hasNonEmptyList(p.social_links), // contact
+      _hasNonEmptyList(p.languages) && Number(p.coverage_radius_km || 0) > 0, // language/location
+      _hasText(p.profile_image) || _hasText(p.cover_image) || _hasNonEmptyList(p.content_sections), // content
+      _hasText(p.seo_keywords) || _hasText(p.seo_meta_description) || _hasText(p.seo_slug), // seo
+    ];
+
+    const doneOptional = checks.filter(Boolean).length;
+    const completion = 0.30 + (doneOptional * (0.70 / 6));
+    return Math.max(0, Math.min(100, Math.round(completion * 100)));
+  }
+
   function _renderCompletion() {
     const p = _providerProfile || {};
-    const pct = p.profile_completion || 0;
+    const raw = Number(p.profile_completion);
+    const pct = Number.isFinite(raw)
+      ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw))
+      : _mobileProfileCompletionPercent(p);
     document.getElementById('completion-pct').textContent = `${pct}%`;
     document.getElementById('completion-bar').style.width = `${pct}%`;
     if (pct >= 100) {

@@ -1,8 +1,11 @@
 "use strict";
 var ProviderProfileEditPage = (function () {
+  var RAW_API = window.ApiClient;
   var API = window.NwApiClient;
   var CITIES = ["الرياض","جدة","مكة المكرمة","المدينة المنورة","الدمام","الخبر","الظهران","الطائف","تبوك","بريدة","عنيزة","حائل","أبها","خميس مشيط","نجران","جازان","ينبع","الباحة","الجبيل","حفر الباطن","القطيف","الأحساء","سكاكا","عرعر","بيشة","الخرج","الدوادمي","المجمعة","القويعية","وادي الدواسر"];
   var profile = null;
+  var initialTab = null;
+  var initialFocus = null;
 
   var FIELD_MAP = {
     fullName: "display_name", accountType: "provider_type", about: "bio",
@@ -37,17 +40,69 @@ var ProviderProfileEditPage = (function () {
   };
 
   function init() {
-    loadProfile();
+    parseEntryQuery();
     bindTabs();
+    loadProfile();
+  }
+
+  function parseEntryQuery() {
+    var params = new URLSearchParams(window.location.search || "");
+    var tab = (params.get("tab") || "").trim();
+    var focus = (params.get("focus") || "").trim();
+    if (tab && TABS[tab]) initialTab = tab;
+    if (focus && FIELD_MAP[focus]) initialFocus = focus;
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function safeGet(path) {
+    if (RAW_API && typeof RAW_API.get === "function") {
+      return RAW_API.get(path);
+    }
+    return API.get(path).then(function (data) {
+      return { ok: !!data, status: data ? 200 : 0, data: data };
+    });
+  }
+
+  function safePatch(path, body) {
+    if (RAW_API && typeof RAW_API.request === "function") {
+      return RAW_API.request(path, { method: "PATCH", body: body });
+    }
+    return API.patch(path, body).then(function (data) {
+      return { ok: !!data, status: data ? 200 : 0, data: data };
+    });
+  }
+
+  function apiErrorMessage(data, fallback) {
+    if (data && typeof data === "object") {
+      if (typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
+      var firstKey = Object.keys(data)[0];
+      var firstVal = data[firstKey];
+      if (typeof firstVal === "string" && firstVal.trim()) return firstVal.trim();
+      if (Array.isArray(firstVal) && firstVal.length) return String(firstVal[0]);
+    }
+    return fallback || "فشل العملية";
   }
 
   function loadProfile() {
     Promise.all([
-      API.get("/api/accounts/profile/me/"),
-      API.get("/api/providers/me/profile/")
+      safeGet("/api/accounts/profile/me/"),
+      safeGet("/api/providers/me/profile/")
     ]).then(function (res) {
-      var user = res[0] || {};
-      var prov = res[1] || {};
+      var userResp = res[0] || {};
+      var provResp = res[1] || {};
+      if (!provResp.ok || !provResp.data) {
+        throw new Error("provider_profile_not_found");
+      }
+      var user = userResp.ok && userResp.data ? userResp.data : {};
+      var prov = provResp.data || {};
       profile = {
         fullName: prov.display_name || "",
         accountType: TYPE_LABELS[prov.provider_type] || prov.provider_type || "",
@@ -64,6 +119,7 @@ var ProviderProfileEditPage = (function () {
         keywords: prov.seo_keywords || ""
       };
       renderAll();
+      applyEntryNavigation();
       document.getElementById("pe-loading").style.display = "none";
       document.getElementById("pe-content").style.display = "";
     }).catch(function () {
@@ -83,15 +139,16 @@ var ProviderProfileEditPage = (function () {
 
   function buildField(f) {
     var val = profile[f.key] || "";
+    var safeVal = escapeHtml(val);
     return '<div class="pe-field" data-key="' + f.key + '">' +
       '<div class="pe-field-header"><span class="pe-field-label">' + f.label + '</span>' +
       (!f.readOnly ? '<button class="btn-icon pe-edit-btn" data-key="' + f.key + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#663D90" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' : '') +
       '</div>' +
-      '<div class="pe-field-display">' + (val || '<span class="text-muted">—</span>') + '</div>' +
+      '<div class="pe-field-display">' + (safeVal || '<span class="text-muted">—</span>') + '</div>' +
       '<div class="pe-field-edit" style="display:none">' +
       (f.isCity ? '<select class="form-select pe-input" data-key="' + f.key + '"><option value="">اختر المدينة</option>' + CITIES.map(function (c) { return '<option' + (c === val ? ' selected' : '') + '>' + c + '</option>'; }).join("") + '</select>'
-        : f.multiline ? '<textarea class="form-input pe-input" rows="3" data-key="' + f.key + '">' + val + '</textarea>'
-        : '<input type="text" class="form-input pe-input" data-key="' + f.key + '" value="' + val.replace(/"/g, '&quot;') + '">') +
+        : f.multiline ? '<textarea class="form-input pe-input" rows="3" data-key="' + f.key + '">' + safeVal + '</textarea>'
+        : '<input type="text" class="form-input pe-input" data-key="' + f.key + '" value="' + safeVal + '">') +
       '<button class="btn btn-sm btn-primary pe-save-btn" data-key="' + f.key + '">حفظ</button>' +
       '</div></div>';
   }
@@ -127,27 +184,79 @@ var ProviderProfileEditPage = (function () {
     }
 
     btn.disabled = true; btn.textContent = "جاري الحفظ...";
-    API.patch("/api/providers/me/profile/", payload).then(function () {
+    safePatch("/api/providers/me/profile/", payload).then(function (resp) {
+      if (!resp || !resp.ok) {
+        throw new Error(apiErrorMessage(resp ? resp.data : null, "فشل في الحفظ"));
+      }
       profile[key] = val;
       var field = document.querySelector('.pe-field[data-key="' + key + '"]');
-      field.querySelector(".pe-field-display").textContent = val || "—";
+      field.querySelector(".pe-field-display").innerHTML = escapeHtml(val) || '<span class="text-muted">—</span>';
       field.querySelector(".pe-field-display").style.display = "";
       field.querySelector(".pe-field-edit").style.display = "none";
-      field.querySelector(".pe-edit-btn").style.display = "";
-    }).catch(function () {
-      alert("فشل في الحفظ");
+      var editBtn = field.querySelector(".pe-edit-btn");
+      if (editBtn) editBtn.style.display = "";
+    }).catch(function (err) {
+      alert((err && err.message) ? err.message : "فشل في الحفظ");
     }).finally(function () {
       btn.disabled = false; btn.textContent = "حفظ";
     });
+  }
+
+  function activateTab(name) {
+    var tabsWrap = document.getElementById("pe-tabs");
+    if (!tabsWrap || !name) return;
+    var tabBtn = tabsWrap.querySelector('.tab[data-tab="' + name + '"]');
+    if (!tabBtn) return;
+    tabsWrap.querySelectorAll(".tab").forEach(function (t) { t.classList.toggle("active", t === tabBtn); });
+    document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.toggle("active", p.dataset.panel === name); });
+  }
+
+  function resolveTabByField(fieldKey) {
+    var tabNames = Object.keys(TABS);
+    for (var i = 0; i < tabNames.length; i++) {
+      var tabName = tabNames[i];
+      var hasField = TABS[tabName].some(function (f) { return f.key === fieldKey; });
+      if (hasField) return tabName;
+    }
+    return null;
+  }
+
+  function openFieldEditor(fieldKey) {
+    var field = document.querySelector('.pe-field[data-key="' + fieldKey + '"]');
+    if (!field) return;
+
+    var display = field.querySelector(".pe-field-display");
+    var editBlock = field.querySelector(".pe-field-edit");
+    var editBtn = field.querySelector(".pe-edit-btn");
+    if (display && editBlock && editBtn) {
+      display.style.display = "none";
+      editBlock.style.display = "";
+      editBtn.style.display = "none";
+    }
+
+    field.style.boxShadow = "0 0 0 2px rgba(103,58,183,0.22)";
+    setTimeout(function () { field.style.boxShadow = ""; }, 1600);
+
+    var input = field.querySelector('.pe-input[data-key="' + fieldKey + '"]');
+    if (input && typeof input.focus === "function") {
+      input.focus();
+      if (typeof input.select === "function") input.select();
+    }
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function applyEntryNavigation() {
+    var tabToOpen = initialTab || (initialFocus ? resolveTabByField(initialFocus) : null);
+    if (tabToOpen) activateTab(tabToOpen);
+    if (!initialFocus) return;
+    setTimeout(function () { openFieldEditor(initialFocus); }, 80);
   }
 
   function bindTabs() {
     document.getElementById("pe-tabs").addEventListener("click", function (e) {
       var tab = e.target.closest(".tab");
       if (!tab) return;
-      var name = tab.dataset.tab;
-      this.querySelectorAll(".tab").forEach(function (t) { t.classList.toggle("active", t === tab); });
-      document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.toggle("active", p.dataset.panel === name); });
+      activateTab(tab.dataset.tab);
     });
   }
 

@@ -9,11 +9,23 @@ const Nav = (() => {
 
   function init() {
     _ensureSingleBottomNav();
+    _initModeAwareProfileNav();
     _initSidebarController();
     _initQuickNavButtons();
     _initAuthUI();
     _initLogout();
     _initUnreadBadges();
+  }
+
+  function _setProfileNavHref(mode) {
+    const profileNav = document.querySelector('#bottom-nav a.bnav-item[data-index="3"]');
+    if (!profileNav) return;
+    profileNav.setAttribute('href', mode === 'provider' ? '/provider-dashboard/' : '/profile/');
+  }
+
+  function _initModeAwareProfileNav() {
+    const mode = _activeMode();
+    _setProfileNavHref(mode);
   }
 
   function _ensureSingleBottomNav() {
@@ -114,6 +126,7 @@ const Nav = (() => {
     }
 
     if (!Auth.isLoggedIn()) {
+      _setProfileNavHref('client');
       if (loginLink) loginLink.classList.remove('hidden');
       if (logoutBtn) logoutBtn.classList.add('hidden');
       if (nameEl) nameEl.textContent = 'زائر';
@@ -128,6 +141,24 @@ const Nav = (() => {
 
     const profile = await Auth.getProfile();
     if (!profile) return;
+
+    const canUseProviderMode = !!(
+      profile.role_state === 'provider'
+      || profile.is_provider
+      || profile.has_provider_profile
+    );
+    const requestedMode = (() => {
+      try {
+        return (sessionStorage.getItem('nw_account_mode') || '').trim().toLowerCase();
+      } catch (_) {
+        return '';
+      }
+    })();
+    const effectiveMode = (requestedMode === 'provider' && canUseProviderMode) ? 'provider' : 'client';
+    try {
+      sessionStorage.setItem('nw_account_mode', effectiveMode);
+    } catch (_) {}
+    _setProfileNavHref(effectiveMode);
 
     const display = profile.display_name || profile.first_name || profile.username || 'مستخدم';
     const role = profile.role_state === 'provider'

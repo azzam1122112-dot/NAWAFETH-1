@@ -92,6 +92,9 @@ body.page-provider-dashboard .pd-name {
   font-weight: 900;
   color: #231942;
   line-height: 1.15;
+  max-width: 92%;
+  margin-inline: auto;
+  overflow-wrap: anywhere;
 }
 
 body.page-provider-dashboard .pd-handle {
@@ -366,5 +369,34 @@ body.page-provider-dashboard .btn {
   body.page-provider-dashboard .pd-section-header h3,
   body.page-provider-dashboard .pd-section-title {
     font-size: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  body.page-provider-dashboard #top-navbar {
+    display: block !important;
+  }
+
+  body.page-provider-dashboard #bottom-nav {
+    display: none !important;
+  }
+
+  body.page-provider-dashboard .page-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: calc(var(--navbar-height) + 18px) 20px 42px;
+  }
+
+  body.page-provider-dashboard .pd-hero {
+    margin: 0;
+  }
+
+  body.page-provider-dashboard .pd-cover-wrap {
+    border-radius: 18px;
+  }
+
+  body.page-provider-dashboard .pd-nav-grid,
+  body.page-provider-dashboard .pd-extras-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
