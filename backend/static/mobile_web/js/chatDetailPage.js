@@ -24,6 +24,11 @@ const ChatDetailPage = (() => {
       id: null,
       providerId: null,
     },
+    account: {
+      mode: 'client',
+      isProviderMode: false,
+      providerProfileId: null,
+    },
     threadState: {
       is_favorite: false,
       is_archived: false,
@@ -58,6 +63,7 @@ const ChatDetailPage = (() => {
 
   async function _boot() {
     await Promise.all([
+      _loadAccountContext(),
       _loadThreadMeta(),
       _loadThreadState(),
       _loadMessages({ showLoader: true, forceScroll: true }),
@@ -80,6 +86,9 @@ const ChatDetailPage = (() => {
 
     dom.btnFavorite = document.getElementById('btn-chat-fav');
     dom.btnOptions = document.getElementById('btn-chat-options');
+    dom.btnClientRequests = document.getElementById('btn-client-requests');
+    dom.btnSendServiceRequest = document.getElementById('btn-send-service-request');
+    dom.btnClientRequestsCard = document.getElementById('btn-client-requests-card');
     dom.actionFavorite = document.getElementById('chat-action-favorite');
     dom.actionBlock = document.getElementById('chat-action-block');
     dom.actionArchive = document.getElementById('chat-action-archive');
@@ -92,6 +101,11 @@ const ChatDetailPage = (() => {
     dom.reportDetails = document.getElementById('chat-report-details');
     dom.btnReportCancel = document.getElementById('btn-report-cancel');
     dom.btnReportSend = document.getElementById('btn-report-send');
+    dom.clientRequestsBackdrop = document.getElementById('chat-client-requests-backdrop');
+    dom.clientRequestsSheet = document.getElementById('chat-client-requests-sheet');
+    dom.clientRequestsTitle = document.getElementById('chat-client-requests-title');
+    dom.clientRequestsBody = document.getElementById('chat-client-requests-body');
+    dom.btnClientRequestsClose = document.getElementById('btn-client-requests-close');
 
     dom.loader = document.getElementById('messages-loader');
     dom.error = document.getElementById('messages-error');
@@ -132,6 +146,9 @@ const ChatDetailPage = (() => {
     dom.btnRetry?.addEventListener('click', () => _loadMessages({ showLoader: true, forceScroll: false }));
     dom.btnFavorite?.addEventListener('click', () => _toggleFavorite());
     dom.btnOptions?.addEventListener('click', _openOptionsSheet);
+    dom.btnClientRequests?.addEventListener('click', _openClientRequestsSheet);
+    dom.btnClientRequestsCard?.addEventListener('click', _openClientRequestsSheet);
+    dom.btnSendServiceRequest?.addEventListener('click', _sendServiceRequestLink);
 
     dom.sheetBackdrop?.addEventListener('click', _closeOptionsSheet);
     dom.optionsSheet?.addEventListener('click', (event) => {
@@ -143,11 +160,14 @@ const ChatDetailPage = (() => {
     dom.reportBackdrop?.addEventListener('click', _closeReportDialog);
     dom.btnReportCancel?.addEventListener('click', _closeReportDialog);
     dom.btnReportSend?.addEventListener('click', _submitReport);
+    dom.clientRequestsBackdrop?.addEventListener('click', _closeClientRequestsSheet);
+    dom.btnClientRequestsClose?.addEventListener('click', _closeClientRequestsSheet);
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       _closeOptionsSheet();
       _closeReportDialog();
+      _closeClientRequestsSheet();
     });
 
     window.addEventListener('beforeunload', _cleanup);
@@ -185,6 +205,24 @@ const ChatDetailPage = (() => {
 
     _renderPeer();
     _renderThreadState();
+    _renderProviderClientActions();
+  }
+
+  async function _loadAccountContext() {
+    state.account.mode = _activeMode();
+    state.account.isProviderMode = state.account.mode === 'provider';
+    state.account.providerProfileId = null;
+
+    if (!state.account.isProviderMode) {
+      _renderProviderClientActions();
+      return;
+    }
+
+    const res = await ApiClient.get('/api/accounts/me/?mode=provider');
+    if (res.ok && res.data) {
+      state.account.providerProfileId = _toInt(res.data.provider_profile_id);
+    }
+    _renderProviderClientActions();
   }
 
   async function _loadThreadState() {
@@ -299,6 +337,26 @@ const ChatDetailPage = (() => {
     dom.peerAvatar.textContent = (state.peer.name || 'م').trim().charAt(0) || 'م';
   }
 
+  function _isChatWithClient() {
+    if (!Number.isFinite(state.peer.id) || state.peer.id <= 0) return false;
+    return !Number.isFinite(state.peer.providerId) || state.peer.providerId <= 0;
+  }
+
+  function _canShowProviderClientActions() {
+    return !!state.account.isProviderMode && _isChatWithClient();
+  }
+
+  function _renderProviderClientActions() {
+    const show = _canShowProviderClientActions();
+    dom.btnClientRequests?.classList.toggle('hidden', !show);
+    dom.btnSendServiceRequest?.classList.toggle('hidden', !show);
+    dom.btnClientRequestsCard?.classList.toggle('hidden', !show);
+    if (dom.clientRequestsTitle) {
+      const peerName = _trim(state.peer.name) || 'العميل';
+      dom.clientRequestsTitle.textContent = 'طلبات العميل: ' + peerName;
+    }
+  }
+
   function _renderThreadState() {
     const isFavorite = !!state.threadState.is_favorite;
     dom.btnFavorite?.classList.toggle('active', isFavorite);
@@ -401,7 +459,15 @@ const ChatDetailPage = (() => {
 
     const attachmentNode = _buildAttachmentNode(msg);
     if (attachmentNode) bubble.appendChild(attachmentNode);
-    if (msg.text) bubble.appendChild(UI.el('div', { className: 'msg-text', textContent: msg.text }));
+    const serviceRequestCta = _parseServiceRequestCTA(msg.text);
+    if (serviceRequestCta && serviceRequestCta.helperText) {
+      bubble.appendChild(UI.el('div', { className: 'msg-text', textContent: serviceRequestCta.helperText }));
+    }
+    if (serviceRequestCta) {
+      bubble.appendChild(_buildServiceRequestNode(serviceRequestCta, mine));
+    } else if (msg.text) {
+      bubble.appendChild(UI.el('div', { className: 'msg-text', textContent: msg.text }));
+    }
 
     const meta = UI.el('div', { className: 'msg-meta' });
     meta.appendChild(UI.el('span', { className: 'msg-time', textContent: _formatTime(msg.createdAt) }));
@@ -415,6 +481,54 @@ const ChatDetailPage = (() => {
     bubble.appendChild(meta);
     row.appendChild(bubble);
     return row;
+  }
+
+  function _buildServiceRequestNode(cta, mine) {
+    const node = UI.el('a', {
+      className: 'msg-service-cta ' + (mine ? 'mine' : 'theirs'),
+      href: cta.href,
+    });
+
+    node.appendChild(UI.el('span', { className: 'msg-service-cta-icon', textContent: '🛠️' }));
+
+    const body = UI.el('span', { className: 'msg-service-cta-body' });
+    body.appendChild(UI.el('strong', { className: 'msg-service-cta-title', textContent: 'طلب خدمة' }));
+    body.appendChild(UI.el('small', { className: 'msg-service-cta-subtitle', textContent: 'اضغط هنا لإرسال طلبك لهذا المزوّد' }));
+    node.appendChild(body);
+
+    node.appendChild(UI.el('span', { className: 'msg-service-cta-arrow', textContent: '‹' }));
+    return node;
+  }
+
+  function _parseServiceRequestCTA(text) {
+    const value = _trim(text);
+    if (!value) return null;
+
+    const urlMatch = value.match(/(https?:\/\/[^\s]+|\/service-request\/[^\s]*)/i);
+    if (!urlMatch) return null;
+
+    const rawUrl = _trim(urlMatch[1]);
+    if (!rawUrl) return null;
+
+    let parsed = null;
+    try {
+      parsed = new URL(rawUrl, window.location.origin);
+    } catch (_) {
+      parsed = null;
+    }
+    if (!parsed) return null;
+
+    const path = (parsed.pathname || '').replace(/\/+$/, '').toLowerCase();
+    if (path !== '/service-request') return null;
+
+    const providerId = _toInt(parsed.searchParams.get('provider_id'));
+    if (!providerId || providerId <= 0) return null;
+
+    const helperText = _trim(value.replace(rawUrl, '').replace(/\s+/g, ' '));
+    return {
+      href: '/service-request/?provider_id=' + encodeURIComponent(String(providerId)),
+      helperText,
+    };
   }
 
   function _buildAttachmentNode(msg) {
@@ -856,6 +970,206 @@ const ChatDetailPage = (() => {
     });
   }
 
+  function _openClientRequestsSheet() {
+    if (!_canShowProviderClientActions()) {
+      _showToast('هذا الإجراء متاح فقط في محادثة المزوّد مع العميل', 'error');
+      return;
+    }
+    if (!Number.isFinite(state.peer.id) || state.peer.id <= 0) {
+      _showToast('تعذر تحديد العميل لعرض طلباته', 'error');
+      return;
+    }
+
+    _renderClientRequestsLoading();
+    dom.clientRequestsBackdrop?.classList.remove('hidden');
+    dom.clientRequestsSheet?.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      dom.clientRequestsBackdrop?.classList.add('open');
+      dom.clientRequestsSheet?.classList.add('open');
+    });
+    _loadClientRequests();
+  }
+
+  function _closeClientRequestsSheet() {
+    dom.clientRequestsBackdrop?.classList.remove('open');
+    dom.clientRequestsSheet?.classList.remove('open');
+    setTimeout(() => {
+      dom.clientRequestsBackdrop?.classList.add('hidden');
+      dom.clientRequestsSheet?.classList.add('hidden');
+    }, 180);
+  }
+
+  async function _loadClientRequests() {
+    if (!dom.clientRequestsBody) return;
+    const peerId = _toInt(state.peer.id);
+    if (!peerId || peerId <= 0) {
+      _renderClientRequestsError('تعذر تحديد العميل لعرض طلباته');
+      return;
+    }
+
+    const res = await ApiClient.get('/api/marketplace/provider/requests/?client_user_id=' + peerId);
+    if (!res.ok) {
+      _renderClientRequestsError(_extractError(res, 'تعذر تحميل طلبات العميل'));
+      return;
+    }
+    const list = _asList(res.data);
+    _renderClientRequestsList(list);
+  }
+
+  function _renderClientRequestsLoading() {
+    if (!dom.clientRequestsBody) return;
+    dom.clientRequestsBody.innerHTML = '';
+    const stateEl = UI.el('div', { className: 'chat-client-requests-state' });
+    stateEl.appendChild(UI.el('div', { className: 'spinner-inline' }));
+    stateEl.appendChild(UI.el('p', { textContent: 'جاري تحميل طلبات العميل...' }));
+    dom.clientRequestsBody.appendChild(stateEl);
+  }
+
+  function _renderClientRequestsError(message) {
+    if (!dom.clientRequestsBody) return;
+    dom.clientRequestsBody.innerHTML = '';
+    const stateEl = UI.el('div', { className: 'chat-client-requests-state error' });
+    stateEl.appendChild(UI.el('p', { textContent: message || 'تعذر تحميل طلبات العميل' }));
+    dom.clientRequestsBody.appendChild(stateEl);
+  }
+
+  function _renderClientRequestsList(items) {
+    if (!dom.clientRequestsBody) return;
+    dom.clientRequestsBody.innerHTML = '';
+    if (!items.length) {
+      const empty = UI.el('div', { className: 'chat-client-requests-state' });
+      empty.appendChild(UI.el('p', { textContent: 'لا توجد طلبات لهذا العميل' }));
+      dom.clientRequestsBody.appendChild(empty);
+      return;
+    }
+
+    const sorted = [...items].sort((a, b) => {
+      const ta = new Date(a.created_at || 0).getTime();
+      const tb = new Date(b.created_at || 0).getTime();
+      return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+    });
+    const current = sorted.filter((r) => {
+      const g = _requestStatusGroup(r);
+      return g !== 'completed' && g !== 'cancelled';
+    });
+    const previous = sorted.filter((r) => {
+      const g = _requestStatusGroup(r);
+      return g === 'completed' || g === 'cancelled';
+    });
+
+    if (current.length) {
+      dom.clientRequestsBody.appendChild(UI.el('div', { className: 'chat-client-requests-section-title', textContent: 'الطلبات الحالية' }));
+      current.forEach((req) => dom.clientRequestsBody.appendChild(_buildClientRequestCard(req)));
+    }
+    if (previous.length) {
+      dom.clientRequestsBody.appendChild(UI.el('div', { className: 'chat-client-requests-section-title', textContent: 'الطلبات السابقة' }));
+      previous.forEach((req) => dom.clientRequestsBody.appendChild(_buildClientRequestCard(req)));
+    }
+  }
+
+  function _buildClientRequestCard(req) {
+    const id = _toInt(req.id);
+    const group = _requestStatusGroup(req);
+    const statusLabel = _trim(req.status_label) || _requestStatusLabel(group);
+    const statusColor = _requestStatusColor(group);
+    const createdAtText = _formatRequestDate(req.created_at);
+    const providerId = _toInt(req.provider);
+    const myProviderId = _toInt(state.account.providerProfileId);
+    const assignedToMe = Number.isFinite(providerId) && Number.isFinite(myProviderId) && providerId === myProviderId;
+
+    const card = UI.el('button', { type: 'button', className: 'chat-client-request-card' });
+    card.addEventListener('click', () => {
+      if (!id || id <= 0) return;
+      if (!assignedToMe) {
+        _showToast('يمكن فتح تفاصيل الطلبات المسندة لك فقط', 'error');
+        return;
+      }
+      window.location.href = '/provider-orders/' + id + '/';
+    });
+
+    const top = UI.el('div', { className: 'chat-client-request-top' });
+    const status = UI.el('span', {
+      className: 'chat-client-request-status',
+      textContent: _requestDisplayId(id) + ' • ' + statusLabel,
+    });
+    status.style.color = statusColor;
+    top.appendChild(status);
+    card.appendChild(top);
+
+    card.appendChild(UI.el('div', {
+      className: 'chat-client-request-title',
+      textContent: _trim(req.title) || 'طلب بدون عنوان',
+    }));
+    card.appendChild(UI.el('div', {
+      className: 'chat-client-request-meta',
+      textContent: createdAtText,
+    }));
+
+    return card;
+  }
+
+  function _requestDisplayId(id) {
+    if (!Number.isFinite(id) || id <= 0) return 'R------';
+    return 'R' + String(id).padStart(6, '0');
+  }
+
+  function _requestStatusGroup(req) {
+    const raw = _trim(req?.status_group || req?.status).toLowerCase();
+    if (raw === 'completed') return 'completed';
+    if (raw === 'cancelled' || raw === 'canceled') return 'cancelled';
+    if (raw === 'in_progress') return 'in_progress';
+    return 'new';
+  }
+
+  function _requestStatusLabel(group) {
+    if (group === 'completed') return 'مكتمل';
+    if (group === 'cancelled') return 'ملغي';
+    if (group === 'in_progress') return 'تحت التنفيذ';
+    return 'جديد';
+  }
+
+  function _requestStatusColor(group) {
+    if (group === 'completed') return '#15803d';
+    if (group === 'cancelled') return '#b91c1c';
+    if (group === 'in_progress') return '#b45309';
+    return '#92400e';
+  }
+
+  function _formatRequestDate(value) {
+    const dt = new Date(value);
+    if (!Number.isFinite(dt.getTime())) return '';
+    return dt.toLocaleDateString('ar-SA', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  async function _sendServiceRequestLink() {
+    if (!_canShowProviderClientActions()) {
+      _showToast('هذا الإجراء متاح فقط في محادثة المزوّد مع العميل', 'error');
+      return;
+    }
+    const providerId = _toInt(state.account.providerProfileId);
+    if (!providerId || providerId <= 0) {
+      _showToast('تعذر تحديد معرف المزوّد لإرسال الرابط', 'error');
+      return;
+    }
+
+    const body = 'طلب خدمة مباشر:\nhttps://nawafeth.app/service-request/?provider_id=' + providerId;
+    const res = await ApiClient.request('/api/messaging/direct/thread/' + state.threadId + '/messages/send/', {
+      method: 'POST',
+      body: { body },
+    });
+    if (!res.ok) {
+      _showToast(_extractError(res, 'فشل إرسال رابط الطلب'), 'error');
+      return;
+    }
+    await _loadMessages({ forceScroll: true });
+    _showToast('تم إرسال رابط طلب الخدمة', 'success');
+    window.dispatchEvent(new Event('nw:badge-refresh'));
+  }
+
   function _closeOptionsSheet() {
     dom.sheetBackdrop?.classList.remove('open');
     dom.optionsSheet?.classList.remove('open');
@@ -999,6 +1313,21 @@ const ChatDetailPage = (() => {
   function _extractError(res, fallback) {
     if (!res || !res.data) return fallback;
     return res.data.detail || res.data.error || fallback;
+  }
+
+  function _activeMode() {
+    try {
+      const mode = _trim(sessionStorage.getItem('nw_account_mode')).toLowerCase();
+      if (mode === 'provider' || mode === 'client') return mode;
+    } catch (_) {}
+    const role = _trim(Auth.getRoleState()).toLowerCase();
+    return role === 'provider' ? 'provider' : 'client';
+  }
+
+  function _asList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    return [];
   }
 
   function _isDefaultPeerName(name) {

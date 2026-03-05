@@ -333,14 +333,18 @@ class MyFollowingProvidersView(generics.ListAPIView):
 
 	def get_queryset(self):
 		role = get_active_role(self.request)
+		followed_by_me = ProviderFollow.objects.filter(
+			provider=OuterRef("pk"),
+			user=self.request.user,
+			role_context=role,
+		)
 		return (
-			ProviderProfile.objects.filter(
-				followers__user=self.request.user,
-				followers__role_context=role,
-			)
+			ProviderProfile.objects.annotate(_is_followed=Exists(followed_by_me))
+			.filter(_is_followed=True)
 			.annotate(
-				followers_count=Count("followers"),
-				likes_count=Count("likes"),
+				# Keep parity with provider stats: count unique users, not role rows.
+				followers_count=Count("followers__user", distinct=True),
+				likes_count=Count("likes__user", distinct=True),
 				activity_at=Coalesce(
 					Max("portfolio_items__created_at"),
 					F("updated_at"),
@@ -743,12 +747,18 @@ class MyLikedProvidersView(generics.ListAPIView):
 
 	def get_queryset(self):
 		role = get_active_role(self.request)
+		liked_by_me = ProviderLike.objects.filter(
+			provider=OuterRef("pk"),
+			user=self.request.user,
+			role_context=role,
+		)
 		return (
-			ProviderProfile.objects.filter(
-				likes__user=self.request.user,
-				likes__role_context=role,
+			ProviderProfile.objects.annotate(_is_liked=Exists(liked_by_me))
+			.filter(_is_liked=True)
+			.annotate(
+				followers_count=Count("followers__user", distinct=True),
+				likes_count=Count("likes__user", distinct=True),
 			)
-			.annotate(followers_count=Count("followers"), likes_count=Count("likes"))
 			.distinct()
 			.order_by("-id")
 		)
@@ -822,14 +832,17 @@ class ProviderFollowingView(generics.ListAPIView):
 		try:
 			provider = ProviderProfile.objects.get(id=provider_id)
 			user = provider.user
+			followed_by_provider_user = ProviderFollow.objects.filter(
+				provider=OuterRef("pk"),
+				user=user,
+				role_context=role,
+			)
 			return (
-				ProviderProfile.objects.filter(
-					followers__user=user,
-					followers__role_context=role,
-				)
+				ProviderProfile.objects.annotate(_is_followed=Exists(followed_by_provider_user))
+				.filter(_is_followed=True)
 				.annotate(
-					followers_count=Count("followers"),
-					likes_count=Count("likes"),
+					followers_count=Count("followers__user", distinct=True),
+					likes_count=Count("likes__user", distinct=True),
 				)
 				.distinct()
 				.order_by("-id")

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/profile_service.dart';
+import '../services/content_service.dart';
 import '../models/user_profile.dart';
 
 /// أيقونة Face ID
@@ -49,10 +50,17 @@ class _LoginSettingsScreenState extends State<LoginSettingsScreen> {
   final _confirmSecurityCodeCtrl = TextEditingController();
   final _faceIdCodeCtrl = TextEditingController();
 
+  // محتوى المساعدة من API (settings_help / settings_info)
+  String? _helpTitle;
+  String? _helpBody;
+  String? _infoTitle;
+  String? _infoBody;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadHelpContent();
   }
 
   @override
@@ -91,6 +99,34 @@ class _LoginSettingsScreenState extends State<LoginSettingsScreen> {
         _error = result.error ?? 'خطأ غير متوقع';
         _loading = false;
       });
+    }
+  }
+
+  /// تحميل محتوى المساعدة/المعلومات من API
+  Future<void> _loadHelpContent() async {
+    try {
+      final result = await ContentService.fetchPublicContent();
+      if (!mounted) return;
+      if (result.isSuccess && result.dataAsMap != null) {
+        final blocks =
+            (result.dataAsMap!['blocks'] as Map<String, dynamic>?) ?? {};
+
+        final help = blocks['settings_help'];
+        final info = blocks['settings_info'];
+
+        setState(() {
+          if (help is Map<String, dynamic>) {
+            _helpTitle = (help['title_ar'] as String?)?.trim();
+            _helpBody = (help['body_ar'] as String?)?.trim();
+          }
+          if (info is Map<String, dynamic>) {
+            _infoTitle = (info['title_ar'] as String?)?.trim();
+            _infoBody = (info['body_ar'] as String?)?.trim();
+          }
+        });
+      }
+    } catch (_) {
+      // fallback — لا شيء
     }
   }
 
@@ -265,6 +301,27 @@ class _LoginSettingsScreenState extends State<LoginSettingsScreen> {
               onPressed: _showFaceIdDialog,
             ),
           ]),
+          const SizedBox(height: 20),
+
+          // ─── محتوى المساعدة من لوحة التحكم ───
+          if (_helpTitle != null && _helpTitle!.isNotEmpty ||
+              _helpBody != null && _helpBody!.isNotEmpty)
+            _buildContentCard(
+              icon: Icons.help_outline,
+              title: _helpTitle ?? 'مساعدة',
+              body: _helpBody ?? '',
+              color: Colors.orange,
+            ),
+
+          if (_infoTitle != null && _infoTitle!.isNotEmpty ||
+              _infoBody != null && _infoBody!.isNotEmpty)
+            _buildContentCard(
+              icon: Icons.info_outline,
+              title: _infoTitle ?? 'معلومات',
+              body: _infoBody ?? '',
+              color: Colors.blue,
+            ),
+
           const SizedBox(height: 30),
 
           // ─── زر الحفظ ───
@@ -416,6 +473,60 @@ class _LoginSettingsScreenState extends State<LoginSettingsScreen> {
   }
 
   // ─── مكونات UI ───
+
+  /// كرت محتوى (مساعدة / معلومات) من لوحة التحكم
+  Widget _buildContentCard({
+    required IconData icon,
+    required String title,
+    required String body,
+    required Color color,
+  }) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      color: color.withAlpha(18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: color.withAlpha(40),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: color.withAlpha(220),
+                  ),
+                ),
+              ),
+            ]),
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                body,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  height: 1.6,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildSection(String title, List<Widget> children) {
     return Card(

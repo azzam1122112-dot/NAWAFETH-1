@@ -164,7 +164,7 @@ const ChatsPage = (() => {
     const bottomRow = UI.el('div', { className: 'thread-bottom-row' });
     bottomRow.appendChild(UI.el('span', {
       className: 'thread-last-msg',
-      textContent: thread.last_message_text || thread.last_message || 'لا توجد رسائل'
+      textContent: _threadPreviewText(thread.last_message_text || thread.last_message || '')
     }));
     if ((thread.unread_count || 0) > 0) {
       bottomRow.appendChild(UI.el('span', { className: 'thread-unread-badge', textContent: thread.unread_count }));
@@ -186,6 +186,17 @@ const ChatsPage = (() => {
     if ((thread.peer_name || '').trim()) return thread.peer_name.trim();
     if ((thread.peer_username || '').trim()) return thread.peer_username.trim();
     return (thread.peer_phone || '').trim();
+  }
+
+  function _threadPreviewText(rawText) {
+    const text = (rawText || '').toString().trim();
+    if (!text) return 'لا توجد رسائل';
+    if (/(https?:\/\/[^\s]+|\/service-request\/[^\s]*)/i.test(text)
+      && /service-request/i.test(text)
+      && /provider_id=\d+/i.test(text)) {
+      return '🛠️ طلب خدمة مباشر';
+    }
+    return text;
   }
 
   function _relativeTime(dateStr) {

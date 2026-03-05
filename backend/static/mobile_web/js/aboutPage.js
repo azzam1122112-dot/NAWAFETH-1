@@ -64,6 +64,16 @@ const AboutPage = (() => {
       linksBox.classList.toggle('hidden', visibleCount === 0);
     }
 
+    // روابط التواصل الاجتماعي
+    const socialBox = document.getElementById('about-social');
+    _bindLink('btn-x-url', links.x_url);
+    _bindLink('btn-whatsapp', _normalizeWhatsapp(links.whatsapp_url));
+    _bindLink('btn-email', _normalizeEmail(links.email));
+    if (socialBox) {
+      const visibleSocial = socialBox.querySelectorAll('a:not(.hidden)').length;
+      socialBox.classList.toggle('hidden', visibleSocial === 0);
+    }
+
     if (loading) loading.classList.add('hidden');
   }
 
@@ -132,6 +142,23 @@ const AboutPage = (() => {
     card.appendChild(head);
     card.appendChild(body);
     return card;
+  }
+
+  /** تطبيع رابط واتساب — لا يضيف prefix إذا بدأ بـ http */
+  function _normalizeWhatsapp(raw) {
+    const v = String(raw || '').trim();
+    if (!v) return '';
+    if (v.startsWith('http://') || v.startsWith('https://')) return v;
+    if (v.startsWith('wa.me/')) return 'https://' + v;
+    return 'https://wa.me/' + v;
+  }
+
+  /** تطبيع بريد إلكتروني — لا يضيف mailto: إذا موجود مسبقاً */
+  function _normalizeEmail(raw) {
+    const v = String(raw || '').trim();
+    if (!v) return '';
+    if (v.startsWith('mailto:')) return v;
+    return 'mailto:' + v;
   }
 
   function _bindLink(id, url) {

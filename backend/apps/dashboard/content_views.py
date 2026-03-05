@@ -13,11 +13,11 @@ from apps.audit.services import log_action
 from apps.content.models import ContentBlockKey, LegalDocumentType, SiteContentBlock, SiteLegalDocument, SiteLinks
 from apps.content.services import sanitize_text
 
-from .auth import dashboard_login_required
+from .auth import dashboard_staff_required as staff_member_required
 from .views import _dashboard_allowed, dashboard_access_required
 
 
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=False)
 def content_management(request):
     blocks = {
@@ -49,7 +49,7 @@ def content_management(request):
 
 
 @require_POST
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 def content_block_update_action(request, key: str):
     valid_keys = {choice[0] for choice in ContentBlockKey.choices}
@@ -97,7 +97,7 @@ def content_block_update_action(request, key: str):
 
 
 @require_POST
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 def content_doc_upload_action(request, doc_type: str):
     valid_types = {choice[0] for choice in LegalDocumentType.choices}
@@ -160,7 +160,7 @@ def content_doc_upload_action(request, doc_type: str):
 
 
 @require_POST
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 def content_links_update_action(request):
     links = SiteLinks.objects.order_by("-updated_at", "-id").first()

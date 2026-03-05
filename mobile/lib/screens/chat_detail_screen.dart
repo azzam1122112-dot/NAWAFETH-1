@@ -11,6 +11,7 @@ import '../services/account_mode_service.dart';
 import '../services/api_client.dart';
 import '../services/marketplace_service.dart';
 import 'provider_dashboard/provider_order_details_screen.dart';
+import 'service_request_form_screen.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final int? threadId;
@@ -59,6 +60,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _isReconnecting = false;
   bool _isProviderAccount = false;
   int? _myProviderProfileId;
+  static final RegExp _serviceRequestUrlRegex = RegExp(
+    r'(https?:\/\/[^\s]+|\/service-request\/[^\s]*)',
+    caseSensitive: false,
+  );
 
   String get _connectionStatusText {
     if (_isChatConnected) return 'متصل';
@@ -756,7 +761,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final link =
         'https://nawafeth.app/service-request/?provider_id=$providerId';
-    final body = 'يمكنك إنشاء طلب خدمة مباشرة عبر الرابط التالي:\n$link';
+    final body = 'طلب خدمة مباشر:\n$link';
 
     setState(() => _isSending = true);
     final result =
@@ -785,6 +790,129 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           style: const TextStyle(fontFamily: 'Cairo'),
         ),
         backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  _ServiceRequestPayload? _extractServiceRequestPayload(String rawText) {
+    final text = rawText.trim();
+    if (text.isEmpty) return null;
+
+    final match = _serviceRequestUrlRegex.firstMatch(text);
+    if (match == null) return null;
+
+    final rawUrl = match.group(0)?.trim() ?? '';
+    if (rawUrl.isEmpty) return null;
+
+    Uri? uri;
+    try {
+      uri = Uri.parse(rawUrl);
+    } catch (_) {
+      uri = null;
+    }
+
+    if (uri == null || !uri.hasScheme) {
+      final normalized = rawUrl.startsWith('/') ? rawUrl : '/$rawUrl';
+      uri = Uri.tryParse('https://nawafeth.app$normalized');
+    }
+    if (uri == null) return null;
+
+    final path = uri.path.toLowerCase();
+    if (path != '/service-request' && path != '/service-request/') return null;
+
+    final providerIdRaw = (uri.queryParameters['provider_id'] ?? '').trim();
+    final providerId = int.tryParse(providerIdRaw);
+    if (providerId == null || providerId <= 0) return null;
+
+    final helperText =
+        text.replaceFirst(rawUrl, '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return _ServiceRequestPayload(
+      providerId: providerId.toString(),
+      helperText: helperText,
+    );
+  }
+
+  Future<void> _openServiceRequestFromMessage(
+      _ServiceRequestPayload payload) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceRequestFormScreen(
+          providerId: payload.providerId,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceRequestAction(
+      _ServiceRequestPayload payload, bool isMe, Color textColor) {
+    final bg = isMe
+        ? Colors.white.withValues(alpha: 0.15)
+        : Colors.deepPurple.withValues(alpha: 0.07);
+    final border = isMe
+        ? Colors.white.withValues(alpha: 0.25)
+        : Colors.deepPurple.withValues(alpha: 0.22);
+    final iconBg = isMe
+        ? Colors.white.withValues(alpha: 0.2)
+        : Colors.deepPurple.withValues(alpha: 0.12);
+    final subTextColor = isMe ? Colors.white70 : Colors.black54;
+
+    return InkWell(
+      onTap: () => _openServiceRequestFromMessage(payload),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.assignment_turned_in_outlined,
+                size: 18,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'طلب خدمة',
+                    style: TextStyle(
+                      color: textColor,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'اضغط هنا لإرسال طلبك لهذا المزوّد',
+                    style: TextStyle(
+                      color: subTextColor,
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_left, color: textColor, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -1198,10 +1326,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } else {
       // نص فقط
-      content = Text(
-        msg.body,
-        style: TextStyle(color: textColor, fontFamily: "Cairo", fontSize: 15),
-      );
+      final servicePayload = _extractServiceRequestPayload(msg.body);
+      if (servicePayload != null) {
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (servicePayload.helperText.isNotEmpty) ...[
+              Text(
+                servicePayload.helperText,
+                style: TextStyle(
+                    color: textColor, fontFamily: "Cairo", fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+            ],
+            _buildServiceRequestAction(servicePayload, isMe, textColor),
+          ],
+        );
+      } else {
+        content = Text(
+          msg.body,
+          style: TextStyle(color: textColor, fontFamily: "Cairo", fontSize: 15),
+        );
+      }
     }
 
     // تنسيق الوقت
@@ -1697,4 +1843,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
     );
   }
+}
+
+class _ServiceRequestPayload {
+  final String providerId;
+  final String helperText;
+
+  const _ServiceRequestPayload({
+    required this.providerId,
+    required this.helperText,
+  });
 }

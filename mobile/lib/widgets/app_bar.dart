@@ -5,9 +5,7 @@ import 'dart:async';
 // ✅ استدعاء شاشة الإشعارات
 import 'package:nawafeth/screens/notifications_screen.dart';
 import 'package:nawafeth/screens/my_chats_screen.dart';
-import 'package:nawafeth/services/account_mode_service.dart';
-import 'package:nawafeth/services/messaging_service.dart';
-import 'package:nawafeth/services/notification_service.dart';
+import 'package:nawafeth/services/unread_badge_service.dart';
 import 'package:nawafeth/widgets/verified_badge_view.dart';
 
 class CustomAppBar extends StatefulWidget implements PreferredSizeWidget {
@@ -52,15 +50,11 @@ class _CustomAppBarState extends State<CustomAppBar> {
   }
 
   Future<void> _loadBadges() async {
-    final mode = await AccountModeService.apiMode();
-    final results = await Future.wait<int>([
-      NotificationService.fetchUnreadCount(mode: mode),
-      MessagingService.fetchUnreadCount(mode: mode),
-    ]);
+    final badges = await UnreadBadgeService.fetch();
     if (!mounted) return;
     setState(() {
-      _notificationUnread = results[0];
-      _chatUnread = results[1];
+      _notificationUnread = badges.notifications;
+      _chatUnread = badges.chats;
     });
   }
 

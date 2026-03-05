@@ -81,7 +81,9 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
 
     if (searchQuery.isNotEmpty) {
       filtered = filtered
-          .where((t) => t.peerDisplayName.contains(searchQuery) || t.peerPhone.contains(searchQuery))
+          .where((t) =>
+              t.peerDisplayName.contains(searchQuery) ||
+              t.peerPhone.contains(searchQuery))
           .toList();
     }
 
@@ -91,7 +93,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
       filtered = filtered.where((t) => t.isFavorite).toList();
     } else if (selectedFilter == "عملاء") {
       if (_isProviderAccount) {
-        filtered = filtered.where((t) => t.clientLabel?.isNotEmpty == true).toList();
+        filtered =
+            filtered.where((t) => t.clientLabel?.isNotEmpty == true).toList();
       }
     } else if (selectedFilter == "الأحدث") {
       filtered.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
@@ -106,6 +109,21 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
     });
 
     return filtered;
+  }
+
+  String _threadPreviewText(String rawText) {
+    final text = rawText.trim();
+    if (text.isEmpty) return "لا توجد رسائل بعد";
+    final hasServiceRequestLink = RegExp(
+      r'(https?:\/\/\S+|\/service-request\/\S*)',
+      caseSensitive: false,
+    ).hasMatch(text);
+    if (hasServiceRequestLink &&
+        text.toLowerCase().contains('service-request') &&
+        RegExp(r'provider_id=\d+', caseSensitive: false).hasMatch(text)) {
+      return "🛠️ طلب خدمة مباشر";
+    }
+    return text;
   }
 
   // ✅ خيارات المحادثة
@@ -216,7 +234,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                     color: Colors.orange.shade50,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.report, color: Colors.orange, size: 28),
+                  child:
+                      const Icon(Icons.report, color: Colors.orange, size: 28),
                 ),
                 const SizedBox(width: 12),
                 const Text(
@@ -243,12 +262,14 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.person, size: 16, color: Colors.deepPurple),
+                        const Icon(Icons.person,
+                            size: 16, color: Colors.deepPurple),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             thread.peerDisplayName,
-                            style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+                            style: const TextStyle(
+                                fontFamily: 'Cairo', fontSize: 14),
                           ),
                         ),
                       ],
@@ -257,7 +278,10 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     "سبب الإبلاغ:",
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -273,17 +297,23 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                         items: reasons
                             .map((r) => DropdownMenuItem(
                                   value: r,
-                                  child: Text(r, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+                                  child: Text(r,
+                                      style: const TextStyle(
+                                          fontFamily: 'Cairo', fontSize: 14)),
                                 ))
                             .toList(),
-                        onChanged: (v) => setDialogState(() => selectedReason = v!),
+                        onChanged: (v) =>
+                            setDialogState(() => selectedReason = v!),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
                   const Text(
                     "تفاصيل إضافية (اختياري):",
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -292,8 +322,10 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                     maxLength: 500,
                     decoration: InputDecoration(
                       hintText: "اكتب التفاصيل هنا...",
-                      hintStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      hintStyle:
+                          const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
@@ -303,7 +335,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("إلغاء", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+                child: const Text("إلغاء",
+                    style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
               ),
               ElevatedButton(
                 onPressed: isSending
@@ -327,21 +360,26 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                                   : result.error ?? "فشل إرسال البلاغ",
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
-                            backgroundColor: result.success ? Colors.green : Colors.red,
+                            backgroundColor:
+                                result.success ? Colors.green : Colors.red,
                           ),
                         );
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: isSending
                     ? const SizedBox(
-                        height: 16, width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text("إرسال البلاغ", style: TextStyle(fontFamily: 'Cairo')),
+                    : const Text("إرسال البلاغ",
+                        style: TextStyle(fontFamily: 'Cairo')),
               ),
             ],
           ),
@@ -365,7 +403,15 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
     }
     if (diff.inDays == 1) return 'الأمس';
     if (diff.inDays < 7) {
-      const days = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+      const days = [
+        'الإثنين',
+        'الثلاثاء',
+        'الأربعاء',
+        'الخميس',
+        'الجمعة',
+        'السبت',
+        'الأحد'
+      ];
       return days[dt.weekday - 1];
     }
     return '${dt.day}/${dt.month}/${dt.year}';
@@ -376,7 +422,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
     final sortedChats = getFilteredChats();
 
     // ✅ مجموع جميع الرسائل غير المقروءة
-    final int totalUnread = _threads.fold<int>(0, (sum, t) => sum + t.unreadCount);
+    final int totalUnread =
+        _threads.fold<int>(0, (sum, t) => sum + t.unreadCount);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -433,24 +480,31 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
             // ✅ محتوى المحادثات
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
+                  ? const Center(
+                      child:
+                          CircularProgressIndicator(color: Colors.deepPurple))
                   : _errorMessage != null
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                              const Icon(Icons.error_outline,
+                                  size: 48, color: Colors.grey),
                               const SizedBox(height: 12),
                               Text(
                                 _errorMessage!,
-                                style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey),
+                                style: const TextStyle(
+                                    fontFamily: 'Cairo', color: Colors.grey),
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton(
                                 onPressed: _fetchThreads,
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.deepPurple),
                                 child: const Text("إعادة المحاولة",
-                                    style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+                                    style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        color: Colors.white)),
                               ),
                             ],
                           ),
@@ -460,7 +514,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade300),
+                                  Icon(Icons.chat_bubble_outline,
+                                      size: 64, color: Colors.grey.shade300),
                                   const SizedBox(height: 16),
                                   const Text(
                                     "لا توجد محادثات",
@@ -479,7 +534,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                               child: ListView.separated(
                                 padding: const EdgeInsets.all(12),
                                 itemCount: sortedChats.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 6),
                                 itemBuilder: (context, index) {
                                   final thread = sortedChats[index];
                                   return _buildChatTile(thread);
@@ -531,7 +587,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                 : Colors.grey.shade200,
           ),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+            BoxShadow(
+                color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
           ],
         ),
         child: Row(
@@ -544,8 +601,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                   backgroundColor: Colors.deepPurple.shade100,
                   child: Text(
                     thread.peerDisplayName.isNotEmpty
-                      ? thread.peerDisplayName[0]
-                      : '?',
+                        ? thread.peerDisplayName[0]
+                        : '?',
                     style: const TextStyle(
                       fontSize: 20,
                       color: Colors.deepPurple,
@@ -569,24 +626,27 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
                           thread.peerDisplayName,
                           style: TextStyle(
                             fontFamily: "Cairo",
-                            fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                            fontWeight:
+                                isUnread ? FontWeight.w700 : FontWeight.w600,
                             fontSize: 15,
                           ),
                         ),
                       ),
-                      if (isFavorite) const Icon(Icons.star, size: 18, color: Colors.amber),
+                      if (isFavorite)
+                        const Icon(Icons.star, size: 18, color: Colors.amber),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    thread.lastMessage.isNotEmpty ? thread.lastMessage : "لا توجد رسائل بعد",
+                    _threadPreviewText(thread.lastMessage),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: "Cairo",
                       fontSize: 13,
                       color: isUnread ? Colors.black87 : Colors.black54,
-                      fontWeight: isUnread ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isUnread ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -602,12 +662,14 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
               children: [
                 Text(
                   _formatTime(thread.lastMessageAt),
-                  style: const TextStyle(fontSize: 12, color: Colors.black45, fontFamily: "Cairo"),
+                  style: const TextStyle(
+                      fontSize: 12, color: Colors.black45, fontFamily: "Cairo"),
                 ),
                 if (isUnread)
                   Container(
                     margin: const EdgeInsets.only(top: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.deepPurple,
                       borderRadius: BorderRadius.circular(12),
@@ -640,7 +702,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
   // ✅ ويدجت الفلاتر مع دعم عدّاد للغير مقروءة
   Widget _buildFilterChip(String label, {int? unreadCount}) {
     final isSelected = selectedFilter == label;
-    final bool showUnreadBadge = label == "غير مقروءة" && (unreadCount ?? 0) > 0;
+    final bool showUnreadBadge =
+        label == "غير مقروءة" && (unreadCount ?? 0) > 0;
 
     return GestureDetector(
       onTap: () => setState(() => selectedFilter = label),
@@ -651,7 +714,8 @@ class _MyChatsScreenState extends State<MyChatsScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.deepPurple),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 3, offset: Offset(0, 2)),
+            BoxShadow(
+                color: Colors.black12, blurRadius: 3, offset: Offset(0, 2)),
           ],
         ),
         child: Row(

@@ -39,6 +39,9 @@ class _AboutScreenState extends State<AboutScreen> {
   String _androidStoreUrl = '';
   String _iosStoreUrl = '';
   String _websiteUrl = '';
+  String _xUrl = '';
+  String _whatsappUrl = '';
+  String _emailUrl = '';
 
   /// 🔹 التحكم بفتح/إغلاق الكروت
   final Map<String, bool> _expanded = {
@@ -134,6 +137,9 @@ class _AboutScreenState extends State<AboutScreen> {
         _androidStoreUrl = (links['android_store'] as String? ?? '').trim();
         _iosStoreUrl = (links['ios_store'] as String? ?? '').trim();
         _websiteUrl = (links['website_url'] as String? ?? '').trim();
+        _xUrl = (links['x_url'] as String? ?? '').trim();
+        _whatsappUrl = (links['whatsapp_url'] as String? ?? '').trim();
+        _emailUrl = (links['email'] as String? ?? '').trim();
       });
     }
 
@@ -160,6 +166,24 @@ class _AboutScreenState extends State<AboutScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تعذر فتح الرابط')),
     );
+  }
+
+  /// تطبيع رابط واتساب — لا يضيف prefix إذا بدأ بـ http
+  String _normalizeWhatsapp(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    if (v.startsWith('http://') || v.startsWith('https://')) return v;
+    if (v.startsWith('wa.me/')) return 'https://$v';
+    // رقم هاتف فقط
+    return 'https://wa.me/$v';
+  }
+
+  /// تطبيع بريد إلكتروني — لا يضيف mailto: إذا موجود مسبقاً
+  String _normalizeEmail(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    if (v.startsWith('mailto:')) return v;
+    return 'mailto:$v';
   }
 
   /// 🔹 بناء الكرت القابل للتوسيع
@@ -221,6 +245,28 @@ class _AboutScreenState extends State<AboutScreen> {
             duration: const Duration(milliseconds: 300),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 🔹 أيقونة تواصل اجتماعي
+  Widget _buildSocialIcon(IconData icon, String tooltip, String url, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(50),
+          onTap: () => _openExternalUrl(url),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+        ),
       ),
     );
   }
@@ -382,6 +428,49 @@ class _AboutScreenState extends State<AboutScreen> {
                 icon: const Icon(Icons.public),
                 label: const Text('الموقع الرسمي'),
               ),
+            ),
+          ],
+
+          // ✅ روابط التواصل الاجتماعي
+          if (_xUrl.isNotEmpty || _whatsappUrl.isNotEmpty || _emailUrl.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Center(
+              child: Text(
+                'تواصل معنا',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_xUrl.isNotEmpty)
+                  _buildSocialIcon(
+                    FontAwesomeIcons.xTwitter,
+                    'X',
+                    _xUrl,
+                    Colors.black,
+                  ),
+                if (_whatsappUrl.isNotEmpty)
+                  _buildSocialIcon(
+                    FontAwesomeIcons.whatsapp,
+                    'واتساب',
+                    _normalizeWhatsapp(_whatsappUrl),
+                    const Color(0xFF25D366),
+                  ),
+                if (_emailUrl.isNotEmpty)
+                  _buildSocialIcon(
+                    Icons.email_outlined,
+                    'البريد',
+                    _normalizeEmail(_emailUrl),
+                    Colors.deepPurple,
+                  ),
+              ],
             ),
           ],
 

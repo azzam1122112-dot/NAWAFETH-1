@@ -12,6 +12,7 @@ import 'package:nawafeth/services/interactive_service.dart';
 import 'package:nawafeth/services/profile_service.dart';
 import 'package:nawafeth/services/subscriptions_service.dart';
 import 'package:nawafeth/services/marketplace_service.dart';
+import 'package:nawafeth/services/unread_badge_service.dart';
 import 'package:nawafeth/models/user_profile.dart';
 import 'package:nawafeth/models/provider_profile_model.dart';
 import 'package:nawafeth/screens/notifications_screen.dart';
@@ -58,6 +59,9 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   int _urgentOrdersCount = 0;
   int _newOrdersCount = 0;
   int _clientsCount = 0;
+  int _notificationUnread = 0;
+  int _chatUnread = 0;
+  Timer? _badgeTimer;
   Map<String, dynamic>? _providerStats;
   List<Map<String, dynamic>> _mySpotlights = <Map<String, dynamic>>[];
   final Set<int> _deletingSpotlightIds = <int>{};
@@ -104,6 +108,10 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   void initState() {
     super.initState();
     _loadProviderData();
+    _loadUnreadBadges();
+    _badgeTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _loadUnreadBadges();
+    });
   }
 
   /// ✅ تحميل بيانات المزود من الـ API
@@ -209,7 +217,21 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
 
   @override
   void dispose() {
+    _badgeTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadBadges() async {
+    try {
+      final badges = await UnreadBadgeService.fetch();
+      if (!mounted) return;
+      setState(() {
+        _notificationUnread = badges.notifications;
+        _chatUnread = badges.chats;
+      });
+    } catch (_) {
+      // Keep old values on transient failures.
+    }
   }
 
   // اختيار صورة الغلاف / الصورة الشخصية
@@ -551,6 +573,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
     required IconData icon,
     required VoidCallback onTap,
     String? semanticLabel,
+    int count = 0,
   }) {
     return Semantics(
       button: true,
@@ -560,23 +583,50 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Ink(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(14),
-              border:
-                  Border.all(color: Colors.white.withOpacity(0.45), width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Ink(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: Colors.white.withOpacity(0.45), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(icon, color: Colors.white, size: 21),
+                child: Icon(icon, color: Colors.white, size: 21),
+              ),
+              if (count > 0)
+                Positioned(
+                  top: -4,
+                  right: -6,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -849,26 +899,30 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
                 _headerActionButton(
                   icon: Icons.notifications_none_rounded,
                   semanticLabel: 'الإشعارات',
-                  onTap: () {
-                    Navigator.push(
+                  count: _notificationUnread,
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const NotificationsScreen(),
                       ),
                     );
+                    _loadUnreadBadges();
                   },
                 ),
                 const SizedBox(width: 10),
                 _headerActionButton(
                   icon: Icons.chat_bubble_outline_rounded,
                   semanticLabel: 'الرسائل',
-                  onTap: () {
-                    Navigator.push(
+                  count: _chatUnread,
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const MyChatsScreen(),
                       ),
                     );
+                    _loadUnreadBadges();
                   },
                 ),
               ],

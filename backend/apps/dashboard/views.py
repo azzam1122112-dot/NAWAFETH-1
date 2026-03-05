@@ -11,7 +11,6 @@ from django.contrib import messages
 
 # Dashboard auth (OTP + staff) — keep legacy decorator names used in this file.
 from .auth import dashboard_staff_required as staff_member_required
-from .auth import dashboard_login_required as login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -1295,7 +1294,7 @@ def request_detail(request, request_id: int):
     return render(request, "dashboard/request_detail.html", ctx)
 
 
-@login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 @require_POST
 def request_accept(request: HttpRequest, request_id: int) -> HttpResponse:
@@ -1338,7 +1337,7 @@ def request_accept(request: HttpRequest, request_id: int) -> HttpResponse:
     return redirect("dashboard:request_detail", request_id=sr.id)
 
 
-@login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 @require_POST
 def request_start(request: HttpRequest, request_id: int) -> HttpResponse:
@@ -1365,7 +1364,7 @@ def request_start(request: HttpRequest, request_id: int) -> HttpResponse:
     return redirect("dashboard:request_detail", request_id=sr.id)
 
 
-@login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 @require_POST
 def request_complete(request: HttpRequest, request_id: int) -> HttpResponse:
@@ -1392,7 +1391,7 @@ def request_complete(request: HttpRequest, request_id: int) -> HttpResponse:
     return redirect("dashboard:request_detail", request_id=sr.id)
 
 
-@login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 @require_POST
 def request_cancel(request: HttpRequest, request_id: int) -> HttpResponse:
@@ -1419,7 +1418,7 @@ def request_cancel(request: HttpRequest, request_id: int) -> HttpResponse:
     return redirect("dashboard:request_detail", request_id=sr.id)
 
 
-@login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 @require_POST
 def request_send(request: HttpRequest, request_id: int) -> HttpResponse:

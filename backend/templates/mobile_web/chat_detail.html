@@ -28,6 +28,19 @@
         </div>
       </div>
       <div class="chat-header-actions">
+        <button class="chat-header-btn hidden" id="btn-client-requests" title="طلبات العميل" aria-label="طلبات العميل" type="button">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="4" y="3" width="16" height="18" rx="2"></rect>
+            <path d="M8 8h8"></path>
+            <path d="M8 12h8"></path>
+            <path d="M8 16h5"></path>
+          </svg>
+        </button>
+        <button class="chat-header-btn hidden" id="btn-send-service-request" title="إرسال رابط طلب خدمة" aria-label="إرسال رابط طلب خدمة" type="button">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+          </svg>
+        </button>
         <button class="chat-header-btn" id="btn-chat-fav" title="المفضلة" aria-label="تبديل المفضلة" type="button">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -55,6 +68,14 @@
         <div class="chat-member-label">العضو</div>
         <div class="chat-member-value" id="peer-card-name">...</div>
       </div>
+      <button class="chat-member-action hidden" id="btn-client-requests-card" type="button" title="طلبات العميل" aria-label="طلبات العميل">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="3" width="16" height="18" rx="2"></rect>
+          <path d="M8 8h8"></path>
+          <path d="M8 12h8"></path>
+          <path d="M8 16h5"></path>
+        </svg>
+      </button>
     </div>
     <div class="chat-member-row">
       <div class="chat-member-icon" aria-hidden="true">
@@ -166,6 +187,16 @@
       <button type="button" id="btn-report-cancel" class="chat-report-btn ghost">إلغاء</button>
       <button type="button" id="btn-report-send" class="chat-report-btn primary">إرسال البلاغ</button>
     </div>
+  </div>
+
+  <div class="chat-sheet-backdrop hidden" id="chat-client-requests-backdrop"></div>
+  <div class="chat-sheet chat-client-requests-sheet hidden" id="chat-client-requests-sheet" role="dialog" aria-modal="true" aria-label="طلبات العميل">
+    <div class="chat-sheet-handle" aria-hidden="true"></div>
+    <div class="chat-client-requests-head">
+      <div class="chat-client-requests-title" id="chat-client-requests-title">طلبات العميل</div>
+      <button class="chat-client-requests-close" id="btn-client-requests-close" type="button" aria-label="إغلاق">×</button>
+    </div>
+    <div class="chat-client-requests-body" id="chat-client-requests-body"></div>
   </div>
 </main>
 {% endblock %}

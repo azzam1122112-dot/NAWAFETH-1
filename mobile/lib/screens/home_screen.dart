@@ -12,6 +12,7 @@ import '../models/provider_public_model.dart';
 import '../models/media_item_model.dart';
 import '../widgets/spotlight_viewer.dart';
 import '../widgets/verified_badge_view.dart';
+import '../services/unread_badge_service.dart';
 
 import 'search_provider_screen.dart';
 import 'provider_profile_screen.dart';
@@ -34,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<BannerModel> _banners = [];
   List<MediaItemModel> _spotlights = [];
   bool _isLoading = true;
+  int _notificationUnread = 0;
+  int _chatUnread = 0;
 
   // -- Banner video --
   VideoPlayerController? _videoController;
@@ -42,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // -- Reels auto scroll --
   final ScrollController _reelsScroll = ScrollController();
   Timer? _reelsTimer;
+  Timer? _badgeTimer;
   double _reelsPos = 0;
 
   static const _reelFallbackLogos = [
@@ -58,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final seeded = _seedFromCachedData();
     _loadData(showLoader: !seeded);
     _startReelsScroll();
+    _loadUnreadBadges();
+    _badgeTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _loadUnreadBadges();
+    });
   }
 
   void _initVideo() {
@@ -161,8 +169,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _videoController?.dispose();
     _reelsTimer?.cancel();
+    _badgeTimer?.cancel();
     _reelsScroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadBadges() async {
+    try {
+      final badges = await UnreadBadgeService.fetch();
+      if (!mounted) return;
+      setState(() {
+        _notificationUnread = badges.notifications;
+        _chatUnread = badges.chats;
+      });
+    } catch (_) {
+      // Keep old values on transient failures.
+    }
   }
 
   // =============================================
@@ -292,14 +314,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const Spacer(),
                       // Notifications
-                      _heroIconBtn(Icons.notifications_none_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-                      }),
+                      _heroIconBtn(
+                        icon: Icons.notifications_none_rounded,
+                        count: _notificationUnread,
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                          );
+                          _loadUnreadBadges();
+                        },
+                      ),
                       const SizedBox(width: 8),
                       // Chat
-                      _heroIconBtn(Icons.chat_bubble_outline_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const MyChatsScreen()));
-                      }),
+                      _heroIconBtn(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        count: _chatUnread,
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MyChatsScreen()),
+                          );
+                          _loadUnreadBadges();
+                        },
+                      ),
                     ],
                   ),
 
@@ -347,16 +385,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _heroIconBtn(IconData icon, VoidCallback onTap) {
+  Widget _heroIconBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required int count,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: Colors.white, size: 18),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -4,
+              right: -6,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

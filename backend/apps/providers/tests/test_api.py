@@ -426,6 +426,82 @@ def test_provider_following_count_in_detail_and_stats_is_scoped_by_mode():
 
 
 @pytest.mark.django_db
+def test_my_following_counts_match_provider_profile_stats_unique_users():
+    from apps.accounts.models import User, UserRole
+
+    current_user = User.objects.create(
+        phone="0500000211",
+        username="current_client",
+        role_state=UserRole.CLIENT,
+    )
+    owner_user = User.objects.create(
+        phone="0500000212",
+        username="owner_provider",
+        role_state=UserRole.PROVIDER,
+    )
+    provider = ProviderProfile.objects.create(
+        user=owner_user,
+        provider_type="individual",
+        display_name="Provider Profile Counts",
+        bio="bio",
+        years_experience=3,
+        city="الرياض",
+    )
+
+    dual_role_follower = User.objects.create(phone="0500000213", username="dual_role_follower")
+    provider_mode_follower = User.objects.create(phone="0500000214", username="provider_mode_follower")
+
+    # Provider appears in current user's "following" list through client mode.
+    ProviderFollow.objects.create(
+        user=current_user,
+        provider=provider,
+        role_context=RoleContext.CLIENT,
+    )
+    # Same user follows from both modes; should still count as one unique follower.
+    ProviderFollow.objects.create(
+        user=dual_role_follower,
+        provider=provider,
+        role_context=RoleContext.CLIENT,
+    )
+    ProviderFollow.objects.create(
+        user=dual_role_follower,
+        provider=provider,
+        role_context=RoleContext.PROVIDER,
+    )
+    ProviderFollow.objects.create(
+        user=provider_mode_follower,
+        provider=provider,
+        role_context=RoleContext.PROVIDER,
+    )
+
+    ProviderLike.objects.create(
+        user=dual_role_follower,
+        provider=provider,
+        role_context=RoleContext.CLIENT,
+    )
+    ProviderLike.objects.create(
+        user=provider_mode_follower,
+        provider=provider,
+        role_context=RoleContext.CLIENT,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=current_user)
+    following = client.get("/api/providers/me/following/?mode=client")
+    assert following.status_code == 200
+    entry = next((p for p in following.json() if p.get("id") == provider.id), None)
+    assert entry is not None
+
+    stats = APIClient().get(f"/api/providers/{provider.id}/stats/?mode=client")
+    assert stats.status_code == 200
+    stats_payload = stats.json()
+
+    assert stats_payload.get("followers_count") == 3
+    assert entry.get("followers_count") == stats_payload.get("followers_count")
+    assert entry.get("likes_count") == stats_payload.get("likes_count") == 2
+
+
+@pytest.mark.django_db
 def test_provider_stats_include_media_likes_and_saves_from_published_media(settings, tmp_path):
     from apps.accounts.models import User
 

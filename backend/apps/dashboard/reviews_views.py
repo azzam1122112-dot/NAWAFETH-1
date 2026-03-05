@@ -15,11 +15,11 @@ from apps.content.services import sanitize_text
 from apps.reviews.models import Review, ReviewModerationStatus
 from apps.reviews.services import sync_review_to_unified
 
-from .auth import dashboard_login_required
+from .auth import dashboard_staff_required as staff_member_required
 from .views import _dashboard_allowed, dashboard_access_required
 
 
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=False)
 def reviews_dashboard_list(request):
     rating = (request.GET.get("rating") or "").strip()
@@ -74,7 +74,7 @@ def reviews_dashboard_list(request):
     )
 
 
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=False)
 def reviews_dashboard_detail(request, review_id: int):
     review = get_object_or_404(
@@ -93,7 +93,7 @@ def reviews_dashboard_detail(request, review_id: int):
 
 
 @require_POST
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 def reviews_dashboard_moderate_action(request, review_id: int):
     review = get_object_or_404(Review, id=review_id)
@@ -134,7 +134,7 @@ def reviews_dashboard_moderate_action(request, review_id: int):
 
 
 @require_POST
-@dashboard_login_required
+@staff_member_required
 @dashboard_access_required("content", write=True)
 def reviews_dashboard_respond_action(request, review_id: int):
     review = get_object_or_404(Review, id=review_id)

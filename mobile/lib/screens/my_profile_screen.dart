@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/account_mode_service.dart';
 import '../services/profile_service.dart';
 import '../services/api_client.dart';
+import '../services/unread_badge_service.dart';
 import '../models/user_profile.dart';
 import 'registration/register_service_provider.dart';
 import 'provider_dashboard/provider_home_screen.dart';
@@ -33,12 +35,25 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   String? _errorMessage;
   UserProfile? _userProfile;
   bool _isProviderMode = false;
+  int _notificationUnread = 0;
+  int _chatUnread = 0;
+  Timer? _badgeTimer;
   bool get isProviderRegistered => _userProfile?.hasProviderProfile ?? false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadUnreadBadges();
+    _badgeTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _loadUnreadBadges();
+    });
+  }
+
+  @override
+  void dispose() {
+    _badgeTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -115,6 +130,19 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _loadUnreadBadges() async {
+    try {
+      final badges = await UnreadBadgeService.fetch();
+      if (!mounted) return;
+      setState(() {
+        _notificationUnread = badges.notifications;
+        _chatUnread = badges.chats;
+      });
+    } catch (_) {
+      // Keep old values on transient failures.
     }
   }
 
@@ -254,15 +282,34 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     // Left: Camera + Message + Notifications
                     Row(
                       children: [
-                        _miniIconBtn(Icons.camera_alt_outlined, () => _pickImage(isCover: true)),
+                        _miniIconBtn(
+                          icon: Icons.camera_alt_outlined,
+                          onTap: () => _pickImage(isCover: true),
+                        ),
                         const SizedBox(width: 8),
-                        _miniIconBtn(Icons.chat_bubble_outline_rounded, () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MyChatsScreen()));
-                        }),
+                        _miniIconBtn(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          count: _chatUnread,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const MyChatsScreen()),
+                            );
+                            _loadUnreadBadges();
+                          },
+                        ),
                         const SizedBox(width: 8),
-                        _miniIconBtn(Icons.notifications_none_rounded, () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-                        }),
+                        _miniIconBtn(
+                          icon: Icons.notifications_none_rounded,
+                          count: _notificationUnread,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                            );
+                            _loadUnreadBadges();
+                          },
+                        ),
                       ],
                     ),
                   ],
@@ -335,17 +382,48 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 
-  Widget _miniIconBtn(IconData icon, VoidCallback onTap) {
+  Widget _miniIconBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    int count = 0,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-        ),
-        child: Icon(icon, color: Colors.white, size: 18),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -4,
+              right: -6,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

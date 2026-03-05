@@ -21,8 +21,10 @@ import apps.messaging.routing  # noqa: E402
 application = ProtocolTypeRouter(
 	{
 		"http": http_app,
-		"websocket": JwtAuthMiddleware(
-			AuthMiddlewareStack(
+		# Session/Auth middleware should run first, then JWT middleware can
+		# override scope["user"] when a token query param is provided.
+		"websocket": AuthMiddlewareStack(
+			JwtAuthMiddleware(
 				URLRouter(apps.messaging.routing.websocket_urlpatterns)
 			)
 		),

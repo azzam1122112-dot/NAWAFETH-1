@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:animate_do/animate_do.dart';
 import '../constants/colors.dart';
+import '../services/content_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -22,8 +23,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  // ✅ الصفحات الثلاثة
-  final List<OnboardItem> onboardingData = [
+  // ✅ الصفحات الثلاثة (قابلة للتحديث من API)
+  late List<OnboardItem> onboardingData = [
     OnboardItem(
       // شعار التطبيق ✅
       const Icon(Icons.widgets, size: 80, color: AppColors.deepPurple),
@@ -49,6 +50,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "جرب تجربة سلسة وسريعة لتصل لما تريد خلال ثوانٍ.",
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContentFromApi();
+  }
+
+  /// تحميل محتوى الأونبوردينغ من API (onboarding_first_time / onboarding_intro)
+  Future<void> _loadContentFromApi() async {
+    try {
+      final result = await ContentService.fetchPublicContent();
+      if (!mounted) return;
+      if (result.isSuccess && result.dataAsMap != null) {
+        final blocks =
+            (result.dataAsMap!['blocks'] as Map<String, dynamic>?) ?? {};
+
+        final firstTime = blocks['onboarding_first_time'];
+        final intro = blocks['onboarding_intro'];
+
+        setState(() {
+          // الصفحة الأولى ← onboarding_first_time
+          if (firstTime is Map<String, dynamic>) {
+            final title =
+                (firstTime['title_ar'] as String?)?.trim() ?? '';
+            final body =
+                (firstTime['body_ar'] as String?)?.trim() ?? '';
+            if (title.isNotEmpty || body.isNotEmpty) {
+              onboardingData[0] = OnboardItem(
+                onboardingData[0].icon,
+                title.isNotEmpty ? title : onboardingData[0].title,
+                body.isNotEmpty ? body : onboardingData[0].desc,
+              );
+            }
+          }
+
+          // الصفحة الثانية ← onboarding_intro
+          if (intro is Map<String, dynamic>) {
+            final title =
+                (intro['title_ar'] as String?)?.trim() ?? '';
+            final body =
+                (intro['body_ar'] as String?)?.trim() ?? '';
+            if (title.isNotEmpty || body.isNotEmpty) {
+              onboardingData[1] = OnboardItem(
+                onboardingData[1].icon,
+                title.isNotEmpty ? title : onboardingData[1].title,
+                body.isNotEmpty ? body : onboardingData[1].desc,
+              );
+            }
+          }
+        });
+      }
+    } catch (_) {
+      // fallback إلى النصوص الثابتة — لا شيء
+    }
+  }
 
   void _nextPage() {
     if (_currentPage < onboardingData.length - 1) {

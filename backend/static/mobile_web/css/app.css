@@ -226,6 +226,12 @@ ul, ol { list-style: none; }
 }
 .notif-badge.hidden { display: none; }
 
+/* Ensure notification badges anchor correctly on any clickable host */
+.badge-host {
+  position: relative !important;
+  overflow: visible !important;
+}
+
 .navbar-links { align-items: center; gap: var(--space-xs); }
 .nav-link {
   text-decoration: none;

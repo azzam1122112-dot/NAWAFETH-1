@@ -231,6 +231,7 @@ const Nav = (() => {
 
   function _ensureBadge(el) {
     if (!el) return null;
+    el.classList.add('badge-host');
     let badge = el.querySelector('.notif-badge');
     if (!badge) {
       badge = document.createElement('span');
@@ -264,10 +265,13 @@ const Nav = (() => {
     if (_badgeRefreshInFlight) return;
     _badgeRefreshInFlight = true;
 
-    if (!Auth.isLoggedIn()) return;
+    if (!Auth.isLoggedIn()) {
+      _badgeRefreshInFlight = false;
+      return;
+    }
 
-    const notificationsBadges = _ensureBadges('a[href="/notifications/"]');
-    const chatsBadges = _ensureBadges('a[href="/chats/"]');
+    const notificationsBadges = _ensureBadges('a[href="/notifications/"], #btn-notifications');
+    const chatsBadges = _ensureBadges('a[href="/chats/"], #btn-chat');
     if (!notificationsBadges.length && !chatsBadges.length) {
       _badgeRefreshInFlight = false;
       return;
