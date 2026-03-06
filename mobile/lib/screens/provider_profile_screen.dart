@@ -35,6 +35,8 @@ class ProviderProfileScreen extends StatefulWidget {
   final double? providerLat;
   final double? providerLng;
   final bool showBackToMapButton;
+  final String backButtonLabel;
+  final IconData backButtonIcon;
 
   const ProviderProfileScreen({
     super.key,
@@ -51,6 +53,8 @@ class ProviderProfileScreen extends StatefulWidget {
     this.providerLat,
     this.providerLng,
     this.showBackToMapButton = false,
+    this.backButtonLabel = 'العودة إلى الخريطة',
+    this.backButtonIcon = Icons.map_outlined,
   });
 
   @override
@@ -117,10 +121,9 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
       _statsData?['following_count'] as int? ??
       _providerDetail?.followingCount ??
       0;
-    int get _profileLikesBase =>
+  int get _profileLikesBase =>
       _statsData?['likes_count'] as int? ?? _providerDetail?.likesCount ?? 0;
-    int get _likesCount =>
-      _profileLikesBase + _portfolioLikes + _spotlightLikes;
+  int get _likesCount => _profileLikesBase + _portfolioLikes + _spotlightLikes;
 
   int get _reviewersCount =>
       _statsData?['rating_count'] as int? ?? _providerDetail?.ratingCount ?? 0;
@@ -724,13 +727,12 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
   MediaItemModel _mapSpotlightItem(Map<String, dynamic> item) {
     final id = _asInt(item['id']);
     final providerIdRaw = _asInt(item['provider_id']);
-    final providerId = providerIdRaw > 0 ? providerIdRaw : (_resolvedProviderId ?? 0);
-    final providerDisplayName = (item['provider_display_name'] ?? providerName)
-        .toString()
-        .trim();
-    final providerUsername = (item['provider_username'] ?? '')
-        .toString()
-        .trim();
+    final providerId =
+        providerIdRaw > 0 ? providerIdRaw : (_resolvedProviderId ?? 0);
+    final providerDisplayName =
+        (item['provider_display_name'] ?? providerName).toString().trim();
+    final providerUsername =
+        (item['provider_username'] ?? '').toString().trim();
     final fileTypeRaw = (item['file_type'] ?? 'image').toString().toLowerCase();
     final normalizedType = fileTypeRaw.startsWith('video') ? 'video' : 'image';
     final fileUrl = _normalizeMediaUrl((item['file_url'] ?? '').toString());
@@ -1705,10 +1707,10 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.map_outlined, size: 16),
-                      label: const Text(
-                        'العودة إلى الخريطة',
-                        style: TextStyle(
+                      icon: Icon(widget.backButtonIcon, size: 16),
+                      label: Text(
+                        widget.backButtonLabel,
+                        style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -1716,7 +1718,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: mainColor,
-                        side: BorderSide(color: mainColor.withValues(alpha: 0.35)),
+                        side: BorderSide(
+                            color: mainColor.withValues(alpha: 0.35)),
                         backgroundColor: isDark
                             ? Colors.white.withValues(alpha: 0.04)
                             : Colors.white,
@@ -2082,7 +2085,8 @@ class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
                   return const SizedBox.shrink();
                 }
                 final item = spotlightItems[index];
-                final logo = logos.isNotEmpty ? logos[index % logos.length] : '';
+                final logo =
+                    logos.isNotEmpty ? logos[index % logos.length] : '';
                 final path = _normalizeMediaUrl((item.fileUrl ?? '').trim());
                 return InkWell(
                   onTap: () => _openHighlights(index),

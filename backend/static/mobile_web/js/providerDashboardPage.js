@@ -90,14 +90,14 @@ const ProviderDashboardPage = (() => {
 
   async function _loadData() {
     // Parallel fetch
-    const [profRes, provRes, subRes, urgentRes, newRes, completedRes, spotsRes] =
+    const [profRes, provRes, subRes, urgentRes, competitiveRes, assignedRes, spotsRes] =
       await Promise.allSettled([
         ApiClient.get('/api/accounts/me/'),
         ApiClient.get('/api/providers/me/profile/'),
         ApiClient.get('/api/subscriptions/my/'),
         ApiClient.get('/api/marketplace/provider/urgent/available/'),
+        ApiClient.get('/api/marketplace/provider/competitive/available/'),
         ApiClient.get('/api/marketplace/provider/requests/?status_group=new'),
-        ApiClient.get('/api/marketplace/provider/requests/?status_group=completed'),
         ApiClient.get('/api/providers/me/spotlights/'),
       ]);
 
@@ -127,7 +127,7 @@ const ProviderDashboardPage = (() => {
     _renderStats();
     _renderSubscription(subRes);
     _renderCompletion();
-    _renderKPIs(urgentRes, newRes, completedRes);
+    _renderKPIs(urgentRes, competitiveRes, assignedRes);
     _renderSpotlights(spotsRes);
   }
 
@@ -247,24 +247,29 @@ const ProviderDashboardPage = (() => {
     }
   }
 
-  function _renderKPIs(urgentRes, newRes, completedRes) {
-    let urgent = 0, newCount = 0, completed = 0;
-    if (urgentRes.status === 'fulfilled' && urgentRes.value.ok) {
-      const d = urgentRes.value.data;
-      urgent = d.count ?? (Array.isArray(d) ? d.length : (d.results || []).length);
-    }
-    if (newRes.status === 'fulfilled' && newRes.value.ok) {
-      const d = newRes.value.data;
-      newCount = d.count ?? (Array.isArray(d) ? d.length : (d.results || []).length);
-    }
-    if (completedRes.status === 'fulfilled' && completedRes.value.ok) {
-      const d = completedRes.value.data;
-      completed = d.count ?? (Array.isArray(d) ? d.length : (d.results || []).length);
-    }
-    document.getElementById('kpi-urgent').textContent = urgent;
-    document.getElementById('kpi-new').textContent = newCount;
-    const completedEl = document.getElementById('kpi-completed');
-    if (completedEl) completedEl.textContent = completed;
+  function _renderKPIs(urgentRes, competitiveRes, assignedRes) {
+    const urgent = _countFromSettled(urgentRes);
+    const competitive = _countFromSettled(competitiveRes);
+    const assigned = _countFromSettled(assignedRes);
+
+    const urgentEl = document.getElementById('kpi-urgent');
+    if (urgentEl) urgentEl.textContent = urgent;
+
+    const competitiveEl = document.getElementById('kpi-competitive');
+    if (competitiveEl) competitiveEl.textContent = competitive;
+
+    const assignedEl = document.getElementById('kpi-assigned');
+    if (assignedEl) assignedEl.textContent = assigned;
+  }
+
+  function _countFromSettled(settledResult) {
+    if (!settledResult || settledResult.status !== 'fulfilled' || !settledResult.value.ok) return 0;
+    const data = settledResult.value.data;
+    if (!data) return 0;
+    if (Number.isFinite(Number(data.count))) return Number(data.count);
+    if (Array.isArray(data)) return data.length;
+    if (Array.isArray(data.results)) return data.results.length;
+    return 0;
   }
 
   function _renderSpotlights(spotsRes) {

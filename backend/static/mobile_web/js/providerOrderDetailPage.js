@@ -2,7 +2,14 @@
 'use strict';
 
 const ProviderOrderDetailPage = (() => {
-  const state = { id: null, order: null, actionLoading: false, completionFiles: [], toastTimer: null };
+  const state = {
+    id: null,
+    order: null,
+    actionLoading: false,
+    completionFiles: [],
+    toastTimer: null,
+    offerAlreadySent: false,
+  };
   const TYPE_LABEL = { normal: 'عادي', competitive: 'تنافسي', urgent: 'عاجل' };
   const STATUS_COLOR = { new: '#A56800', in_progress: '#E67E22', completed: '#2E7D32', cancelled: '#C62828' };
 
@@ -31,6 +38,7 @@ const ProviderOrderDetailPage = (() => {
     if (!res.ok || !res.data || typeof res.data !== 'object') return showError(extractError(res, 'تعذّر تحميل تفاصيل الطلب'));
     state.order = res.data;
     state.completionFiles = [];
+    state.offerAlreadySent = false;
     render();
   }
 
@@ -194,13 +202,18 @@ const ProviderOrderDetailPage = (() => {
   function renderActions(o, group) {
     const root = byId('pod-actions');
     root.innerHTML = '';
-    if (group === 'new') return renderNewActions(root, o);
+    if (group === 'new') {
+      if (isCompetitiveAvailable(o)) return renderCompetitiveOfferActions(root);
+      if (isUrgentAvailable(o)) return renderUrgentAvailableActions(root);
+      if (isCompetitiveAssigned(o)) return renderCompetitiveAssignedNewActions(root, o);
+      return renderAssignedNewActions(root, o);
+    }
     if (group === 'in_progress') return renderProgressActions(root, o);
     if (group === 'completed') return renderCompleted(root, o);
     if (group === 'cancelled') return renderCancelled(root, o);
   }
 
-  function renderNewActions(root, o) {
+  function renderAssignedNewActions(root, o) {
     root.innerHTML = `
       <button type="button" class="pod-btn pod-btn-success pod-btn-block" id="pod-accept-btn" data-pod-action>قبول الطلب</button>
       <div class="pod-readonly-box" id="pod-client-rejection-box" style="display:none"><label>سبب رفض العميل للتفاصيل السابقة</label><p id="pod-client-rejection-note">-</p></div>
@@ -234,6 +247,71 @@ const ProviderOrderDetailPage = (() => {
     byId('pod-accept-btn').addEventListener('click', acceptOrder);
     byId('pod-progress-btn').addEventListener('click', () => submitProgress(true));
     byId('pod-reject-btn').addEventListener('click', rejectOrder);
+    setActionLoading(false);
+  }
+
+  function renderUrgentAvailableActions(root) {
+    root.innerHTML = `
+      <div class="pod-readonly-box">
+        <label>طلب عاجل متاح</label>
+        <p>هذا الطلب العاجل متاح الآن لك. عند القبول سيتم إسناده لك مباشرة.</p>
+      </div>
+      <button type="button" class="pod-btn pod-btn-danger pod-btn-block" id="pod-urgent-accept-btn" data-pod-action>قبول الطلب العاجل</button>`;
+    byId('pod-urgent-accept-btn').addEventListener('click', acceptOrder);
+    setActionLoading(false);
+  }
+
+  function renderCompetitiveOfferActions(root) {
+    if (state.offerAlreadySent) {
+      root.appendChild(readonly('عرض السعر', 'تم إرسال عرضك على هذا الطلب. بانتظار قرار العميل.'));
+      setActionLoading(false);
+      return;
+    }
+
+    root.innerHTML = `
+      <div class="pod-readonly-box">
+        <label>طلب عروض أسعار متاح</label>
+        <p>أدخل السعر ومدة التنفيذ لإرسال عرضك للعميل. يمكنك إرسال عرض واحد لكل طلب.</p>
+      </div>
+      <div class="pod-grid-2">
+        <div><label class="pod-input-label" for="pod-offer-price">سعر العرض (SR)</label><input type="number" class="pod-input" id="pod-offer-price" step="0.01" min="0" placeholder="0"></div>
+        <div><label class="pod-input-label" for="pod-offer-duration">مدة التنفيذ (يوم)</label><input type="number" class="pod-input" id="pod-offer-duration" step="1" min="1" placeholder="5"></div>
+      </div>
+      <label class="pod-input-label" for="pod-offer-note">ملاحظة للعميل (اختياري)</label>
+      <textarea class="pod-textarea" id="pod-offer-note" rows="3" placeholder="ملاحظة (اختياري)"></textarea>
+      <button type="button" class="pod-btn pod-btn-primary pod-btn-block" id="pod-send-offer-btn" data-pod-action>إرسال عرض السعر</button>`;
+
+    byId('pod-send-offer-btn').addEventListener('click', sendCompetitiveOffer);
+    setActionLoading(false);
+  }
+
+  function renderCompetitiveAssignedNewActions(root, o) {
+    root.innerHTML = `
+      <div class="pod-readonly-box" id="pod-client-rejection-box" style="display:none"><label>سبب رفض العميل للتفاصيل السابقة</label><p id="pod-client-rejection-note">-</p></div>
+      <p class="pod-action-title" id="pod-progress-title"></p>
+      <label class="pod-input-label" for="pod-expected-delivery">موعد التسليم المتوقع</label>
+      <input type="date" class="pod-input" id="pod-expected-delivery">
+      <div class="pod-grid-2">
+        <div><label class="pod-input-label" for="pod-estimated-amount">قيمة الخدمة المقدرة (SR)</label><input type="number" class="pod-input" id="pod-estimated-amount" step="0.01" min="0" placeholder="0"></div>
+        <div><label class="pod-input-label" for="pod-received-amount">المبلغ المستلم (SR)</label><input type="number" class="pod-input" id="pod-received-amount" step="0.01" min="0" placeholder="0"></div>
+      </div>
+      <label class="pod-input-label" for="pod-note">ملاحظة (اختياري)</label>
+      <textarea class="pod-textarea" id="pod-note" rows="2" placeholder="ملاحظة (اختياري)"></textarea>
+      <button type="button" class="pod-btn pod-btn-primary pod-btn-block" id="pod-progress-btn" data-pod-action></button>`;
+    byId('pod-expected-delivery').value = toDateInput(o.expected_delivery_at);
+    byId('pod-estimated-amount').value = str(o.estimated_service_amount);
+    byId('pod-received-amount').value = str(o.received_amount);
+
+    const rejected = o.provider_inputs_approved === false;
+    byId('pod-progress-title').textContent = rejected ? 'إعادة إرسال تفاصيل التنفيذ' : 'إرسال تفاصيل التنفيذ';
+    byId('pod-progress-btn').textContent = rejected ? 'إعادة إرسال التفاصيل' : 'إرسال التفاصيل للعميل';
+    const rbox = byId('pod-client-rejection-box');
+    if (rejected) {
+      rbox.style.display = '';
+      setText('pod-client-rejection-note', val(o.provider_inputs_decision_note, '-'));
+    } else rbox.style.display = 'none';
+
+    byId('pod-progress-btn').addEventListener('click', () => submitProgress(true));
     setActionLoading(false);
   }
 
@@ -343,12 +421,65 @@ const ProviderOrderDetailPage = (() => {
 
   async function acceptOrder() {
     if (state.actionLoading) return;
+    const order = state.order;
+    if (!order) return;
     setActionLoading(true);
-    const res = await ApiClient.request('/api/marketplace/provider/requests/' + state.id + '/accept/', { method: 'POST' });
+    const res = isUrgentAvailable(order)
+      ? await ApiClient.request('/api/marketplace/requests/urgent/accept/', {
+        method: 'POST',
+        body: { request_id: state.id },
+      })
+      : await ApiClient.request('/api/marketplace/provider/requests/' + state.id + '/accept/', { method: 'POST' });
     setActionLoading(false);
     if (!res.ok) return toast(extractError(res, 'فشلت العملية'));
-    toast('تم قبول الطلب. أرسل تفاصيل التنفيذ للعميل');
+    toast(isUrgentAvailable(order)
+      ? 'تم قبول الطلب العاجل بنجاح'
+      : 'تم قبول الطلب. أرسل تفاصيل التنفيذ للعميل');
     loadDetail();
+  }
+
+  async function sendCompetitiveOffer() {
+    if (state.actionLoading) return;
+    const priceRaw = str(byId('pod-offer-price').value);
+    const durationRaw = str(byId('pod-offer-duration').value);
+    const noteRaw = str(byId('pod-offer-note').value);
+
+    const price = Number(priceRaw);
+    if (!priceRaw || !Number.isFinite(price) || price <= 0) return toast('أدخل سعر عرض صالح');
+
+    const duration = Number(durationRaw);
+    if (!durationRaw || !Number.isInteger(duration) || duration <= 0) {
+      return toast('أدخل مدة تنفيذ بالأيام بشكل صحيح');
+    }
+
+    const body = {
+      price: priceRaw,
+      duration_days: duration,
+    };
+    if (noteRaw) body.note = noteRaw;
+
+    setActionLoading(true);
+    const res = await ApiClient.request('/api/marketplace/requests/' + state.id + '/offers/create/', {
+      method: 'POST',
+      body,
+    });
+    setActionLoading(false);
+
+    if (res.ok) {
+      state.offerAlreadySent = true;
+      toast('تم إرسال عرض السعر بنجاح');
+      renderActions(state.order, statusGroup(state.order));
+      return;
+    }
+
+    if (res.status === 409) {
+      state.offerAlreadySent = true;
+      toast('تم إرسال عرض مسبقًا على هذا الطلب');
+      renderActions(state.order, statusGroup(state.order));
+      return;
+    }
+
+    toast(extractError(res, 'تعذّر إرسال العرض'));
   }
 
   async function submitProgress(isNew) {
@@ -490,6 +621,29 @@ const ProviderOrderDetailPage = (() => {
     if (group === 'completed') return 'مكتمل';
     if (group === 'cancelled') return 'ملغي';
     return 'جديد';
+  }
+
+  function requestType(o) {
+    return str(o && o.request_type).toLowerCase();
+  }
+
+  function hasAssignedProvider(o) {
+    const provider = o && o.provider;
+    if (provider === null || provider === undefined || provider === '') return false;
+    if (typeof provider === 'object') return provider.id !== null && provider.id !== undefined;
+    return true;
+  }
+
+  function isCompetitiveAvailable(o) {
+    return requestType(o) === 'competitive' && !hasAssignedProvider(o);
+  }
+
+  function isUrgentAvailable(o) {
+    return requestType(o) === 'urgent' && !hasAssignedProvider(o);
+  }
+
+  function isCompetitiveAssigned(o) {
+    return requestType(o) === 'competitive' && hasAssignedProvider(o);
   }
 
   function fmtDateTime(v) {

@@ -123,6 +123,81 @@
 .order-card h4 { margin: 0; font-size: 15px; }
 .order-card p { margin: 6px 0; font-size: 13px; color: #666; }
 
+body.page-provider-orders .po-search {
+  border: 1px solid rgba(103, 58, 183, 0.14);
+  box-shadow: 0 8px 20px rgba(20, 20, 38, 0.04);
+}
+
+body.page-provider-orders .po-main-tabs {
+  margin-bottom: 10px;
+}
+
+body.page-provider-orders .po-main-tabs .status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.po-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(103, 58, 183, 0.12);
+  color: #673AB7;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+body.page-provider-orders .po-main-tabs .status-tab.active .po-tab-count {
+  background: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
+
+body.page-provider-orders .po-card {
+  border: 1px solid rgba(103, 58, 183, 0.14);
+  box-shadow: 0 10px 22px rgba(20, 18, 38, 0.06);
+}
+
+.po-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.po-card-head {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.po-available-badge {
+  border-radius: 999px;
+  padding: 4px 9px;
+  border: 1px solid rgba(30, 136, 229, 0.4);
+  background: rgba(33, 150, 243, 0.12);
+  color: #1565c0;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+body.page-provider-orders .order-type-badge {
+  border: 1px solid rgba(30, 136, 229, 0.34);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #1565c0;
+  background: rgba(33, 150, 243, 0.1);
+}
+
 /* ══════════════════════════════════════════════
    Provider Order Detail
    ══════════════════════════════════════════════ */
@@ -470,6 +545,7 @@ body.page-provider-order-detail .pod-btn-block {
 
 body.page-provider-order-detail .pod-btn-primary { background: #673AB7; color: #fff; }
 body.page-provider-order-detail .pod-btn-success { background: #2E7D32; color: #fff; }
+body.page-provider-order-detail .pod-btn-danger { background: #C62828; color: #fff; }
 body.page-provider-order-detail .pod-btn-warning { background: #E67E22; color: #fff; }
 body.page-provider-order-detail .pod-btn-outline {
   border: 1px solid #673AB7;

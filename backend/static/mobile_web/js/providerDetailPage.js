@@ -24,7 +24,7 @@ const ProviderDetailPage = (() => {
   let _spotlightSyncBound = false;
   let _derivedMainCategory = '';
   let _derivedSubCategory = '';
-  let _returnToMapHref = '';
+  let _returnNav = null;
   let _socialUrls = {
     instagram: '',
     x: '',
@@ -43,7 +43,7 @@ const ProviderDetailPage = (() => {
     }
     _providerId = match[1];
     _mode = _resolveMode();
-    _returnToMapHref = _resolveReturnToMapHref();
+    _returnNav = _resolveReturnNavigation();
 
     _bindTabs();
     _bindActions();
@@ -82,8 +82,8 @@ const ProviderDetailPage = (() => {
     const backBtn = document.getElementById('btn-back');
     if (backBtn) {
       backBtn.addEventListener('click', () => {
-        if (_returnToMapHref) {
-          window.location.href = _returnToMapHref;
+        if (_returnNav && _returnNav.href) {
+          window.location.href = _returnNav.href;
           return;
         }
         if (window.history.length > 1) {
@@ -99,8 +99,10 @@ const ProviderDetailPage = (() => {
 
     const returnToMapBtn = document.getElementById('btn-back-to-map');
     if (returnToMapBtn) {
-      if (_returnToMapHref) {
-        returnToMapBtn.href = _returnToMapHref;
+      if (_returnNav && _returnNav.href) {
+        returnToMapBtn.href = _returnNav.href;
+        returnToMapBtn.textContent = _returnNav.label || 'العودة';
+        returnToMapBtn.setAttribute('aria-label', _returnNav.label || 'العودة');
         returnToMapBtn.classList.remove('hidden');
       } else {
         returnToMapBtn.classList.add('hidden');
@@ -206,22 +208,50 @@ const ProviderDetailPage = (() => {
     });
   }
 
-  function _resolveReturnToMapHref() {
+  function _resolveReturnNavigation() {
     try {
       const params = new URLSearchParams(window.location.search || '');
       const fromMap = params.get('from_map') === '1';
       const returnTo = String(params.get('return_to') || '').trim();
-      if (!fromMap && !returnTo) return '';
-      const candidate = returnTo || '/search/?open_map=1';
-      if (!candidate.startsWith('/')) return '/search/?open_map=1';
-      if (!candidate.startsWith('/search')) return '/search/?open_map=1';
-      const normalized = new URL(candidate, window.location.origin);
-      if (normalized.searchParams.get('open_map') !== '1') {
-        normalized.searchParams.set('open_map', '1');
+      const returnLabel = String(params.get('return_label') || '').trim();
+
+      if (!fromMap && !returnTo) return null;
+
+      const fallbackMapPath = '/search/?open_map=1';
+      const rawTarget = returnTo || fallbackMapPath;
+      let href = _sanitizeInternalReturnPath(rawTarget);
+      if (!href) return null;
+
+      if (fromMap && href.startsWith('/search')) {
+        const normalized = new URL(href, window.location.origin);
+        if (normalized.searchParams.get('open_map') !== '1') {
+          normalized.searchParams.set('open_map', '1');
+        }
+        href = normalized.pathname + normalized.search + normalized.hash;
       }
-      return normalized.pathname + normalized.search;
+
+      return {
+        href,
+        label: returnLabel || (fromMap ? 'العودة إلى الخريطة' : 'العودة'),
+      };
     } catch (_) {
-      return '/search/?open_map=1';
+      return {
+        href: '/search/?open_map=1',
+        label: 'العودة إلى الخريطة',
+      };
+    }
+  }
+
+  function _sanitizeInternalReturnPath(rawPath) {
+    const candidate = String(rawPath || '').trim();
+    if (!candidate || candidate.startsWith('//')) return '';
+    try {
+      const parsed = new URL(candidate, window.location.origin);
+      if (parsed.origin !== window.location.origin) return '';
+      if (!parsed.pathname.startsWith('/')) return '';
+      return parsed.pathname + parsed.search + parsed.hash;
+    } catch (_) {
+      return '';
     }
   }
 

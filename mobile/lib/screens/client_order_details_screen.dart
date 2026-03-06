@@ -6,6 +6,7 @@ import '../models/service_request_model.dart';
 import '../services/account_mode_service.dart';
 import '../services/marketplace_service.dart';
 import '../services/reviews_service.dart';
+import 'provider_profile_screen.dart';
 
 class ClientOrderDetailsScreen extends StatefulWidget {
   final int requestId;
@@ -35,6 +36,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
   final TextEditingController _reminderController = TextEditingController();
   final TextEditingController _rejectInputsReasonController =
       TextEditingController();
+  List<Offer> _offers = <Offer>[];
+  int? _acceptingOfferId;
 
   bool _editTitle = false;
   bool _editDetails = false;
@@ -104,10 +107,18 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
       return;
     }
 
+    List<Offer> offers = <Offer>[];
+    if (order.requestType == 'competitive') {
+      offers = await MarketplaceService.getRequestOffers(order.id);
+      if (!mounted) return;
+    }
+
     setState(() {
       _order = order;
       _titleController.text = order.title;
       _detailsController.text = order.description;
+      _offers = offers;
+      _acceptingOfferId = null;
 
       _ratingResponseSpeed = order.reviewResponseSpeed ?? 0;
       _ratingCostValue = order.reviewCostValue ?? 0;
@@ -118,6 +129,72 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
 
       _loading = false;
     });
+  }
+
+  Future<void> _acceptOffer(Offer offer) async {
+    final order = _order;
+    if (order == null) return;
+
+    if (order.requestType != 'competitive' ||
+        order.statusGroup != 'new' ||
+        order.provider != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا يمكن اختيار عرض في الحالة الحالية',
+              style: TextStyle(fontFamily: 'Cairo')),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _acceptingOfferId = offer.id);
+    final res = await MarketplaceService.acceptOffer(offer.id);
+    if (!mounted) return;
+    setState(() => _acceptingOfferId = null);
+
+    if (res.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم اختيار العرض وإسناد الطلب بنجاح',
+              style: TextStyle(fontFamily: 'Cairo')),
+        ),
+      );
+      _loadDetail();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res.error ?? 'تعذّر اختيار العرض',
+              style: const TextStyle(fontFamily: 'Cairo')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openProviderProfile(Offer offer) async {
+    final providerId = offer.provider > 0 ? offer.provider.toString() : null;
+    if (providerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تعذر فتح صفحة المزود: معرف غير صالح',
+              style: TextStyle(fontFamily: 'Cairo')),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderProfileScreen(
+          providerId: providerId,
+          providerName:
+              offer.providerName.isNotEmpty ? offer.providerName : 'مزود خدمة',
+          showBackToMapButton: true,
+          backButtonLabel: 'العودة إلى عروض الأسعار',
+          backButtonIcon: Icons.local_offer_outlined,
+        ),
+      ),
+    );
   }
 
   Color _statusColor(String statusGroup) {
@@ -205,7 +282,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     if (!approved && _rejectInputsReasonController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('سبب الرفض مطلوب', style: TextStyle(fontFamily: 'Cairo')),
+          content:
+              Text('سبب الرفض مطلوب', style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -250,7 +328,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     if (order.reviewId != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تم إرسال تقييمك مسبقاً', style: TextStyle(fontFamily: 'Cairo')),
+          content: Text('تم إرسال تقييمك مسبقاً',
+              style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -528,24 +607,21 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                           style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 13,
-                              color:
-                                  isDark ? Colors.white70 : Colors.black54)),
+                              color: isDark ? Colors.white70 : Colors.black54)),
                       if (order.categoryName != null)
                         Text(
                             '${order.categoryName} / ${order.subcategoryName ?? ''}',
                             style: TextStyle(
                                 fontFamily: 'Cairo',
                                 fontSize: 12,
-                                color: isDark
-                                    ? Colors.white54
-                                    : Colors.black45)),
+                                color:
+                                    isDark ? Colors.white54 : Colors.black45)),
                       const SizedBox(height: 6),
                       Text(_formatDate(order.createdAt),
                           style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 12,
-                              color:
-                                  isDark ? Colors.white54 : Colors.black54)),
+                              color: isDark ? Colors.white54 : Colors.black54)),
                       if (order.providerName != null) ...[
                         const SizedBox(height: 6),
                         Row(children: [
@@ -579,6 +655,11 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                 ),
                 const SizedBox(height: 14),
 
+                if (order.requestType == 'competitive') ...[
+                  _competitiveOffersCard(order, cardColor, borderColor, isDark),
+                  const SizedBox(height: 12),
+                ],
+
                 // ─── مكتمل: التسليم + التقييم ───
                 if (order.statusGroup == 'completed') ...[
                   _completedCard(cardColor, borderColor, isDark),
@@ -597,8 +678,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                         order.estimatedAmount != null ||
                         order.receivedAmt != null ||
                         order.remainingAmt != null)) ...[
-                  _providerInputsDecisionCard(order, cardColor, borderColor,
-                      isDark, canEdit),
+                  _providerInputsDecisionCard(
+                      order, cardColor, borderColor, isDark, canEdit),
                   const SizedBox(height: 12),
                 ],
 
@@ -670,9 +751,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
                             style: TextStyle(
                                 fontFamily: 'Cairo',
                                 fontSize: 12,
-                                color: isDark
-                                    ? Colors.white54
-                                    : Colors.black54)),
+                                color:
+                                    isDark ? Colors.white54 : Colors.black54)),
                       ],
                     ],
                   ),
@@ -1071,6 +1151,210 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     );
   }
 
+  Color _offerStatusColor(String status) {
+    switch (status) {
+      case 'selected':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.orange.shade800;
+    }
+  }
+
+  String _offerStatusLabel(String status) {
+    switch (status) {
+      case 'selected':
+        return 'تم اختياره';
+      case 'rejected':
+        return 'مرفوض';
+      default:
+        return 'بانتظار القرار';
+    }
+  }
+
+  Widget _competitiveOffersCard(
+      ServiceRequest order, Color cardColor, Color borderColor, bool isDark) {
+    final canSelectOffer = order.statusGroup == 'new' && order.provider == null;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('عروض الأسعار',
+                    style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold)),
+              ),
+              IconButton(
+                onPressed: _loading ? null : _loadDetail,
+                tooltip: 'تحديث العروض',
+                icon: const Icon(Icons.refresh, color: _mainColor),
+              ),
+            ],
+          ),
+          if (_offers.isEmpty)
+            Text(
+              'لا توجد عروض أسعار حتى الآن.',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                  color: isDark ? Colors.white54 : Colors.black54),
+            )
+          else
+            ..._offers.map((offer) {
+              final statusColor = _offerStatusColor(offer.status);
+              final note = (offer.note ?? '').trim();
+              final isSelecting = _acceptingOfferId == offer.id;
+
+              return Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white10 : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: statusColor.withAlpha(70)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _openProviderProfile(offer),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person_outline,
+                                      size: 16, color: _mainColor),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      offer.providerName.isNotEmpty
+                                          ? offer.providerName
+                                          : 'مقدم خدمة #${offer.provider}',
+                                      style: const TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.open_in_new_rounded,
+                                    size: 15,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black45,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withAlpha(20),
+                            borderRadius: BorderRadius.circular(14),
+                            border:
+                                Border.all(color: statusColor.withAlpha(80)),
+                          ),
+                          child: Text(
+                            _offerStatusLabel(offer.status),
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'السعر: ${offer.price} (SR)',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'مدة التنفيذ: ${offer.durationDays} يوم',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    if (note.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'ملاحظة: $note',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                    ],
+                    if (canSelectOffer && offer.status == 'pending') ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isSelecting || _saving
+                              ? null
+                              : () => _acceptOffer(offer),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _mainColor,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: isSelecting
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text(
+                                  'اختيار هذا العرض',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   Widget _attachmentsCard(
       ServiceRequest order, Color cardColor, Color borderColor, bool isDark) {
     final deliveredAt = order.deliveredAt;
@@ -1140,7 +1424,8 @@ class _ClientOrderDetailsScreenState extends State<ClientOrderDetailsScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(children: [
-        Icon(_attachmentIcon(attachment.fileType), size: 18, color: Colors.grey),
+        Icon(_attachmentIcon(attachment.fileType),
+            size: 18, color: Colors.grey),
         const SizedBox(width: 6),
         Expanded(
             child: Text(attachment.fileUrl.split('/').last,

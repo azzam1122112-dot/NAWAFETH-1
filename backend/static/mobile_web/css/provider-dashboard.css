@@ -94,6 +94,48 @@ body.page-provider-dashboard .provider-kpi-button {
   cursor: pointer;
 }
 
+body.page-provider-dashboard .provider-kpi-order {
+  position: relative;
+  overflow: hidden;
+}
+
+body.page-provider-dashboard .provider-kpi-order .provider-kpi-value {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+body.page-provider-dashboard .provider-kpi-order .provider-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body.page-provider-dashboard .provider-kpi-urgent {
+  border-color: rgba(198, 40, 40, 0.24);
+  background: linear-gradient(180deg, rgba(255, 235, 238, 0.7) 0%, #fff 100%);
+}
+
+body.page-provider-dashboard .provider-kpi-urgent .provider-kpi-value {
+  color: #c62828;
+}
+
+body.page-provider-dashboard .provider-kpi-competitive {
+  border-color: rgba(25, 118, 210, 0.26);
+  background: linear-gradient(180deg, rgba(227, 242, 253, 0.7) 0%, #fff 100%);
+}
+
+body.page-provider-dashboard .provider-kpi-competitive .provider-kpi-value {
+  color: #1565c0;
+}
+
+body.page-provider-dashboard .provider-kpi-assigned {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: linear-gradient(180deg, rgba(255, 248, 225, 0.75) 0%, #fff 100%);
+}
+
+body.page-provider-dashboard .provider-kpi-assigned .provider-kpi-value {
+  color: #a16207;
+}
+
 body.page-provider-dashboard .provider-quick-row {
   margin-top: 2px;
 }
